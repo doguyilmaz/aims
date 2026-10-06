@@ -184,6 +184,7 @@ test('failover command marks the current profile and activates the next', () => 
   const until = Date.parse(loadState().claude.personal.until);
   assert.ok(until > Date.now() + 25 * 60000 && until < Date.now() + 35 * 60000);
   assert.throws(() => failover('claude'), /no other usable claude profile/);
+  assert.equal(loadConfig().tools.claude.active, 'work', 'nothing changes when failover is impossible');
 });
 
 test('failover uses the reset time reported by the status line', () => {

@@ -31,7 +31,13 @@ export function formatStatus(report, { color: useColor = true } = {}) {
       const tags = [p.existing && 'default login', p.isolated && 'isolated', p.pinned && 'pinned here']
         .filter(Boolean)
         .join(', ');
-      const account = [p.email || c.dim(p.loggedIn === false ? 'not logged in' : 'unknown account'), p.plan]
+      const fallback =
+        p.loggedIn === false
+          ? 'not logged in'
+          : p.method === 'api-key' || p.method === 'env'
+            ? 'API key / token'
+            : 'unknown account';
+      const account = [p.email || c.dim(fallback), p.plan]
         .filter(Boolean)
         .join(' · ');
       const state = p.usable ? c.green(p.loggedIn === null ? 'ok?' : 'ok') : c.yellow(p.reasons.join(', '));
