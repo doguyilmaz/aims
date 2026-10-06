@@ -4,20 +4,27 @@
   "description": "Run several Claude Code and Codex accounts (personal, work, ...) side by side: one-time login per account, instant switching, shared history, automatic failover. Ships a CLI, an MCP server and a skill.",
   "type": "module",
   "bin": {
-    "aims": "bin/aims.js"
+    "aims": "src/cli.ts"
   },
   "files": [
-    "bin",
     "src",
     "skills",
     ".claude-plugin",
+    "tsconfig.json",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "bun test",
+    "typecheck": "tsc -p .",
+    "check": "tsc -p . && bun test",
+    "build": "bun build --compile --minify src/cli.ts --outfile dist/aims"
   },
   "engines": {
-    "node": ">=18.17"
+    "bun": ">=1.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
   },
   "keywords": [
     "claude",
@@ -25,7 +32,8 @@
     "codex",
     "multi-account",
     "profiles",
-    "mcp"
+    "mcp",
+    "bun"
   ],
   "license": "MIT"
 }

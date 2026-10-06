@@ -1,14 +1,32 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import type { Sink as SinkType } from '../src/types.ts';
+import { home as aimsHomeDir } from '../src/util.ts';
 
-export const FAKE_CLAUDE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-claude.mjs');
+export const FAKE_CLAUDE = path.join(import.meta.dir, 'fixtures', 'fake-claude.ts');
 
-const SAVED = ['HOME', 'USERPROFILE', 'AIMS_HOME', 'AIMS_CLAUDE_BIN', 'AIMS_CODEX_BIN', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'AIMS_CLAUDE_PROFILE', 'AIMS_CODEX_PROFILE', 'ANTHROPIC_API_KEY'];
+const SAVED = [
+  'HOME',
+  'USERPROFILE',
+  'AIMS_HOME',
+  'AIMS_CLAUDE_BIN',
+  'AIMS_CODEX_BIN',
+  'CLAUDE_CONFIG_DIR',
+  'CODEX_HOME',
+  'AIMS_CLAUDE_PROFILE',
+  'AIMS_CODEX_PROFILE',
+  'ANTHROPIC_API_KEY',
+];
+
+export interface Sandbox {
+  root: string;
+  home: string;
+  restore(): void;
+}
 
 /** Point HOME / AIMS_HOME at a fresh temp dir for one test. */
-export function sandbox() {
+export function sandbox(): Sandbox {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aims-test-'));
   const saved = Object.fromEntries(SAVED.map((k) => [k, process.env[k]]));
   const home = path.join(root, 'home');
@@ -20,6 +38,8 @@ export function sandbox() {
   for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'AIMS_CLAUDE_PROFILE', 'AIMS_CODEX_PROFILE', 'ANTHROPIC_API_KEY']) {
     delete process.env[k];
   }
+  // Never let a test touch the real ~/.claude or ~/.codex.
+  if (aimsHomeDir() !== home) throw new Error(`sandbox HOME not honoured: ${aimsHomeDir()}`);
   return {
     root,
     home,
@@ -33,24 +53,25 @@ export function sandbox() {
   };
 }
 
-export function write(file, content) {
+export function write(file: string, content: string | object): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content));
 }
 
-/** A stream-like sink for launch() output. */
-export class Sink {
-  constructor() {
-    this.data = '';
-  }
-  write(d) {
-    this.data += d.toString();
+export const read = (file: string) => fs.readFileSync(file, 'utf8');
+
+/** Collects launch() output. */
+export class Sink implements SinkType {
+  data = '';
+  private decoder = new TextDecoder();
+  write(d: string | Uint8Array): boolean {
+    this.data += typeof d === 'string' ? d : this.decoder.decode(d, { stream: true });
     return true;
   }
 }
 
-/** Seed an existing Claude login in ~/.claude for the "personal" account. */
-export function seedClaudeHome(home, { email = 'me@gmail.com' } = {}) {
+/** An existing Claude login in ~/.claude (the "personal" account). */
+export function seedClaudeHome(home: string, email = 'me@gmail.com'): void {
   write(path.join(home, '.claude', '.credentials.json'), {
     claudeAiOauth: { accessToken: 'a', refreshToken: 'r', subscriptionType: 'pro' },
   });

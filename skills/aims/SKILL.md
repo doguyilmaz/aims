@@ -45,8 +45,10 @@ one account can be continued on another.
 
 1. Usage limit on the current account: call `aims_failover` (or `aims failover <tool>`),
    then tell the user which account is now active and how to continue
-   (`aims claude --continue`). Headless runs started via `aims` already retry on
-   the next account by themselves.
+   (`aims claude --continue`). Headless runs started via `aims` retry on the next
+   account by themselves only when the failed attempt did nothing; otherwise the
+   account is marked and the next run uses another one. Check what the failed
+   run already changed before re-running it.
 2. "Please run /login", "OAuth token revoked", "refresh token was already used":
    the login is dead. Run `aims_failover` with `reason: "login"` so new sessions avoid it,
    and give the user `aims login <tool> <profile>`.
