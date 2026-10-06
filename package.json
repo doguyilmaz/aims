@@ -1,0 +1,31 @@
+{
+  "name": "ai-multi-session",
+  "version": "0.1.0",
+  "description": "Run several Claude Code and Codex accounts (personal, work, ...) side by side: one-time login per account, instant switching, shared history, automatic failover. Ships a CLI, an MCP server and a skill.",
+  "type": "module",
+  "bin": {
+    "aims": "bin/aims.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    ".claude-plugin",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "multi-account",
+    "profiles",
+    "mcp"
+  ],
+  "license": "MIT"
+}
