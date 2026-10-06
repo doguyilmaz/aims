@@ -162,7 +162,6 @@ export function failover(id, { from, to, minutes, reason = 'limit' } = {}) {
   const t = cfg.tools[id];
   const current = from || preferredProfile(cfg, id);
   if (!current) throw new Error(`no ${id} profiles configured`);
-  markLimited(cfg, id, current, { minutes, reason });
   let next = to;
   if (next) {
     if (!t.profiles[next]) throw new Error(`no ${id} profile "${next}"`);
@@ -174,6 +173,7 @@ export function failover(id, { from, to, minutes, reason = 'limit' } = {}) {
       throw new Error(`no other usable ${id} profile${why ? ` (${why})` : ''}`);
     }
   }
+  markLimited(cfg, id, current, { minutes, reason });
   t.active = next;
   saveConfig(cfg);
   const st = getProfileState(loadState(), id, current);
@@ -207,6 +207,7 @@ export function statusReport({ ids = TOOL_IDS } = {}) {
         email: ev.cred.email || acct.email || null,
         plan: ev.cred.plan || acct.plan || null,
         loggedIn: ev.cred.present,
+        method: ev.cred.method || null,
         usable: ev.usable,
         reasons: ev.reasons,
         usage: usageWindows(st),
