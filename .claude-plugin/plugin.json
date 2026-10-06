@@ -9,8 +9,11 @@
   "license": "MIT",
   "mcpServers": {
     "aims": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/aims.js", "mcp"]
+      "command": "bun",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/src/cli.ts",
+        "mcp"
+      ]
     }
   }
 }

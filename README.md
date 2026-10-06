@@ -12,7 +12,8 @@ more) for **Claude Code** and **Codex** on one computer:
 - **Your AI can use it too.** An MCP server and a skill let Claude or Codex check
   accounts, switch them, fail over, or run a task with the other account.
 
-One small Node.js CLI (Node 18+), no npm dependencies.
+Written in TypeScript for [Bun](https://bun.sh), with no runtime dependencies. It also compiles to a
+single self-contained binary (`bun run build`) that needs neither Bun nor Node.
 
 ## How it works
 
@@ -54,8 +55,16 @@ link. The older version is kept next to it as `*.aims-previous-*`.
 ## Install
 
 ```sh
-npm install -g github:doguyilmaz/ai-multi-session     # or: git clone ... && npm link
+bun add -g github:doguyilmaz/ai-multi-session    # needs Bun >= 1.2
 aims --version
+```
+
+Or as a standalone binary (no runtime needed on the machine that runs it):
+
+```sh
+git clone https://github.com/doguyilmaz/ai-multi-session && cd ai-multi-session
+bun install && bun run build          # -> dist/aims, put it on your PATH
+# other platforms: bun build --compile --target=bun-darwin-arm64 src/cli.ts --outfile aims
 ```
 
 ## Quick start
@@ -115,13 +124,20 @@ aims fails over at three levels:
    comes from the Claude status line (`aims setup --statusline`) and from
    `aims status --live`. It then launches the next account in `aims order` and
    prints which one it used.
-2. **Headless runs** (`claude -p`, `codex exec`/`review`). If the run fails with a
-   usage-limit or login error, aims marks that account and **retries with the
-   next one**. Output of the failed attempt is held back, so scripts only see the good run.
+2. **Headless runs** (`claude -p`, `codex exec`/`review`). A usage-limit or
+   login error marks that account, so the next run goes elsewhere. aims
+   **retries the same run** on the next account only when the failed attempt
+   provably did nothing: no tool call in `--output-format stream-json` /
+   `codex exec --json` output, or a login error. A run that may already have
+   pushed, written or deployed something is never repeated behind your back.
+   Output of a retried attempt is held back, so scripts only see the good run.
 3. **Interactive sessions** can't be switched mid-run. When you hit a limit:
    ```sh
    aims failover claude --resume   # mark current as limited, activate next, continue the same conversation
    ```
+   "Current" is the account aims launched last (which may differ from the
+   active one after an automatic skip); `--from <name>` picks another. A reset
+   time that is already known is never extended.
    Because transcripts are shared, `claude --continue` / `codex resume --last` picks
    up the conversation you just left, now on the other account.
 
@@ -150,7 +166,7 @@ Claude-only alternative: the repo is also a plugin marketplace.
 /plugin install aims@ai-multi-session
 ```
 
-(Use either `aims setup --tools codex` + the plugin, or `aims setup`. Doing both gives Claude two copies of the server.)
+(The plugin starts the server with `bun`. Use either `aims setup --tools codex` + the plugin, or `aims setup`; doing both gives Claude two copies of the server.)
 
 MCP tools: `aims_status`, `aims_switch`, `aims_failover`, `aims_clear`,
 `aims_run`, `aims_login_help`.
@@ -162,15 +178,17 @@ What the AI can and cannot do:
 - `aims_switch` / `aims_failover` change the account for **new** sessions immediately.
 - `aims_run` uses another account **right now** for a self-contained task
   (`claude -p` / `codex exec` under that profile, with failover), e.g. "ask
-  Codex on my work account to review this diff".
+  Codex on my work account to review this diff". It returns the final answer.
 - Logging in needs a browser. The AI hands you the exact command (`aims_login_help`).
 
 ## Commands
 
 ```
-aims add <tool> <name> [--existing] [--isolated]   create profile (--isolated: share nothing)
+aims add <tool> <name> [--existing] [--isolated] [--dir d]
+                                                   create profile (--isolated: share nothing)
 aims login | logout <tool> <name> [-- args]        browser login for that profile
-aims rm <tool> <name> [--purge]                    forget profile (--purge deletes its dir, never shared data)
+aims rm <tool> <name> [--purge [--force]]          forget profile (--purge deletes its dir after moving
+                                                   anything shared into the hub; never shared data)
 aims use [tool] <name>                             set active profile
 aims order <tool> <names...>                       failover order
 aims [status|ls] [tool] [--live] [--json]          overview
@@ -202,6 +220,10 @@ because they would override the profile's login.
   `"exclude": ["projects", "history.jsonl"]` on the profile in `config.json`.
   Exclude `settings.json` / `config.toml` too if one account needs different
   login settings (`forceLoginOrgUUID`, `forced_chatgpt_workspace_id`, ...).
+  Turning either on later takes effect on the next `aims` run: settings-type
+  entries become a private copy, conversation data starts empty.
+- `config.json` is meant to be hand-edited; if it has a JSON error, aims stops
+  and tells you instead of starting over.
 - **macOS.** Claude Code keeps each login in the keychain under
   `Claude Code-credentials-<hash of CLAUDE_CONFIG_DIR>`. aims always passes the
   same absolute path, so each profile keeps its own entry. The `--existing`
@@ -212,15 +234,28 @@ because they would override the profile's login.
   commands, and from Codex's (experimental) `app-server` account API. If a
   future version changes them, aims falls back to cooldowns from actual
   limit errors.
-- Tested on Linux with Claude Code 2.1.291 and Codex 0.160.1 (`npm test` runs
+- Tested on Linux with Claude Code 2.1.291 and Codex 0.160.1 (`bun test` runs
   the suite against a stand-in `claude`). The macOS keychain naming was checked
   against Claude Code 2.1.291's code, but the macOS and Windows code paths have
   not been run on those systems yet.
+
+## Development
+
+```sh
+bun install
+bun run check        # tsc (strict) + bun test
+bun src/cli.ts ...   # run from source
+```
+
+`src/` layout: `cli.ts` (commands), `run.ts` (launch + failover), `health.ts`
+(logins, usage, live checks), `links.ts` (shared folders), `analyze.ts`
+(reading headless output safely), `proc.ts` (Bun.spawn wrappers), `mcp.ts`,
+`statusline.ts`, `ops.ts`, `config.ts`.
 
 ## Uninstall
 
 ```sh
 aims rm claude work --purge      # per profile; shared data in ~/.claude / ~/.codex stays
 claude mcp remove aims -s user   # per login, if you used `aims setup`
-rm -rf ~/.aims && npm rm -g ai-multi-session
+rm -rf ~/.aims && bun remove -g ai-multi-session
 ```
