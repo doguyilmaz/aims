@@ -108,11 +108,14 @@ func TestWithLockSerializes(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = WithLock(path, func() error {
+			err := WithLock(path, func() error {
 				b, _ := os.ReadFile(path)
 				n, _ := strconv.Atoi(string(b))
 				return WriteFile(path, []byte(strconv.Itoa(n+1)), 0o644)
 			})
+			if err != nil {
+				t.Error(err)
+			}
 		}()
 	}
 	wg.Wait()

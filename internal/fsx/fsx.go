@@ -159,7 +159,7 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 		os.Remove(name)
 		return err
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := rename(name, path); err != nil {
 		os.Remove(name)
 		return err
 	}
@@ -222,7 +222,9 @@ func Lock(path string, wait time.Duration) (unlock func(), ok bool, err error) {
 			f.Close()
 			return func() { os.Remove(lock) }, true, nil
 		}
-		if !errors.Is(err, fs.ErrExist) {
+		// On Windows a lock file another process is deleting reads as
+		// "access denied" for a moment, not "exists": wait for it too.
+		if !errors.Is(err, fs.ErrExist) && !(busy(err) && time.Now().Before(deadline)) {
 			return nil, false, err
 		}
 		if fi := Stat(lock); fi != nil && time.Since(fi.ModTime()) > lockStale {
