@@ -88,8 +88,9 @@ if (flag === '--publish') {
   if (published) {
     console.log(`${name}@${version} is already on npm`);
   } else {
+    // Provenance is up to the caller (NPM_CONFIG_PROVENANCE): npm accepts it
+    // only from a public repository.
     const args = ['publish', '--access', 'public'];
-    if (process.env.GITHUB_ACTIONS) args.push('--provenance');
     if (version.includes('-')) args.push('--tag', 'next');
     execFileSync('npm', args, { cwd: out, stdio: 'inherit' });
   }
