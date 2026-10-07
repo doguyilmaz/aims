@@ -204,7 +204,7 @@ aims failover codex --to work --minutes 90`,
 				}
 				return err
 			}
-			ui.Done("%s now uses %s; %s rests until %s", a.Title(), ui.Err.Bold.Render(res.To), res.From, res.Until.Local().Format("Mon 15:04"))
+			ui.Done("%s now uses %s; %s rests (%s)", a.Title(), ui.Err.Bold.Render(res.To), res.From, ui.Until(res.Until))
 			if res.FromLastUsed {
 				ui.Hint("%s was marked because it was used last; another one? aims clear %s %s && aims failover %s --from <name>", res.From, a.ID(), res.From, a.ID())
 			}

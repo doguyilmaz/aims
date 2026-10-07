@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
@@ -161,7 +162,8 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	}
 	var o *oauth
 	present := false
-	if runtime.GOOS == "darwin" {
+	// Test binaries never read the keychain of the person running them.
+	if runtime.GOOS == "darwin" && !testing.Testing() {
 		present, o = readKeychain(h.EnvValue)
 	}
 	if !present {
@@ -230,25 +232,30 @@ var missingRe = regexp.MustCompile(`(?i)no (mcp )?server named|not found`)
 
 func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, name string, command []string) error {
 	args := append([]string{"mcp", "add", "--scope", "user", name, "--"}, command...)
-	return runMCP(h, args, alreadyRe)
+	_, err := runMCP(h, args, alreadyRe)
+	return err
 }
 
-func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) error {
+func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) (bool, error) {
 	return runMCP(h, []string{"mcp", "remove", "--scope", "user", name}, missingRe)
 }
 
-func runMCP(h tool.Home, args []string, benign *regexp.Regexp) error {
+// runMCP runs an mcp subcommand. changed is false when it failed with an
+// expected message (already there, nothing to remove).
+func runMCP(h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
 	if h.Bin == "" {
-		return errNotInstalled
+		return false, errNotInstalled
 	}
 	out, code, err := proc.CombinedOutput(h.Bin, args, h.Env, time.Minute)
-	if err != nil {
-		return err
+	switch {
+	case err != nil:
+		return false, err
+	case benign.MatchString(out): // codex exits 0 after "No MCP server named ..."
+		return false, nil
+	case code == 0:
+		return true, nil
 	}
-	if code != 0 && !benign.MatchString(out) {
-		return &tool.CommandError{Output: out, Code: code}
-	}
-	return nil
+	return false, &tool.CommandError{Output: out, Code: code}
 }
 
 var errNotInstalled = &tool.CommandError{Output: "claude is not installed"}
@@ -307,17 +314,17 @@ func (*Adapter) InstallStatusLine(home, command string) (string, error) {
 	return prev, fsx.WriteFile(path, out, 0o644)
 }
 
-func (*Adapter) RemoveStatusLine(home, command, previous string) error {
+func (*Adapter) RemoveStatusLine(home, command, previous string) (bool, error) {
 	path := filepath.Join(home, "settings.json")
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		return false, nil
 	}
 	out, changed, err := unsetStatusLine(b, command, previous)
 	if err != nil || !changed {
-		return err
+		return false, err
 	}
-	return fsx.WriteFile(path, out, 0o644)
+	return true, fsx.WriteFile(path, out, 0o644)
 }
 
 // StatusInput is the part of Claude Code's status line JSON aims reads.

@@ -156,14 +156,17 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 		}
 		if in.MCP && profiles.Bin(a) != "" {
 			for _, h := range mcpHomes(cfg, a) {
-				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: a.UnregisterMCP(ctx, h, MCPName)})
+				if removed, err := a.UnregisterMCP(ctx, h, MCPName); removed || err != nil {
+					steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: err})
+				}
 			}
 		}
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {
 			cmd := shellJoin(append(command, "statusline"))
 			for _, h := range homes(cfg, a) {
-				err := sl.RemoveStatusLine(h.Dir, cmd, cfg.Status.Chain)
-				steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
+				if removed, err := sl.RemoveStatusLine(h.Dir, cmd, cfg.Status.Chain); removed || err != nil {
+					steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
+				}
 			}
 		}
 	}

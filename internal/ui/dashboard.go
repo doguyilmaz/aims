@@ -171,7 +171,7 @@ func (m *dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.help.Width = msg.Width
+		m.help.Width = msg.Width - 1
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
@@ -236,7 +236,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("%s is cooling down until %s; %s is now active", res.From, res.Until.Local().Format("15:04"), res.To), false}
+			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
 		}
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {
@@ -338,7 +338,11 @@ func (m *dashboard) View() string {
 	}
 
 	if sel, ok := m.selected(); ok {
-		b.WriteString(m.card(sel, min(w-2, 78)) + "\n")
+		card := m.card(sel, min(w-2, 78))
+		// Drop the card rather than push the list off a short terminal.
+		if m.height == 0 || lipgloss.Height(b.String())+lipgloss.Height(card)+3 <= m.height {
+			b.WriteString(card + "\n")
+		}
 	}
 	if m.flash != "" {
 		st, glyph := s.OK, glyphOK
@@ -347,7 +351,7 @@ func (m *dashboard) View() string {
 		}
 		b.WriteString(" " + st.Render(glyph) + " " + m.flash + "\n")
 	}
-	b.WriteString("\n " + m.help.View(keys) + "\n")
+	b.WriteString("\n" + s.Renderer().NewStyle().PaddingLeft(1).Render(m.help.View(keys)) + "\n")
 	return b.String()
 }
 

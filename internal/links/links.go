@@ -331,6 +331,9 @@ func ensureOne(o Options, name string) (Report, error) {
 
 	// A regular file where the link should be.
 	switch {
+	case hfi != nil && hfi.IsDir():
+		r.Action, r.Detail = Conflict, "a file here, a folder in the shared folder"
+		return r, nil
 	case hfi == nil:
 		if err := move(link, target); err != nil {
 			return r, err

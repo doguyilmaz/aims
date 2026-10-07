@@ -230,6 +230,9 @@ func Uninstall(sh Shell) (string, bool, error) {
 	if !found {
 		return path, false, nil
 	}
+	if sh == Fish && strings.TrimSpace(updated) == "" {
+		return path, true, os.Remove(path) // aims.fish is ours alone
+	}
 	return path, true, fsx.WriteFile(path, []byte(updated), 0o644)
 }
 
@@ -249,7 +252,11 @@ func replaceBlock(s, block string) (string, bool) {
 			if end < len(s) && s[end] == '\n' {
 				end++
 			}
-			return s[:start] + block + s[end:], true
+			head := s[:start]
+			if block == "" && end == len(s) && strings.HasSuffix(head, "\n\n") {
+				head = head[:len(head)-1] // the blank line Install put before it
+			}
+			return head + block + s[end:], true
 		}
 	}
 	if block == "" {

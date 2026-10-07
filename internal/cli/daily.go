@@ -71,7 +71,7 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 			if quiet || !ui.Interactive() {
 				run()
 			} else {
-				_ = ui.Spin(fmt.Sprintf("checking %s/%s", id, n), run)
+				ui.Spin(fmt.Sprintf("checking %s/%s", id, n), run)
 			}
 			if !quiet && p.Status != tool.ProbeOK {
 				ui.Warn("%s/%s: %s%s", id, n, p.Status, suffix(p.Detail))

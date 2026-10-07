@@ -132,7 +132,7 @@ func runInit(ctx context.Context, o initOptions) error {
 	if o.yes {
 		all = detect(ctx, cfg, only)
 	} else {
-		_ = ui.Spin("looking for Claude Code and Codex", func() { all = detect(ctx, cfg, only) })
+		ui.Spin("looking for Claude Code and Codex", func() { all = detect(ctx, cfg, only) })
 	}
 	inst := installed(all)
 	if len(inst) == 0 {
@@ -334,16 +334,21 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 
 func askIntegrations(r *ui.Rail, inst []found) (ops.Integrations, error) {
 	sh := shell.Detect()
-	opts := []ui.Option{{Label: "Let Claude Code and Codex switch accounts themselves", Value: "mcp", Hint: "MCP server and skill"}}
+	var titles, bins []string
+	for _, f := range inst {
+		titles = append(titles, f.a.Title())
+		bins = append(bins, "`"+f.a.Layout().Bin+"`")
+	}
+	opts := []ui.Option{{Label: "Let " + strings.Join(titles, " and ") + " switch accounts themselves", Value: "mcp", Hint: "MCP server and skill", Short: "MCP server and skill"}}
 	for _, f := range inst {
 		if _, ok := f.a.(tool.StatusLiner); ok {
-			opts = append(opts, ui.Option{Label: "Show the account and plan usage in " + f.a.Title(), Value: "statusline", Hint: "status line"})
+			opts = append(opts, ui.Option{Label: "Show the account and plan usage in " + f.a.Title(), Value: "statusline", Hint: "status line", Short: "status line"})
 			break
 		}
 	}
 	rc := shell.RCFile(sh)
 	if rc != "" {
-		opts = append(opts, ui.Option{Label: "Make plain `claude` and `codex` follow the active account", Value: "shell", Hint: fsx.Tildify(rc)})
+		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " follow the active account", Value: "shell", Hint: fsx.Tildify(rc), Short: "shell integration"})
 	}
 	picked := make([]string, len(opts))
 	for i, o := range opts {
@@ -557,13 +562,20 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	return nil
 }
 
-// initQuiet is `aims init --yes`.
+// initQuiet is `aims init --yes`. Tools that already have profiles are left
+// alone, so it is safe to run again (from a dotfiles script, say).
 func initQuiet(ctx context.Context, cfg *config.Config, inst []found, o initOptions) error {
-	if cfg.HasProfiles() {
-		return errors.New("aims already has profiles; add one with: aims login <tool> <name>")
+	in, err := parseIntegrations(o.integrations)
+	if err != nil {
+		return err
 	}
+	var hints []string
 	for _, f := range inst {
 		a := f.a
+		if len(cfg.Tools[a.ID()].Profiles) > 0 {
+			ui.Info("%s already has profiles: %s", a.ID(), strings.Join(cfg.Tools[a.ID()].Order, ", "))
+			continue
+		}
 		if f.loggedIn() {
 			if _, err := ops.AddProfile(a, o.current, ops.AddOptions{Existing: true}); err != nil {
 				return err
@@ -576,15 +588,31 @@ func initQuiet(ctx context.Context, cfg *config.Config, inst []found, o initOpti
 				return err
 			}
 			ui.Done("%s/%s %s", a.ID(), o.current, fsx.Tildify(res.Dir))
+			hints = append(hints, fmt.Sprintf("aims login %s %s", a.ID(), o.current))
 		}
 		res, err := ops.AddProfile(a, o.second, ops.AddOptions{Share: o.share})
 		if err != nil {
 			return err
 		}
 		ui.Done("%s/%s %s", a.ID(), o.second, fsx.Tildify(res.Dir))
+		hints = append(hints, fmt.Sprintf("aims login %s %s", a.ID(), o.second))
 	}
-	in := ops.Integrations{}
-	for _, part := range strings.Split(o.integrations, ",") {
+	steps, err := ops.Setup(ctx, nil, in)
+	if err != nil {
+		return err
+	}
+	if err := reportSteps(steps, ""); err != nil {
+		return err
+	}
+	for _, h := range hints {
+		ui.Hint("log in: %s", h)
+	}
+	return nil
+}
+
+func parseIntegrations(list string) (ops.Integrations, error) {
+	var in ops.Integrations
+	for _, part := range strings.Split(list, ",") {
 		switch strings.TrimSpace(part) {
 		case "all":
 			in = ops.Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect()}
@@ -598,21 +626,8 @@ func initQuiet(ctx context.Context, cfg *config.Config, inst []found, o initOpti
 			in.Shell = shell.Detect()
 		case "none", "":
 		default:
-			return fmt.Errorf("unknown integration %q", part)
+			return in, fmt.Errorf("unknown integration %q (skill, mcp, statusline, shell, all or none)", part)
 		}
 	}
-	steps, err := ops.Setup(ctx, nil, in)
-	if err != nil {
-		return err
-	}
-	if err := reportSteps(steps, ""); err != nil {
-		return err
-	}
-	for _, f := range inst {
-		if !f.loggedIn() {
-			ui.Hint("log in: aims login %s %s", f.a.ID(), o.current)
-		}
-		ui.Hint("log in: aims login %s %s", f.a.ID(), o.second)
-	}
-	return nil
+	return in, nil
 }

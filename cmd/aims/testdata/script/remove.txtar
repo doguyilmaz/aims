@@ -1,0 +1,43 @@
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+
+# Conversations written through a profile land in the shared folder.
+mkdir $HOME/.aims/profiles/claude/work/projects/repo
+cp transcript.jsonl $HOME/.aims/profiles/claude/work/projects/repo/t.jsonl
+exists $HOME/.claude/projects/repo/t.jsonl
+
+# Purging a profile deletes its folder and nothing it shared.
+exec aims rm claude work --purge -y
+stderr 'removed claude profile work and deleted ~/.aims/profiles/claude/work'
+! exists $HOME/.aims/profiles/claude/work
+exists $HOME/.claude/projects/repo/t.jsonl
+exists $HOME/.claude/.credentials.json
+
+# The adopted login is never deleted, --purge or not.
+exec aims rm claude personal --purge -y
+! stderr 'deleted'
+exists $HOME/.claude/.credentials.json
+exec aims status claude
+stdout 'no accounts yet'
+
+# Custom folders must not overlap the tool's own folder, aims' or the home folder.
+! exec aims add claude bad --dir $HOME/.claude/sub
+stderr 'is inside ~/.claude'
+! exec aims add claude bad --dir $HOME
+stderr 'contains your home folder'
+exec aims add claude ext --dir $WORK/elsewhere/ext
+stderr 'ext'
+exists $WORK/elsewhere/ext/projects
+! exec aims rm claude ext --purge -y
+stderr 'custom folder'
+exec aims rm claude ext -y
+exists $WORK/elsewhere/ext
+
+# Names are checked.
+! exec aims add claude '../evil'
+stderr 'name'
+! exec aims rm claude nobody -y
+stderr 'no claude profile "nobody"'
+
+-- transcript.jsonl --
+{"type":"user"}
