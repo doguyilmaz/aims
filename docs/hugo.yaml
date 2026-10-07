@@ -1,0 +1,58 @@
+# Hugo site config for the aims docs (Hextra theme, GitHub Pages).
+# Build:  hugo --source docs --minify     Serve:  hugo server --source docs
+baseURL: "https://doguyilmaz.github.io/aims/"
+title: aims
+
+enableRobotsTXT: true
+enableGitInfo: true
+enableInlineShortcodes: true
+
+module:
+  imports:
+    - path: github.com/imfing/hextra
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    noClasses: false
+
+menu:
+  main:
+    - name: Docs
+      pageRef: /docs
+      weight: 1
+    - name: Search
+      weight: 2
+      params:
+        type: search
+    - name: GitHub
+      weight: 3
+      url: "https://github.com/doguyilmaz/aims"
+      params:
+        icon: github
+
+params:
+  description: "Several Claude Code and Codex accounts on one machine: switch instantly, share history and settings, and fail over when an account hits its limit."
+  images: ["images/og.png"]
+  navbar:
+    displayTitle: true
+    displayLogo: true
+    logo:
+      path: images/logo-small.svg
+      dark: images/logo-small.svg
+      width: 28
+      height: 28
+  footer:
+    enable: true
+    displayCopyright: false
+    displayPoweredBy: true
+  page:
+    width: normal
+  theme:
+    default: system
+    displayToggle: true
+  editURL:
+    enable: true
+    base: "https://github.com/doguyilmaz/aims/edit/main/docs/content"
