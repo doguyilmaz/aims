@@ -35,6 +35,8 @@ type Options struct {
 	Timeout time.Duration
 	// StripEnv drops more variables from the child (MCP: the parent session's markers).
 	StripEnv []string
+	// ExtraEnv adds KEY=VALUE pairs to the child's environment.
+	ExtraEnv []string
 	// Notify receives progress messages ("skipping work: limited for 2h").
 	Notify func(level Level, msg string)
 }
@@ -91,7 +93,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			return Result{Code: 2}, fmt.Errorf("no %s profile %q (see: aims status)", a.ID(), o.Profile)
 		}
 		// Nothing configured: behave exactly like the plain tool.
-		env := strip(os.Environ(), o.StripEnv)
+		env := append(strip(os.Environ(), o.StripEnv), o.ExtraEnv...)
 		if !headless {
 			code, err := proc.RunAttached(bin, o.Args, env, o.Dir)
 			return Result{Code: code}, err
@@ -131,7 +133,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			}
 		}
 		env, dropped := profiles.Env(cfg, a, name, os.Environ())
-		env = strip(env, o.StripEnv)
+		env = append(strip(env, o.StripEnv), o.ExtraEnv...)
 		if len(dropped) > 0 {
 			o.say(Info, "ignoring %s from your shell so the %q login is used", strings.Join(dropped, ", "), name)
 		}
@@ -167,6 +169,10 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	res.Code, res.FinalText, res.ErrorText = cap.Code, an.FinalText(), an.ErrorText()
 	if cap.Code == 0 && !an.ResultFailed() {
 		cap.Flush()
+		// It just worked, so any limit or login mark on it is out of date.
+		if ps := config.LoadState().Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
+			_ = profiles.Clear(a.ID(), name)
+		}
 		return res, "", nil
 	}
 	res.Failure = tool.Classify(res.ErrorText)
@@ -176,11 +182,10 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	case tool.FailLimit:
 		_ = profiles.MarkLimited(cfg, a.ID(), name, "limit", time.Time{}, 0)
 	}
-	// Retry only when the failed run provably changed nothing: no tool call in
-	// structured output, or, with the output hidden, a login error, which stops
-	// the very first request.
-	activity := an.Activity()
-	safe := activity == tool.ActivityNone || (activity == tool.ActivityUnknown && res.Failure == tool.FailLogin)
+	// Retry only when the failed run provably changed nothing: structured
+	// output that shows no tool call. Plain output hides tool calls, and even a
+	// login error can come mid-run (a refresh token rotated by another session).
+	safe := an.Activity() == tool.ActivityNone
 	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
 		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
 			return res, next.Name, nil

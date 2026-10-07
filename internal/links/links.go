@@ -111,15 +111,30 @@ func pointsTo(p, target string) bool {
 	return filepath.Clean(raw) == filepath.Clean(target)
 }
 
-// move renames, falling back to copy and delete across file systems.
+// move renames without replacing anything at to, falling back to copy and
+// delete only across file systems. Any other failure (a file open on Windows,
+// say) is returned as is, with nothing deleted.
 func move(from, to string) error {
-	if err := os.Rename(from, to); err == nil {
-		return nil
+	if fsx.Lstat(to) != nil {
+		return fmt.Errorf("%s already exists", to)
+	}
+	err := os.Rename(from, to)
+	if err == nil || !crossDevice(err) {
+		return err
 	}
 	if err := copyTree(from, to); err != nil {
 		return err
 	}
 	return os.RemoveAll(from)
+}
+
+// unique returns base, or base with a counter, naming nothing that exists yet.
+func unique(base string) string {
+	p := base
+	for i := 2; fsx.Lstat(p) != nil; i++ {
+		p = fmt.Sprintf("%s-%d", base, i)
+	}
+	return p
 }
 
 func copyTree(from, to string) error {
@@ -187,6 +202,9 @@ func sameContent(a, b string) bool {
 // removes src. Returns the names of kept duplicates.
 func mergeDir(src, dst, label string) ([]string, error) {
 	var kept []string
+	if si, di := fsx.Stat(src), fsx.Stat(dst); si != nil && di != nil && os.SameFile(si, di) {
+		return nil, fmt.Errorf("%s and %s are the same folder", src, dst) // removing src would empty dst
+	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return nil, err
 	}
@@ -208,7 +226,7 @@ func mergeDir(src, dst, label string) ([]string, error) {
 		case sfi.Mode().IsRegular() && dfi.Mode().IsRegular() && sameContent(s, d):
 			os.Remove(s)
 		default:
-			alt := d + ".aims-" + label + "-" + stamp()
+			alt := unique(d + ".aims-" + label + "-" + stamp())
 			if err := move(s, alt); err != nil {
 				return kept, err
 			}
@@ -228,6 +246,12 @@ func Ensure(o Options) []Report {
 	}
 	if fsx.Abs(o.Hub) == fsx.Abs(o.Dir) {
 		return nil
+	}
+	// A profile folder that is the hub under another name (a symlink, another
+	// letter case) or overlaps it would have its "shared" entries merged into
+	// themselves.
+	if fsx.Inside(o.Dir, o.Hub) || fsx.Inside(o.Hub, o.Dir) {
+		return []Report{{Name: o.Dir, Action: Conflict, Detail: "the profile folder overlaps the shared folder " + o.Hub}}
 	}
 	if err := os.MkdirAll(o.Dir, 0o700); err != nil {
 		return []Report{{Name: o.Dir, Action: Conflict, Detail: err.Error()}}
@@ -280,6 +304,10 @@ func ensureOne(o Options, name string) (Report, error) {
 	case hfi != nil && sameFile(lfi, hfi):
 		// A Windows hard link standing in for a file symlink.
 		r.Action = OK
+		return r, nil
+
+	case lfi.IsDir() && hfi != nil && os.SameFile(fsx.Stat(link), hfi):
+		r.Action, r.Detail = Conflict, "this is the shared folder itself, under another name"
 		return r, nil
 
 	case lfi.IsDir():
@@ -360,7 +388,7 @@ func ensureOne(o Options, name string) (Report, error) {
 		if profileNewer {
 			tag = "previous"
 		}
-		backup := target + ".aims-" + tag + "-" + stamp()
+		backup := unique(target + ".aims-" + tag + "-" + stamp())
 		if profileNewer {
 			if err := move(target, backup); err != nil {
 				return r, err

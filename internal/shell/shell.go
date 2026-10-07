@@ -52,12 +52,15 @@ func Detect() Shell {
 func quote(sh Shell, v string) string {
 	switch sh {
 	case PowerShell:
-		return "'" + strings.ReplaceAll(v, "'", "''") + "'"
+		// PowerShell also ends a single-quoted string at the typographic quotes.
+		return "'" + psQuotes.Replace(v) + "'"
 	case Fish:
 		return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(v) + "'"
 	}
 	return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
 }
+
+var psQuotes = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019", "\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")
 
 func set(sh Shell, k, v string) string {
 	switch sh {

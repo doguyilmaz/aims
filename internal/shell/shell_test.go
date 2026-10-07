@@ -115,3 +115,9 @@ func TestInitQuotesPath(t *testing.T) {
 		t.Fatalf("powershell:\n%s", out)
 	}
 }
+
+func TestPowerShellTypographicQuotes(t *testing.T) {
+	if got := quote(PowerShell, "a\u2019b'c"); got != "'a\u2019\u2019b''c'" {
+		t.Fatalf("quote = %s", got)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestHomePaths(t *testing.T) {
@@ -60,8 +61,16 @@ func TestWriteFileThroughSymlink(t *testing.T) {
 	if b, _ := os.ReadFile(real); string(b) != "new" {
 		t.Fatalf("target = %q", b)
 	}
-	if fi, _ := os.Stat(real); fi.Mode().Perm() != 0o600 {
+	// An existing file keeps its mode; a new one gets the requested mode.
+	if fi, _ := os.Stat(real); fi.Mode().Perm() != 0o644 {
 		t.Fatalf("perm = %v", fi.Mode().Perm())
+	}
+	fresh := filepath.Join(dir, "new.json")
+	if err := WriteFile(fresh, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(fresh); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("new file perm = %v", fi.Mode().Perm())
 	}
 	if m, _ := filepath.Glob(filepath.Join(dir, "dotfiles", ".*.tmp")); len(m) != 0 {
 		t.Fatalf("temp files left: %v", m)
@@ -112,5 +121,44 @@ func TestWithLockSerializes(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".lock"); err == nil {
 		t.Fatal("lock file left behind")
+	}
+}
+
+func TestInsideSeesThroughLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need developer mode on Windows")
+	}
+	root := t.TempDir()
+	hub := filepath.Join(root, ".claude")
+	os.MkdirAll(hub, 0o755)
+	alias := filepath.Join(root, "alias")
+	os.Symlink(hub, alias)
+	for _, c := range []string{alias, filepath.Join(alias, "work"), filepath.Join(alias, "not", "yet")} {
+		if !Inside(c, hub) {
+			t.Errorf("%s is inside the hub", c)
+		}
+	}
+	if Inside(filepath.Join(root, "elsewhere"), hub) || !Inside(hub, root) {
+		t.Error("Inside is too eager")
+	}
+	if Real(filepath.Join(alias, "x", "y")) != filepath.Join(Real(hub), "x", "y") {
+		t.Errorf("Real = %s", Real(filepath.Join(alias, "x", "y")))
+	}
+}
+
+func TestLockTimesOut(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f")
+	unlock, ok, err := Lock(path, time.Second)
+	if err != nil || !ok {
+		t.Fatal("first lock")
+	}
+	if _, ok, _ := Lock(path, 50*time.Millisecond); ok {
+		t.Fatal("lock taken twice")
+	}
+	unlock()
+	if u, ok, _ := Lock(path, 50*time.Millisecond); !ok {
+		t.Fatal("lock not released")
+	} else {
+		u()
 	}
 }

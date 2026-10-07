@@ -30,12 +30,11 @@ A headless run (`claude -p`, `codex exec`, or the `aims_run` MCP tool) that fail
 | --- | --- | --- | --- |
 | `claude -p --output-format stream-json`, `codex exec --json` | limit or login, no tool call seen | yes | the stream shows every tool call, and there was none |
 | same | limit or login, after a tool call | no | the run may already have edited files or run commands |
-| plain text or `json` | login error | yes | a dead login stops the first request |
-| plain text or `json` | limit | no | the output does not show whether tools ran |
+| plain text or `json` | limit or login | no | the output does not show whether tools ran |
 
-When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer.
+When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
 
-Errors are read only from the tool's own error output and final status, never from the model's text, so a prompt about rate limits does not trigger a failover.
+Errors are read only from the tool's own error output and final status, never from the model's answer or your prompt, so a prompt about rate limits does not trigger a failover.
 
 ## In an interactive session
 

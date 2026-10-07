@@ -158,3 +158,28 @@ func TestLoginHelp(t *testing.T) {
 		t.Fatalf("login help: %s", out)
 	}
 }
+
+func TestRunIsReadOnlyUnlessAsked(t *testing.T) {
+	setup(t)
+	log := filepath.Join(t.TempDir(), "log")
+	t.Setenv("FAKE_SIDE_EFFECTS", log)
+	t.Setenv("FAKE_RECORD_ARGS", "1")
+	cs := connect(t)
+	call(t, cs, "aims_run", map[string]any{"tool": "claude", "prompt": "look"})
+	call(t, cs, "aims_run", map[string]any{"tool": "claude", "prompt": "edit", "write": true})
+	got := testutil.Read(t, log)
+	lines := strings.Split(strings.TrimSpace(got), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "--permission-mode plan") || strings.Contains(lines[1], "--permission-mode") {
+		t.Fatalf("runs:\n%s", got)
+	}
+}
+
+func TestRunRefusesToNest(t *testing.T) {
+	setup(t)
+	t.Setenv(nestedVar, "1")
+	cs := connect(t)
+	out, isErr := call(t, cs, "aims_run", map[string]any{"tool": "claude", "prompt": "again"})
+	if !isErr || !strings.Contains(out, "cannot start another") {
+		t.Fatalf("nested run: %s", out)
+	}
+}

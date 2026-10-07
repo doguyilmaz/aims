@@ -3,6 +3,7 @@
 package links
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"syscall"
@@ -13,6 +14,8 @@ func makeLink(target, link string, _ bool) error { return os.Symlink(target, lin
 func removeLink(p string) error { return os.Remove(p) }
 
 func isJunction(string) bool { return false }
+
+func crossDevice(err error) bool { return errors.Is(err, syscall.EXDEV) }
 
 func sameFile(a, b fs.FileInfo) bool {
 	sa, ok1 := a.Sys().(*syscall.Stat_t)

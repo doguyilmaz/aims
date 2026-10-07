@@ -218,14 +218,23 @@ func idsOrAll(ids []tool.ID) []tool.ID {
 	return ids
 }
 
-// shellJoin quotes a command for a settings file that runs it through a shell.
+// shellJoin quotes a command for a settings file that runs it through a
+// shell. Anything outside a small safe set is single-quoted.
 func shellJoin(parts []string) string {
 	quoted := make([]string, len(parts))
 	for i, p := range parts {
-		if p == "" || strings.ContainsAny(p, " \t\"'$`\\|&;<>()*?") {
+		if p == "" || strings.IndexFunc(p, unsafeRune) >= 0 {
 			p = "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
 		}
 		quoted[i] = p
 	}
 	return strings.Join(quoted, " ")
+}
+
+func unsafeRune(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return false
+	}
+	return !strings.ContainsRune("/._-+:@%,=", r)
 }

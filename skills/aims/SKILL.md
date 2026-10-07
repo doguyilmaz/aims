@@ -19,8 +19,8 @@ logout, and a conversation started on one account can continue on another.
   move this conversation, the user exits and runs `aims claude --continue` or
   `aims codex resume --last`; `aims failover claude --resume` does both.
 - To use another account **right now**, run a self-contained task with it:
-  the `aims_run` MCP tool, or `aims claude@work -p "..."` /
-  `aims codex@work exec "..."`.
+  the `aims_run` MCP tool (read-only unless you pass `write: true`), or
+  `aims claude@work -p "..."` / `aims codex@work exec "..."`.
 - A login opens a browser and needs the person. Never try to complete one;
   give the user the command: `aims login <tool> <profile>`.
 

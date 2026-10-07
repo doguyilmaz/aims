@@ -9,7 +9,14 @@ import (
 )
 
 func (*Adapter) NewAnalyzer(args []string) tool.Analyzer {
-	return &analyzer{json: tool.HasFlag(args, "--json"), errs: tool.Tail{Max: 20}}
+	json := tool.HasFlag(args, "--json")
+	// Plain output mixes codex's own errors with the echoed prompt and command
+	// output; only its last error line, the one that ended the run, counts.
+	keep := 1
+	if json {
+		keep = 20
+	}
+	return &analyzer{json: json, errs: tool.Tail{Max: keep}}
 }
 
 var toolItems = map[string]bool{"command_execution": true, "file_change": true, "mcp_tool_call": true, "web_search": true}

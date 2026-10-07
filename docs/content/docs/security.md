@@ -27,11 +27,12 @@ Everything else, including your prompts and conversations, goes from the tools t
 
 - `~/.aims`, its `config.json` and `state.json`, and the profile folders are created readable by you only. If you put an API key in a profile's `env`, it is stored in `config.json` in plain text, as the tools store their own.
 - Writes are atomic (a temporary file, then a rename), so an interrupted aims never leaves a half-written file. A file you keep as a symlink (dotfiles) is written through, not replaced.
-- aims deletes only what it created: `--purge` refuses folders outside `~/.aims/profiles`, and shared content is moved to the hub before a profile folder goes.
+- aims deletes only what it created: `--purge` refuses folders outside `~/.aims/profiles`, and shared content is moved to the hub before a profile folder goes. When it repairs a link it never overwrites: the other version is kept under a new name.
+- A custom profile folder (`--dir`) must be new, empty or a config folder of that tool, and may not overlap your home folder, `~/.aims` or the tool's folder, also through a symlink or a different letter case.
 
 ## Sessions and the model
 
-The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, switch the account for new sessions, and run a prompt with another account. It cannot log in, read logins or change the account of the running session. `aims_run` uses the tool's default permissions, so a headless run cannot use tools that would need your approval.
+The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, switch the account for new sessions, and run a prompt with another account. It cannot log in, read logins or change the account of the running session. `aims_run` is read-only unless the call asks for `write`, so a restricted session cannot use it to edit files; see [AI integration](../ai-integration#mcp-server).
 
 If one account must never see another's conversations, give it `share: settings` or `none`. See [What accounts share](../sharing).
 

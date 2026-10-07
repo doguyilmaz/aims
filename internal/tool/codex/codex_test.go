@@ -132,3 +132,14 @@ func TestProbeWithFake(t *testing.T) {
 		t.Fatalf("probe: %+v", p)
 	}
 }
+
+// A pasted error in the prompt must not decide how a run failed.
+func TestPlainOutputUsesTheLastErrorOnly(t *testing.T) {
+	an := New().NewAnalyzer([]string{"exec", "--", "why does this fail?"})
+	an.Line(true, "user")
+	an.Line(true, "ERROR: upstream 401 Unauthorized")
+	an.Line(true, "ERROR: stream ended unexpectedly")
+	if f := tool.Classify(an.ErrorText()); f != tool.FailNone {
+		t.Fatalf("classified as %q from %q", f, an.ErrorText())
+	}
+}
