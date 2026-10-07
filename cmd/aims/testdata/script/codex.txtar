@@ -1,0 +1,52 @@
+[windows] skip 'checks paths in Unix form'
+
+# Codex without a login yet: both profiles are new folders.
+exec aims init --yes --tools codex --share settings --integrations none
+stderr 'codex/personal ~/.aims/profiles/codex/personal'
+exec aims status codex
+stdout 'personal +no login +not logged in +own history'
+
+env FAKE_EMAIL=me@gmail.com
+exec aims login codex personal
+env FAKE_EMAIL=work@corp.com
+exec aims login codex work
+exec aims status codex
+stdout '● personal +me@gmail.com · plus +ready +own history'
+
+# settings share config.toml with ~/.codex but keep their own sessions.
+cp config.toml $HOME/.codex/config.toml
+exec aims sync codex
+grep 'model = "o5"' $HOME/.aims/profiles/codex/work/config.toml
+mkdir $HOME/.aims/profiles/codex/personal/sessions/2026
+! exists $HOME/.codex/sessions/2026
+
+# A JSON run that hit the limit before any command is repeated on work.
+cp marker $HOME/.aims/profiles/codex/personal/LIMITED
+exec aims codex exec --json --skip-git-repo-check -- 'build it'
+stdout 'answer from work: build it'
+stderr 'codex/personal hit a limit error before doing anything, retrying with "work"'
+
+# Plain output hides commands, so the same failure is not repeated.
+exec aims clear codex
+! exec aims codex exec -- plain
+stderr 'You''ve hit your usage limit'
+stderr 'not retried'
+
+# Live check: the app-server answers for free.
+exec aims clear codex
+exec aims status --live codex
+stdout 'personal .*limited'
+stdout 'work .*ready .*5h \[#'
+exec aims status --json codex
+stdout '"label": "5h"'
+stdout '"pct": 12'
+
+cp usage $HOME/.aims/profiles/codex/work/USAGE
+exec aims status --live codex
+stdout 'work .*near limit'
+
+-- marker --
+-- config.toml --
+model = "o5"
+-- usage --
+97

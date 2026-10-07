@@ -1,4 +1,11 @@
-node_modules/
+# release builds (goreleaser, scripts/completions.sh, scripts/npm)
 dist/
+completions/
+
+# docs site build output (hugo --source docs)
+docs/public/
+docs/resources/
+.hugo_build.lock
+
 *.log
 .DS_Store

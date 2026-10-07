@@ -1,0 +1,41 @@
+[windows] skip 'checks paths in Unix form'
+
+# aims init --yes adopts the existing login and creates the second profile.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --integrations none
+stderr 'claude/personal uses your current login \(me@gmail.com\)'
+stderr 'claude/work ~/.aims/profiles/claude/work'
+stderr 'log in: aims login claude work'
+
+# Shared entries of the new profile point at ~/.claude; the login does not.
+exists $HOME/.aims/profiles/claude/work/projects
+! exists $HOME/.aims/profiles/claude/work/.credentials.json
+exec aims status claude
+stdout '● personal +me@gmail.com · max +ready +default login'
+stdout 'work +no login +not logged in'
+stdout '→ aims login claude work'
+
+# Logging in records the account and warns about a duplicate.
+exec aims login claude work
+stdout 'Login successful'
+stderr 'claude/work is logged in as work@example.com \(max\)'
+exec aims status --json claude
+stdout '"email": "work@example.com"'
+stdout '"usable": true'
+
+env FAKE_EMAIL=me@gmail.com
+exec aims login codex personal
+exec aims login codex work
+stderr 'me@gmail.com is already used by personal; log in again in a private browser window'
+
+# Running init again changes nothing.
+cp $HOME/.aims/config.json config.before
+exec aims init --yes --integrations none
+stderr 'claude already has profiles: personal, work'
+cmp $HOME/.aims/config.json config.before
+
+# Bad flags fail before anything is created.
+! exec aims init --yes --integrations bogus
+stderr 'unknown integration "bogus"'
+! exec aims init --yes --current work --second work
+stderr 'must be two different valid names'
