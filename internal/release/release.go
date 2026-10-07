@@ -21,11 +21,18 @@ const (
 	// LatestURL redirects to the newest release (drafts and prereleases
 	// excluded). github.com is used rather than the API, whose unauthenticated
 	// limit is shared by everyone behind the same office NAT.
-	LatestURL   = "https://github.com/" + repo + "/releases/latest"
-	tagPrefix   = "https://github.com/" + repo + "/releases/tag/"
-	ModulePath  = "github.com/" + repo + "/cmd/aims"
-	InstallLine = "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/scripts/install.sh | sh"
+	LatestURL  = "https://github.com/" + repo + "/releases/latest"
+	tagPrefix  = "https://github.com/" + repo + "/releases/tag/"
+	ModulePath = "github.com/" + repo + "/cmd/aims"
 )
+
+// InstallLine is the one-line install for this system.
+func InstallLine(goos string) string {
+	if goos == "windows" {
+		return "irm https://raw.githubusercontent.com/" + repo + "/main/scripts/install.ps1 | iex"
+	}
+	return "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/scripts/install.sh | sh"
+}
 
 // Compare orders versions numerically per segment ("v" ignored); a release
 // sorts after its pre-releases.
@@ -82,6 +89,7 @@ const (
 	Homebrew
 	GoInstall
 	Npm
+	Scoop
 )
 
 // Detect classifies an install from the binary's resolved path. aims never
@@ -94,6 +102,8 @@ func Detect(exe, goBin string) Method {
 		return Homebrew
 	case strings.Contains(slash, "/node_modules/"):
 		return Npm
+	case strings.Contains(strings.ToLower(slash), "/scoop/apps/"):
+		return Scoop
 	case goBin != "" && filepath.Dir(exe) == filepath.Clean(goBin):
 		return GoInstall
 	}
@@ -111,6 +121,8 @@ func UpgradeCommand(m Method) [][]string {
 		return [][]string{{"go", "install", ModulePath + "@latest"}}
 	case Npm:
 		return [][]string{{"npm", "install", "-g", "@doguyilmaz/aims@latest"}}
+	case Scoop:
+		return [][]string{{"scoop", "update"}, {"scoop", "update", "aims"}}
 	}
 	return nil
 }

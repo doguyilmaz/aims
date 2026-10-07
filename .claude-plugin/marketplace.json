@@ -1,14 +1,14 @@
 {
-  "name": "ai-multi-session",
+  "name": "aims",
   "owner": {
     "name": "Dogu Yilmaz"
   },
-  "description": "aims: run several Claude Code / Codex accounts side by side with instant switching and failover.",
+  "description": "aims: several Claude Code and Codex accounts on one machine, with instant switching and failover.",
   "plugins": [
     {
       "name": "aims",
       "source": "./",
-      "description": "Multiple Claude Code / Codex accounts with instant switching and failover (MCP server + skill)."
+      "description": "MCP server and skill for the aims CLI: check, switch and use your other accounts from inside a session."
     }
   ]
 }

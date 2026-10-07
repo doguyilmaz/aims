@@ -3,6 +3,7 @@ package shell
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -71,6 +72,9 @@ func TestRCFiles(t *testing.T) {
 }
 
 func TestEnvLinesQuote(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a Unix path")
+	}
 	testutil.Sandbox(t)
 	c, _ := config.Load()
 	c.Tools["claude"].Profiles["work"] = &config.Profile{Dir: "/tmp/it's here"}
