@@ -58,7 +58,11 @@ const main = join(out, 'aims');
 mkdirSync(join(main, 'bin'), { recursive: true });
 copyFileSync(join(root, 'scripts', 'npm', 'aims.js'), join(main, 'bin', 'aims.js'));
 chmodSync(join(main, 'bin', 'aims.js'), 0o755);
-copyFileSync(join(root, 'README.md'), join(main, 'README.md'));
+// npm shows the README outside the repository: point relative images at the tag.
+writeFileSync(
+  join(main, 'README.md'),
+  readFileSync(join(root, 'README.md'), 'utf8').replaceAll('src="assets/', `src="https://raw.githubusercontent.com/doguyilmaz/aims/${tag}/assets/`),
+);
 copyFileSync(join(root, 'LICENSE'), join(main, 'LICENSE'));
 writeFileSync(
   join(main, 'package.json'),

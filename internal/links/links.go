@@ -407,20 +407,30 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 		}
 		link := filepath.Join(dir, name)
 		fi := fsx.Lstat(link)
-		if fi == nil || (fi.Mode()&fs.ModeSymlink == 0 && !isJunction(link)) {
+		if fi == nil {
 			continue
 		}
-		// aims links to <hub>/<name>, and that entry may itself be a symlink
-		// (dotfiles), so compare the link's own target, not its resolved path.
-		raw, err := os.Readlink(link)
-		if err != nil {
-			continue
-		}
-		if !filepath.IsAbs(raw) {
-			raw = filepath.Join(dir, raw)
-		}
-		raw = strings.TrimPrefix(raw, `\\?\`)
-		if parent := filepath.Dir(filepath.Clean(raw)); parent != hubAbs && parent != hubReal {
+		var raw string
+		switch hfi := fsx.Lstat(filepath.Join(hub, name)); {
+		case fi.Mode()&fs.ModeSymlink != 0 || isJunction(link):
+			// aims links to <hub>/<name>, and that entry may itself be a symlink
+			// (dotfiles), so compare the link's own target, not its resolved path.
+			target, err := os.Readlink(link)
+			if err != nil {
+				continue
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(dir, target)
+			}
+			target = strings.TrimPrefix(target, `\\?\`)
+			if parent := filepath.Dir(filepath.Clean(target)); parent != hubAbs && parent != hubReal {
+				continue
+			}
+			raw = target
+		case hfi != nil && sameFile(fi, hfi):
+			// A hard link, which Windows gets for files without Developer Mode.
+			raw = filepath.Join(hub, name)
+		default:
 			continue
 		}
 		if err := removeLink(link); err != nil {

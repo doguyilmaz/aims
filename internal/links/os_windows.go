@@ -23,12 +23,9 @@ func makeLink(target, link string, isDir bool) error {
 	return os.Link(target, link)
 }
 
-func removeLink(p string) error {
-	if err := os.Remove(p); err != nil {
-		return os.RemoveAll(p)
-	}
-	return nil
-}
+// removeLink deletes a symlink, junction or hard link without touching what
+// it points to. Never RemoveAll here: that is one mistake away from the hub.
+func removeLink(p string) error { return os.Remove(p) }
 
 func isJunction(p string) bool {
 	fi, err := os.Lstat(p)

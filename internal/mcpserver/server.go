@@ -202,8 +202,12 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 		return fail(err)
 	}
 	resume := "aims " + string(a.ID()) + " " + strings.Join(a.Commands().Resume, " ")
-	msg := fmt.Sprintf("%s: %q is cooling down until %s; %q is now active. To continue this conversation there, exit this session and run: %s",
-		a.ID(), res.From, res.Until.Local().Format("Jan 2 15:04"), res.To, resume)
+	state := fmt.Sprintf("is cooling down until %s", res.Until.Local().Format("Jan 2 15:04"))
+	if res.Login {
+		state = fmt.Sprintf("needs a new login (the user runs: aims login %s %s)", a.ID(), res.From)
+	}
+	msg := fmt.Sprintf("%s: %q %s; %q is now active. To continue this conversation there, exit this session and run: %s",
+		a.ID(), res.From, state, res.To, resume)
 	if res.Pinned != "" && res.Pinned != res.To {
 		msg += fmt.Sprintf("\nThis terminal is pinned to %q (%s); aims skips it while it cools down.", res.Pinned, config.PinVar(a.ID()))
 	}

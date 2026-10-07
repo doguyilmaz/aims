@@ -76,11 +76,14 @@ func flag(args []string, name string) string {
 	return ""
 }
 
-func sideEffect(label string) {
+func sideEffect(label string) { record("tool ran as " + label) }
+
+// record appends a line to $FAKE_SIDE_EFFECTS, for tests to check.
+func record(line string) {
 	if f := os.Getenv("FAKE_SIDE_EFFECTS"); f != "" {
 		fh, err := os.OpenFile(f, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
-			fmt.Fprintln(fh, "tool ran as "+label)
+			fmt.Fprintln(fh, line)
 			fh.Close()
 		}
 	}
@@ -120,6 +123,7 @@ func Claude() int {
 		return 0
 	case len(args) > 1 && args[0] == "auth" && args[1] == "logout":
 		_ = os.Remove(creds)
+		record("logout as " + label)
 		fmt.Println("Successfully logged out.")
 		return 0
 	case len(args) > 1 && args[0] == "mcp":
