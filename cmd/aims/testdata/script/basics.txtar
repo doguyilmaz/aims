@@ -1,0 +1,46 @@
+# Version, help and completion.
+exec aims --version
+stdout '^aims v1.2.3$'
+exec aims --help
+stdout 'Get started'
+stdout 'Every day'
+stdout '  aims init'
+! stdout 'statusline'
+exec aims completion zsh
+stdout 'compdef'
+exec aims shell-init bash
+stdout 'claude\(\)'
+stdout 'source <\(aims completion bash\)'
+exec aims shell-init fish
+stdout 'function claude'
+
+# Unknown commands and flags exit 2.
+! exec aims frobnicate
+stderr 'unknown command'
+! exec aims status --bogus
+stderr 'unknown flag'
+
+# Without profiles, aims runs the tools as they are.
+exec aims claude --model x
+stdout 'claude interactive as default'
+exec aims status
+stdout 'no accounts yet'
+
+# Without a terminal, the wizard explains how to script it.
+! exec aims init
+stderr 'aims init --yes'
+
+# A broken config is reported, not overwritten; the status line stays quiet.
+mkdir $HOME/.aims
+cp broken.json $HOME/.aims/config.json
+! exec aims status
+stderr 'config.json'
+! exec aims add claude x
+cmp $HOME/.aims/config.json broken.json
+stdin empty
+exec aims statusline
+stdout 'aims: config error'
+
+-- broken.json --
+{"version": 1, "tools": {
+-- empty --

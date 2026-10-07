@@ -89,6 +89,10 @@ func newRoot(version string) *cobra.Command {
 		Long: "aims (AI multi-session) keeps one login per account for Claude Code and Codex,\n" +
 			"switches between them instantly, shares history and settings across them, and\n" +
 			"moves to the next account when one hits its usage limit or needs a new login.",
+		Example: `aims init
+aims claude@work
+aims use work
+aims status --live`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -42,8 +42,10 @@ type Adapter interface {
 
 	// MCPScope says where the tool keeps user-level MCP servers.
 	MCPScope() MCPScope
+	// RegisterMCP adds a user-level MCP server; one already there is fine.
 	RegisterMCP(ctx context.Context, h Home, name string, command []string) error
-	UnregisterMCP(ctx context.Context, h Home, name string) error
+	// UnregisterMCP removes it and reports whether it was there.
+	UnregisterMCP(ctx context.Context, h Home, name string) (removed bool, err error)
 }
 
 // Optional capabilities, detected with a type assertion.
@@ -65,8 +67,9 @@ type StatusLiner interface {
 	// InstallStatusLine sets command in the settings under home and returns
 	// the command it replaced, if any.
 	InstallStatusLine(home, command string) (previous string, err error)
-	// RemoveStatusLine restores previous if command is still the one set.
-	RemoveStatusLine(home, command, previous string) error
+	// RemoveStatusLine restores previous if command is still the one set,
+	// and reports whether it changed anything.
+	RemoveStatusLine(home, command, previous string) (removed bool, err error)
 }
 
 // Layout is where a tool keeps its state and which parts accounts can share.

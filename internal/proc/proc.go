@@ -135,15 +135,25 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	if len(o.Stdin) > 0 {
 		cmd.Stdin = bytes.NewReader(o.Stdin)
 	} // otherwise the null device: tools that read stdin see EOF at once
-	stdout, err := cmd.StdoutPipe()
+	// Own pipes rather than StdoutPipe: a background process the tool left
+	// behind may keep them open, and aims must not wait for it (see below).
+	outR, outW, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
-	stderr, err := cmd.StderrPipe()
+	errR, errW, err := os.Pipe()
 	if err != nil {
+		outR.Close()
+		outW.Close()
 		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
+	defer outR.Close()
+	defer errR.Close()
+	cmd.Stdout, cmd.Stderr = outW, errW
+	err = cmd.Start()
+	outW.Close()
+	errW.Close()
+	if err != nil {
 		return &Captured{Code: 127, flush: func() {}}, err
 	}
 	stop := relay(cmd, true)
@@ -167,18 +177,30 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	commitTimer := time.AfterFunc(CommitAfter, commit)
 	defer commitTimer.Stop()
 	if o.Timeout > 0 {
-		killer := time.AfterFunc(o.Timeout, func() {
+		exited := make(chan struct{})
+		defer close(exited)
+		go func() {
+			select {
+			case <-exited:
+				return
+			case <-time.After(o.Timeout):
+			}
 			io.WriteString(o.Stderr, "aims: stopped after "+o.Timeout.String()+"\n")
 			_ = terminate(cmd.Process)
-		})
-		defer killer.Stop()
+			select {
+			case <-exited:
+			case <-time.After(5 * time.Second):
+				_ = cmd.Process.Kill()
+			}
+		}()
 	}
 
+	readers := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pump(stdout, func(chunk []byte) {
+		pump(outR, func(chunk []byte) {
 			mu.Lock()
 			if committed {
 				mu.Unlock()
@@ -196,16 +218,27 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	}()
 	go func() {
 		defer wg.Done()
-		pump(stderr, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
+		pump(errR, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
 	}()
-	// Wait closes the pipes, so the readers must finish first.
-	wg.Wait()
+	go func() { wg.Wait(); close(readers) }()
+
 	code := ExitCode(cmd.Wait())
+	select {
+	case <-readers:
+	case <-time.After(pipeGrace):
+		// The tool exited but something it started still holds the pipes.
+		outR.Close()
+		errR.Close()
+		<-readers
+	}
 	mu.Lock()
 	wasCommitted := committed
 	mu.Unlock()
 	return &Captured{Code: code, Committed: wasCommitted, flush: commit}, nil
 }
+
+// pipeGrace is how long output may keep arriving after the tool exits.
+const pipeGrace = 2 * time.Second
 
 var lineMu sync.Mutex
 

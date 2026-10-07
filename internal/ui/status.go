@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ func State(s *Styles, p ops.ProfileStatus) string {
 		return s.Warn.Render("limited " + profiles.Duration(time.Until(p.Until)))
 	}
 	if len(p.Reasons) > 0 {
-		return s.Warn.Render(p.Reasons[0])
+		return s.Warn.Render("near limit") // a usage window is over the threshold; the bar shows which
 	}
 	return s.Warn.Render("unavailable")
 }
@@ -173,11 +174,23 @@ func PlainStatus(report []ops.ToolStatus) string {
 			}
 			fmt.Fprintf(&b, "  %s %s: %s, %s", mark, p.Name, acct, state)
 			for _, w := range p.Usage {
-				fmt.Fprintf(&b, ", %s %.0f%%", w.Label, w.Percent)
+				if !slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.HasPrefix(r, w.Label+" at ") }) {
+					fmt.Fprintf(&b, ", %s %.0f%%", w.Label, w.Percent)
+				}
 			}
 			b.WriteString("\n")
 		}
 	}
 	b.WriteString("(* = active for new sessions)\n")
 	return b.String()
+}
+
+// Until describes when a rest period ends: "30m, until 14:05".
+func Until(t time.Time) string {
+	d := time.Until(t)
+	clock := t.Local().Format("15:04")
+	if d > 20*time.Hour {
+		clock = t.Local().Format("Mon 15:04")
+	}
+	return profiles.Duration(d) + ", until " + clock
 }

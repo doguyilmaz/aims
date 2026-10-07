@@ -85,7 +85,17 @@ func setStatusLine(settings []byte, command string) ([]byte, string, error) {
 	if IsAimsStatusLine(prev) {
 		prev = ""
 	}
-	out, err := sjson.SetRawBytes(settings, "statusLine", []byte(fmt.Sprintf(`{"type":"command","command":%q,"padding":0}`, command)))
+	var out []byte
+	var err error
+	if gjson.GetBytes(settings, "statusLine").IsObject() {
+		// Keep the user's other status line settings (padding and so on).
+		out, err = sjson.SetBytes(settings, "statusLine.type", "command")
+		if err == nil {
+			out, err = sjson.SetBytes(out, "statusLine.command", command)
+		}
+	} else {
+		out, err = sjson.SetBytes(settings, "statusLine", map[string]any{"type": "command", "command": command, "padding": 0})
+	}
 	if err != nil {
 		return nil, "", err
 	}

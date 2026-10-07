@@ -57,15 +57,27 @@ func (*Adapter) Commands() tool.Commands {
 	}
 }
 
+// valueFlags are codex's global options that take a value, so the word after
+// them is not the subcommand.
+var valueFlags = map[string]bool{
+	"-c": true, "--config": true, "--enable": true, "--disable": true, "--remote": true,
+	"--remote-auth-token-env": true, "-i": true, "--image": true, "-m": true, "--model": true,
+	"--local-provider": true, "-p": true, "--profile": true, "-s": true, "--sandbox": true,
+	"-C": true, "--cd": true, "--add-dir": true, "-a": true, "--ask-for-approval": true,
+}
+
 func (*Adapter) IsHeadless(args []string) bool {
-	for _, a := range args {
-		if a == "--" {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--":
 			return false
+		case valueFlags[a]:
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			return a == "exec" || a == "e" || a == "review"
 		}
-		if strings.HasPrefix(a, "-") {
-			continue
-		}
-		return a == "exec" || a == "e" || a == "review"
 	}
 	return false
 }
@@ -152,23 +164,28 @@ var (
 )
 
 func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, name string, command []string) error {
-	return runMCP(h, append([]string{"mcp", "add", name, "--"}, command...), alreadyRe)
+	_, err := runMCP(h, append([]string{"mcp", "add", name, "--"}, command...), alreadyRe)
+	return err
 }
 
-func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) error {
+func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) (bool, error) {
 	return runMCP(h, []string{"mcp", "remove", name}, missingRe)
 }
 
-func runMCP(h tool.Home, args []string, benign *regexp.Regexp) error {
+// runMCP runs an mcp subcommand. changed is false when it failed with an
+// expected message (already there, nothing to remove).
+func runMCP(h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
 	if h.Bin == "" {
-		return &tool.CommandError{Output: "codex is not installed"}
+		return false, &tool.CommandError{Output: "codex is not installed"}
 	}
 	out, code, err := proc.CombinedOutput(h.Bin, args, h.Env, time.Minute)
-	if err != nil {
-		return err
+	switch {
+	case err != nil:
+		return false, err
+	case benign.MatchString(out): // codex exits 0 after "No MCP server named ..."
+		return false, nil
+	case code == 0:
+		return true, nil
 	}
-	if code != 0 && !benign.MatchString(out) {
-		return &tool.CommandError{Output: out, Code: code}
-	}
-	return nil
+	return false, &tool.CommandError{Output: out, Code: code}
 }

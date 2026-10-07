@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -136,15 +135,14 @@ func (r *Rail) ask(title string, field huh.Field, answer func() string) error {
 		WithShowHelp(false).
 		WithAccessible(os.Getenv("ACCESSIBLE") != "")
 	err := form.Run()
-	if r.s.Color() {
-		fmt.Fprint(r.w, "\x1b[1A\x1b[2K") // drop the active line
-	}
 	if errors.Is(err, huh.ErrUserAborted) {
-		r.line(r.s.Warn.Render(glyphDone) + "  " + r.s.Dim.Render(title))
-		return ErrCancelled
+		return ErrCancelled // the question stays on screen above the cancel line
 	}
 	if err != nil {
 		return err
+	}
+	if r.s.Color() {
+		fmt.Fprint(r.w, "\x1b[1A\x1b[2K") // swap the active line for the answered one
 	}
 	r.line(r.s.OK.Render(glyphDone) + "  " + title)
 	r.line(r.bar() + "  " + r.s.Dim.Render(answer()))
@@ -157,6 +155,8 @@ type Option struct {
 	Label string
 	Value string
 	Hint  string
+	// Short names the option in the answer line ("" = Label).
+	Short string
 }
 
 func (r *Rail) options(opts []Option) []huh.Option[string] {
@@ -174,6 +174,9 @@ func (r *Rail) options(opts []Option) []huh.Option[string] {
 func labelOf(opts []Option, v string) string {
 	for _, o := range opts {
 		if o.Value == v {
+			if o.Short != "" {
+				return o.Short
+			}
 			return o.Label
 		}
 	}
@@ -241,14 +244,13 @@ func (r *Rail) Confirm(title, description string, value *bool) error {
 	})
 }
 
-// Task runs fn behind a spinner and prints its result line.
+// Task runs fn behind a spinner on the rail and prints its result line.
 func (r *Rail) Task(label string, fn func() (string, error)) error {
 	var detail string
 	var err error
 	run := func() { detail, err = fn() }
-	if Interactive() {
-		sty := r.s.Renderer().NewStyle()
-		_ = spinner.New().Type(spinner.MiniDot).Style(sty.Foreground(accent)).TitleStyle(sty.Foreground(subtle)).Title(" " + label).Action(run).Run()
+	if Interactive() && r.s.Color() {
+		spin(r.w, r.s, r.bar()+"  ", label, run)
 	} else {
 		run()
 	}
@@ -265,11 +267,10 @@ func (r *Rail) Task(label string, fn func() (string, error)) error {
 }
 
 // Spin runs fn behind a spinner on stderr (directly when not on a terminal).
-func Spin(label string, fn func()) error {
-	if !Interactive() {
+func Spin(label string, fn func()) {
+	if !Interactive() || !Err.Color() {
 		fn()
-		return nil
+		return
 	}
-	sty := Err.Renderer().NewStyle()
-	return spinner.New().Type(spinner.MiniDot).Output(os.Stderr).Style(sty.Foreground(accent)).TitleStyle(sty.Foreground(subtle)).Title(" " + label).Action(fn).Run()
+	spin(os.Stderr, Err, "", label, fn)
 }

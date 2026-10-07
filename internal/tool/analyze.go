@@ -18,7 +18,7 @@ const (
 // prompts or model text, so plain status codes are safe to match.
 var (
 	loginRe = regexp.MustCompile(`(?i)please run /login|oauth token (?:has expired|revoked)|invalid api key|not logged in|could not be refreshed|refresh token (?:was|has been) (?:already used|revoked)|sign in again|signing in again|log out and sign in|authentication required|run codex login|unauthori[sz]ed|\b401\b|token_expired`)
-	limitRe = regexp.MustCompile(`(?i)you(?:'|’)ve hit your (?:usage |session |weekly )?limit|hit your usage limit|usage limit reached|usage limit for|limit reached|rate[ _-]?limit(?:ed| exceeded)|quota exceeded|spend cap|too many requests|\b429\b`)
+	limitRe = regexp.MustCompile(`(?i)you(?:'|’)ve hit your (?:usage |session |weekly )?limit|hit your usage limit|usage limit reached|usage limit for|limit reached|rate[ _-]?limit(?:ed|[ _-]exceeded)|quota exceeded|spend cap|too many requests|\b429\b`)
 )
 
 // Classify maps provider error text to a Failure.
