@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/doguyilmaz/aims/internal/config"
 )
 
 func TestRewrite(t *testing.T) {
@@ -46,5 +48,16 @@ func TestHelpListsEveryCommand(t *testing.T) {
 	}
 	if strings.Contains(b.String(), "statusline") {
 		t.Error("hidden command listed")
+	}
+}
+
+// The setup started from bare `aims` or a command uses these as they are.
+func TestDefaultInitIsValid(t *testing.T) {
+	o := defaultInit("v1")
+	if !config.ValidName(o.current) || !config.ValidName(o.second) || o.current == o.second || !config.ValidShare(o.share) {
+		t.Fatalf("defaults: %+v", o)
+	}
+	if _, err := parseIntegrations(o.integrations); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -30,7 +30,11 @@ func State(s *Styles, p ops.ProfileStatus) string {
 		}
 	}
 	if !p.Until.IsZero() {
-		return s.Warn.Render("limited " + profiles.Duration(time.Until(p.Until)))
+		word := "limited "
+		if p.Reason == "busy" {
+			word = "busy "
+		}
+		return s.Warn.Render(word + profiles.Duration(time.Until(p.Until)))
 	}
 	if len(p.Reasons) > 0 {
 		return s.Warn.Render("near limit") // a usage window is over the threshold; the bar shows which
@@ -132,6 +136,9 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 			if p.Pinned {
 				tags = append(tags, "pinned in this terminal")
 			}
+			if p.MarkedBy != "" {
+				tags = append(tags, "marked by "+p.MarkedBy)
+			}
 			if len(tags) > 0 {
 				line += "  " + s.Dim.Render(strings.Join(tags, ", "))
 			}
@@ -164,6 +171,9 @@ func PlainStatus(report []ops.ToolStatus) string {
 			state := "ready"
 			if !p.Usable {
 				state = strings.Join(p.Reasons, ", ")
+				if p.MarkedBy != "" {
+					state += " (marked by " + p.MarkedBy + ")"
+				}
 			}
 			acct := p.Email
 			if acct == "" {

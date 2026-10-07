@@ -9,14 +9,16 @@ cp LIMITED $HOME/.claude/LIMITED
 exec aims claude -p --output-format stream-json -- hello
 stdout '"result":"answer from work: hello"'
 ! stdout 'hit your session limit'
-stderr 'claude/personal hit a limit error before doing anything, retrying with "work"'
+stderr 'claude/personal hit its usage limit before doing anything, retrying with "work"'
 exec aims status claude
-stdout 'personal .*limited 5h'
+# The mark lasts until the reset the message names (5pm), and says who set it.
+stdout 'personal .*limited [0-9hm]+ .*marked by a failed run'
 
 # The next run goes to work straight away.
 exec aims claude -p -- again
 stdout 'answer from work: again'
-stderr 'skipping "personal" \(limit for 5h\)'
+stderr 'skipping "personal" \(limit for [0-9hm]+, marked by a failed run\), using "work"'
+stderr 'works again\? aims clear claude personal'
 
 # A run that already called a tool is not repeated, even with a profile to spare.
 exec aims clear claude personal
@@ -57,6 +59,18 @@ exec aims claude@work -p -- works-again
 stdout 'answer from work: works-again'
 exec aims status claude
 stdout 'work .*ready'
+
+# A 429 is a short rate limit, not the plan's: retried elsewhere, and the
+# account rests for two minutes, not hours.
+exec aims clear claude
+exec aims use personal
+cp LIMITED $HOME/.claude/BUSY
+exec aims claude -p --output-format stream-json -- busy
+stdout 'answer from work: busy'
+stderr 'claude/personal hit a rate limit before doing anything, retrying with "work"'
+exec aims status claude
+stdout 'personal .*busy [12]m'
+rm $HOME/.claude/BUSY
 
 # A pinned profile turns automatic failover off.
 exec aims clear claude

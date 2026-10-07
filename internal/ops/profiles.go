@@ -325,7 +325,8 @@ var ErrNoTarget = errors.New("no other usable profile")
 // Failover marks a profile as limited (or logged out) and makes the next
 // usable one active.
 // It changes nothing when there is no profile to switch to.
-func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason string) (FailoverResult, error) {
+// by names who asked ("aims failover", "the dashboard"), for the mark.
+func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason, by string) (FailoverResult, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return FailoverResult{}, err
@@ -364,12 +365,12 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 	}
 	switch reason {
 	case "", "limit":
-		if err := profiles.MarkLimited(cfg, id, res.From, "limit", time.Time{}, d); err != nil {
+		if err := profiles.MarkLimited(cfg, id, res.From, profiles.Limit{For: d, By: by}); err != nil {
 			return res, err
 		}
 	case "login":
 		// A dead login does not recover on its own; `aims login` clears this.
-		if err := profiles.MarkNeedsLogin(id, res.From); err != nil {
+		if err := profiles.MarkNeedsLogin(id, res.From, by, ""); err != nil {
 			return res, err
 		}
 		res.Login = true

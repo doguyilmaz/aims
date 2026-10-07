@@ -47,6 +47,8 @@ type Level int
 const (
 	Info Level = iota
 	Warn
+	// Hint is a follow-up line: the command that undoes or fixes something.
+	Hint
 )
 
 // Result describes a finished launch.
@@ -64,6 +66,9 @@ func (o *Options) say(l Level, format string, args ...any) {
 		o.Notify(l, fmt.Sprintf(format, args...))
 	}
 }
+
+// busyFor is how long a profile rests after a short-lived rate limit.
+const busyFor = 2 * time.Minute
 
 // ErrNotInstalled is returned when the tool's binary is not on PATH.
 var ErrNotInstalled = errors.New("not installed")
@@ -114,6 +119,9 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			o.say(Warn, "no %s profile looks usable (%s); trying %q anyway", a.ID(), describe(pick.Skipped), preferred)
 		case pick.Name != preferred:
 			o.say(Info, "%s: skipping %s, using %q", a.ID(), describe(pick.Skipped), pick.Name)
+			if marked := markedOnly(pick.Skipped); len(marked) > 0 {
+				o.say(Hint, "works again? aims clear %s %s", a.ID(), strings.Join(marked, " "))
+			}
 			name = pick.Name
 		}
 	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable {
@@ -149,7 +157,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 		if err != nil || retry == "" {
 			return res, err
 		}
-		o.say(Info, "%s/%s hit a %s error before doing anything, retrying with %q", a.ID(), name, res.Failure, retry)
+		o.say(Info, "%s/%s hit %s before doing anything, retrying with %q", a.ID(), name, failureText(res.Failure), retry)
 		name = retry
 	}
 }
@@ -176,11 +184,16 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 		return res, "", nil
 	}
 	res.Failure = tool.Classify(res.ErrorText)
+	const by = "a failed run"
 	switch res.Failure {
 	case tool.FailLogin:
-		_ = profiles.MarkNeedsLogin(a.ID(), name)
+		_ = profiles.MarkNeedsLogin(a.ID(), name, by, res.ErrorText)
 	case tool.FailLimit:
-		_ = profiles.MarkLimited(cfg, a.ID(), name, "limit", time.Time{}, 0)
+		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{ResetsAt: tool.ResetTime(res.ErrorText, config.Now()), By: by, Detail: res.ErrorText})
+	case tool.FailBusy:
+		// A rate limit passes in moments; another account is worth a try, a
+		// long mark is not.
+		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: busyFor, By: by, Detail: res.ErrorText})
 	}
 	// Retry only when the failed run provably changed nothing: structured
 	// output that shows no tool call. Plain output hides tool calls, and even a
@@ -201,9 +214,20 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 		default:
 			why = " (no other usable profile)"
 		}
-		o.say(Warn, "%s/%s hit a %s error; new runs will use another profile%s", a.ID(), name, res.Failure, why)
+		o.say(Warn, "%s/%s hit %s; new runs will use another profile%s", a.ID(), name, failureText(res.Failure), why)
 	}
 	return res, "", nil
+}
+
+// failureText names a failure in a sentence: "hit its usage limit".
+func failureText(f tool.Failure) string {
+	switch f {
+	case tool.FailLogin:
+		return "a login error"
+	case tool.FailBusy:
+		return "a rate limit"
+	}
+	return "its usage limit"
 }
 
 func runOnce(o Options, bin string, env []string, input []byte) (Result, error) {
@@ -254,7 +278,26 @@ func strip(env, keys []string) []string {
 func describe(evs []profiles.Evaluation) string {
 	parts := make([]string, len(evs))
 	for i, e := range evs {
-		parts[i] = fmt.Sprintf("%q (%s)", e.Name, strings.Join(e.Reasons, ", "))
+		why := strings.Join(e.Reasons, ", ")
+		if e.State != nil && e.State.MarkedBy != "" {
+			why += ", marked by " + e.State.MarkedBy
+		}
+		parts[i] = fmt.Sprintf("%q (%s)", e.Name, why)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// markedOnly names the skipped profiles that are unusable only because of a
+// limit or login mark, which `aims clear` removes.
+func markedOnly(evs []profiles.Evaluation) []string {
+	var out []string
+	for _, e := range evs {
+		if e.Account.LoggedIn != nil && !*e.Account.LoggedIn {
+			continue
+		}
+		if e.State != nil && (e.State.NeedsLogin || e.State.Until.After(config.Now())) {
+			out = append(out, e.Name)
+		}
+	}
+	return out
 }

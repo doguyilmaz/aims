@@ -197,7 +197,7 @@ aims failover codex --to work --minutes 90`,
 			if err != nil {
 				return err
 			}
-			res, err := ops.Failover(cmd.Context(), a, from, to, time.Duration(minutes)*time.Minute, reason)
+			res, err := ops.Failover(cmd.Context(), a, from, to, time.Duration(minutes)*time.Minute, reason, "aims failover")
 			if err != nil {
 				if errors.Is(err, ops.ErrNoTarget) {
 					return fmt.Errorf("%w; add one with: aims login %s <name>", err, a.ID())

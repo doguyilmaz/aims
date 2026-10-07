@@ -9,12 +9,20 @@ Plans have usage windows (five hours, a week) and logins expire. aims keeps trac
 
 | Mark | Set by | Cleared |
 | --- | --- | --- |
-| **Limited** until a time | a run that failed on a usage limit; `aims failover`; a live check | at that time, or `aims clear` |
-| **Login expired** | a run that failed on a login error; `aims failover --reason login`; a live check | `aims login`, or `aims clear` |
+| **Limited** until a time | a run that failed on a usage limit; `aims failover`; `f` in the dashboard; the AI through `aims_failover`; a live check | at that time, a run on it that succeeds, or `aims clear` |
+| **Busy** for 2 minutes | a run that failed on a short rate limit (HTTP 429, "too many requests") | at that time |
+| **Login expired** | a run that failed on a login error; `aims failover --reason login`; a live check | `aims login`, a run that succeeds, or `aims clear` |
 | **Not logged in** | the account's folder has no login | `aims login` |
 | **Near limit** | the last usage report has a window at or over the threshold (95% by default) | when that window resets |
 
-A limit mark lasts until the reset time when aims knows it (from the last usage report), and for 5 hours otherwise. `aims failover --minutes 90` sets it yourself.
+A limit mark lasts until the reset time the provider gave ("resets 5pm", "try again in 2 hours") or the last usage report shows, and for 5 hours when neither says. `aims failover --minutes 90` sets it yourself.
+
+Every mark remembers who set it and the provider's message. `aims status` and the dashboard show it, and the line aims prints when it skips an account names it, with the command that removes it:
+
+```text
+› claude: skipping "work" (limit for 4h53m, marked by a live check), using "personal"
+  works again? aims clear claude work
+```
 
 ## Before a session starts
 

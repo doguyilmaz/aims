@@ -24,7 +24,7 @@ mkdir $HOME/.aims/profiles/codex/personal/sessions/2026
 cp marker $HOME/.aims/profiles/codex/personal/LIMITED
 exec aims codex exec --json --skip-git-repo-check -- 'build it'
 stdout 'answer from work: build it'
-stderr 'codex/personal hit a limit error before doing anything, retrying with "work"'
+stderr 'codex/personal hit its usage limit before doing anything, retrying with "work"'
 
 # Plain output hides commands, so the same failure is not repeated.
 exec aims clear codex

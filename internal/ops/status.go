@@ -29,7 +29,12 @@ type ProfileStatus struct {
 	Usage    []tool.Window `json:"usage,omitempty"`
 	UsageAt  time.Time     `json:"usageAt,omitzero"`
 	Until    time.Time     `json:"until,omitzero"`
-	LastUsed time.Time     `json:"lastUsed,omitzero"`
+	// Reason ("limit", "busy"), MarkedBy and Detail explain a mark.
+	Reason   string    `json:"reason,omitempty"`
+	MarkedBy string    `json:"markedBy,omitempty"`
+	Detail   string    `json:"detail,omitempty"`
+	MarkedAt time.Time `json:"markedAt,omitzero"`
+	LastUsed time.Time `json:"lastUsed,omitzero"`
 }
 
 // ToolStatus is one tool in `aims status`.
@@ -93,7 +98,10 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			row.Usage, row.UsageAt = ps.Usage.Windows, ps.Usage.At
 		}
 		if ps.Until.After(now) {
-			row.Until = ps.Until
+			row.Until, row.Reason = ps.Until, ps.Reason
+		}
+		if row.Until.After(now) || ps.NeedsLogin {
+			row.MarkedBy, row.Detail, row.MarkedAt = ps.MarkedBy, ps.Detail, ps.MarkedAt
 		}
 		ts.Profiles = append(ts.Profiles, row)
 	}

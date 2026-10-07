@@ -47,10 +47,10 @@ func TestChooseSkipsUnusable(t *testing.T) {
 	if p := Choose(t.Context(), cfg, config.LoadState(), a, "b", nil); p.Name != "b" {
 		t.Fatalf("preferred first: %+v", p)
 	}
-	if err := MarkLimited(cfg, "codex", "b", "limit", time.Time{}, 0); err != nil {
+	if err := MarkLimited(cfg, "codex", "b", Limit{By: "a test", Detail: "You've hit your limit\nmore"}); err != nil {
 		t.Fatal(err)
 	}
-	_ = MarkNeedsLogin("codex", "a")
+	_ = MarkNeedsLogin("codex", "a", "a test", "")
 	p := Choose(t.Context(), cfg, config.LoadState(), a, "b", nil)
 	if p.Name != "c" || len(p.Skipped) != 2 || p.Skipped[0].Name != "b" {
 		t.Fatalf("pick: %+v", p)
@@ -58,12 +58,18 @@ func TestChooseSkipsUnusable(t *testing.T) {
 	if !strings.Contains(strings.Join(p.Skipped[0].Reasons, ","), "limit for 5h") || p.Skipped[1].Reasons[0] != "login expired" {
 		t.Fatalf("reasons: %+v", p.Skipped)
 	}
+	if ps := p.Skipped[0].State; ps.MarkedBy != "a test" || ps.Detail != "You've hit your limit" || ps.MarkedAt.IsZero() {
+		t.Fatalf("mark not recorded: %+v", ps)
+	}
 	if p := Choose(t.Context(), cfg, config.LoadState(), a, "", []string{"c"}); p.Name != "" {
 		t.Fatalf("excluded the only usable one: %+v", p)
 	}
 	_ = Clear("codex", "b")
 	if p := Choose(t.Context(), cfg, config.LoadState(), a, "b", nil); p.Name != "b" {
 		t.Fatalf("after clear: %+v", p)
+	}
+	if ps := config.LoadState().Get("codex", "b"); ps.MarkedBy != "" || ps.Detail != "" {
+		t.Fatalf("clear kept the mark's origin: %+v", ps)
 	}
 }
 
@@ -87,17 +93,17 @@ func TestUsageThreshold(t *testing.T) {
 func TestMarkLimitedUsesKnownReset(t *testing.T) {
 	cfg, _ := setup(t)
 	_ = RecordUsage("codex", "a", []tool.Window{{Label: "5h", Percent: 100, ResetsAt: now.Add(70 * time.Minute)}}, "test")
-	_ = MarkLimited(cfg, "codex", "a", "", time.Time{}, 0)
+	_ = MarkLimited(cfg, "codex", "a", Limit{})
 	if until := config.LoadState().Get("codex", "a").Until; !until.Equal(now.Add(70 * time.Minute)) {
 		t.Fatalf("until = %v", until)
 	}
 	// An existing cooldown is not stretched by a second report.
-	_ = MarkLimited(cfg, "codex", "a", "limit", time.Time{}, 0)
+	_ = MarkLimited(cfg, "codex", "a", Limit{})
 	if until := config.LoadState().Get("codex", "a").Until; !until.Equal(now.Add(70 * time.Minute)) {
 		t.Fatalf("stretched to %v", until)
 	}
 	// An explicit duration wins.
-	_ = MarkLimited(cfg, "codex", "b", "limit", time.Time{}, 15*time.Minute)
+	_ = MarkLimited(cfg, "codex", "b", Limit{For: 15 * time.Minute})
 	if until := config.LoadState().Get("codex", "b").Until; !until.Equal(now.Add(15 * time.Minute)) {
 		t.Fatalf("explicit: %v", until)
 	}
@@ -176,5 +182,14 @@ func TestConcurrentSyncKeepsEveryVersion(t *testing.T) {
 				os.Remove(f)
 			}
 		}
+	}
+}
+
+func TestBusyMarkIsShort(t *testing.T) {
+	cfg, _ := setup(t)
+	_ = MarkLimited(cfg, "codex", "a", Limit{Reason: "busy", For: 2 * time.Minute, By: "a failed run"})
+	ps := config.LoadState().Get("codex", "a")
+	if ps.Reason != "busy" || !ps.Until.Equal(now.Add(2*time.Minute)) {
+		t.Fatalf("busy mark: %+v", ps)
 	}
 }

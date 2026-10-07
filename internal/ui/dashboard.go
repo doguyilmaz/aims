@@ -76,6 +76,8 @@ type dashboard struct {
 	err       error
 	launch    *Launch
 	self      string
+	// confirm is the account `f` would mark, waiting for y.
+	confirm *selection
 }
 
 type reportMsg struct {
@@ -200,6 +202,20 @@ func (m *dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if c := m.confirm; c != nil {
+		m.confirm = nil
+		if msg.String() != "y" {
+			m.flash, m.flashBad = "Nothing marked", false
+			return m, nil
+		}
+		return m, func() tea.Msg {
+			res, err := ops.Failover(m.ctx, tools.Get(c.toolID), c.name, "", 0, "limit", "the dashboard")
+			if err != nil {
+				return flashMsg{err.Error(), true}
+			}
+			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+		}
+	}
 	sel, ok := m.selected()
 	switch {
 	case key.Matches(msg, keys.Quit):
@@ -231,13 +247,9 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Login):
 		return m, m.exec("login", string(sel.toolID), sel.name)
 	case key.Matches(msg, keys.Failover):
-		return m, func() tea.Msg {
-			res, err := ops.Failover(m.ctx, tools.Get(sel.toolID), sel.name, "", 0, "limit")
-			if err != nil {
-				return flashMsg{err.Error(), true}
-			}
-			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false} // the dashboard marks limits only
-		}
+		// Marking an account takes it out of use for hours: ask first.
+		m.confirm = &sel
+		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited and make the next account active? y/n", sel.toolID, sel.name), false
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {
 			if _, err := ops.ClearMarks(tools.Get(sel.toolID), sel.name); err != nil {
@@ -346,7 +358,10 @@ func (m *dashboard) View() string {
 	}
 	if m.flash != "" {
 		st, glyph := s.OK, glyphOK
-		if m.flashBad {
+		switch {
+		case m.confirm != nil:
+			st, glyph = s.Accent, "?"
+		case m.flashBad:
 			st, glyph = s.Bad, glyphFail
 		}
 		b.WriteString(" " + st.Render(glyph) + " " + m.flash + "\n")
@@ -389,6 +404,16 @@ func (m *dashboard) card(sel selection, width int) string {
 	lines = append(lines, label("folder")+fsx.Tildify(p.Dir))
 	lines = append(lines, label("account")+Account(s, p))
 	lines = append(lines, label("state")+State(s, p))
+	if p.MarkedBy != "" {
+		why := "by " + p.MarkedBy
+		if !p.MarkedAt.IsZero() {
+			why += ", " + ago(p.MarkedAt)
+		}
+		if p.Detail != "" {
+			why += ": " + p.Detail
+		}
+		lines = append(lines, label("marked")+s.Dim.Render(why))
+	}
 	for _, w := range p.Usage {
 		line := label(w.Label) + Bar(s, w.Percent, m.threshold, 24) + fmt.Sprintf(" %3.0f%%", w.Percent)
 		if w.ResetsAt.After(time.Now()) {
@@ -402,8 +427,11 @@ func (m *dashboard) card(sel selection, width int) string {
 	if !p.LastUsed.IsZero() {
 		lines = append(lines, label("last used")+s.Dim.Render(ago(p.LastUsed)))
 	}
-	if next := Next(sel.toolID, p); next != "" {
+	switch next := Next(sel.toolID, p); {
+	case next != "":
 		lines = append(lines, "", s.Warn.Render("press l to log in")+s.Dim.Render("  or run ")+s.Cmd.Render(next))
+	case !p.Until.IsZero():
+		lines = append(lines, "", s.Dim.Render("works again? press ")+s.Cmd.Render("c")+s.Dim.Render(" to clear the mark"))
 	}
 	return s.Renderer().NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(subtle).Padding(0, 1).MarginLeft(1).Width(width).Render(strings.Join(lines, "\n"))
 }

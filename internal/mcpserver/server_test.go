@@ -141,7 +141,7 @@ func TestRunFailsOver(t *testing.T) {
 
 	// Pinned to the limited profile: no failover, the error comes back.
 	out, isErr = call(t, cs, "aims_run", map[string]any{"tool": "claude", "profile": "personal", "prompt": "hi"})
-	if !isErr || !strings.Contains(out, "limit error") || !strings.Contains(out, "hit your session limit") {
+	if !isErr || !strings.Contains(out, "usage limit]") || !strings.Contains(out, "hit your session limit") {
 		t.Fatalf("pinned run:\n%s", out)
 	}
 

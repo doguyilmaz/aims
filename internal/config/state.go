@@ -26,6 +26,11 @@ type ProfileState struct {
 	Until      time.Time `json:"until,omitzero"`
 	Reason     string    `json:"reason,omitempty"`
 	NeedsLogin bool      `json:"needsLogin,omitempty"`
+	// MarkedBy and Detail say who set the limit or login mark and the
+	// provider's message, so a surprising mark can be explained.
+	MarkedBy   string    `json:"markedBy,omitempty"`
+	Detail     string    `json:"detail,omitempty"`
+	MarkedAt   time.Time `json:"markedAt,omitzero"`
 	Usage      *Usage    `json:"usage,omitempty"`
 	Account    *Account  `json:"account,omitempty"`
 	LastUsedAt time.Time `json:"lastUsedAt,omitzero"`
