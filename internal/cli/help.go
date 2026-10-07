@@ -120,9 +120,9 @@ func flagLines(s *ui.Styles, fs *pflag.FlagSet) string {
 		if f.Hidden {
 			return
 		}
-		name := "--" + f.Name
+		name := "    --" + f.Name // long-only flags line up with "-x, --long"
 		if f.Shorthand != "" {
-			name = "-" + f.Shorthand + ", " + name
+			name = "-" + f.Shorthand + ", --" + f.Name
 		}
 		if t := f.Value.Type(); t != "bool" {
 			name += " " + valueName(f)

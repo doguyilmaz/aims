@@ -1,59 +1,59 @@
 ---
 name: aims
-description: Manage multiple Claude Code / Codex accounts (e.g. personal and work) with the aims CLI. Use when the user asks which account is active, wants to switch accounts, hits a usage/rate limit ("You've hit your limit", "Usage limit reached"), sees a login error ("Please run /login", "refresh token was already used"), or wants to hand a task to another account or to the other tool.
+description: Manage several Claude Code and Codex accounts (personal, work) with the aims CLI. Use when the user asks which account is active, wants to switch accounts, hits a usage limit ("You've hit your limit", "usage limit reached"), sees a login error ("Please run /login", "refresh token was already used"), or wants to hand a task to another account.
 ---
 
-# aims: several Claude Code / Codex accounts on one machine
+# aims: several Claude Code and Codex accounts on one machine
 
-`aims` keeps one login per account in its own config dir (`CLAUDE_CONFIG_DIR` /
-`CODEX_HOME`) and links everything else (transcripts, history, settings, skills,
-MCP config) to the shared `~/.claude` / `~/.codex`. Switching accounts is
-therefore instant and never needs logout/login, and a conversation started on
-one account can be continued on another.
+aims keeps each account's login in its own config folder (`CLAUDE_CONFIG_DIR`
+or `CODEX_HOME`) and links everything else (conversations, history, settings,
+skills, MCP servers) to the shared `~/.claude` or `~/.codex`. Switching needs no
+logout, and a conversation started on one account can continue on another.
 
-## What you can and cannot do from inside a session
+## What a running session can and cannot do
 
-- **This session's account is fixed.** A running `claude`/`codex` process keeps
-  the login it started with. Find it in env `AIMS_SESSION_PROFILE`
-  (`claude:work`, `codex:personal`; unset = not started through aims).
-- Switching (`aims use`, `aims failover`) changes the account for **new**
-  sessions. To move *this* conversation to another account the user exits and
-  runs `aims claude --continue` (or `aims codex resume --last`) -- or
-  `aims failover claude --resume` does both steps.
-- To use another account **right now**, run a self-contained headless task with
-  it: MCP tool `aims_run`, or `aims claude@work -p "..."` / `aims codex@work exec "..."`.
-- Logging in needs a browser and a human: never try to complete it yourself;
-  give the user the command (`aims login <tool> <profile>`).
+- **This session's account is fixed.** A running `claude` or `codex` keeps the
+  login it started with. Env `AIMS_SESSION_PROFILE` names it (`claude:work`,
+  `codex:personal`); unset means the session was not started through aims.
+- `aims use` and `aims failover` change the account of **new** sessions. To
+  move this conversation, the user exits and runs `aims claude --continue` or
+  `aims codex resume --last`; `aims failover claude --resume` does both.
+- To use another account **right now**, run a self-contained task with it:
+  the `aims_run` MCP tool, or `aims claude@work -p "..."` /
+  `aims codex@work exec "..."`.
+- A login opens a browser and needs the person. Never try to complete one;
+  give the user the command: `aims login <tool> <profile>`.
 
-## Prefer the MCP tools when present
+## Tools
 
-`aims_status`, `aims_switch`, `aims_failover`, `aims_clear`, `aims_run`,
-`aims_login_help`. Otherwise use the CLI through the shell:
+Prefer the MCP tools when they are available: `aims_status`, `aims_switch`,
+`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Otherwise use the
+CLI:
 
 | Task | Command |
 | --- | --- |
-| Show accounts, health, usage | `aims status` (`--live` to verify with the providers, `--json`) |
-| Switch active account | `aims use work` (both tools) / `aims use claude work` |
-| Current account hit its limit | `aims failover claude` (marks it limited, activates the next) |
-| Clear a wrong limited/login mark | `aims clear claude [profile]` |
-| Run something as a given account | `aims claude@work -p "prompt"` / `aims codex@personal exec "prompt"` |
-| Re-login an account | tell the user: `aims login claude work` |
-| Pin only this terminal | `eval "$(aims env work)"`, undo with `eval "$(aims env --reset)"` |
-| Diagnose | `aims doctor` |
+| Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
+| Switch the account for new sessions | `aims use work` (every tool) or `aims use claude work` |
+| The current account hit its limit | `aims failover claude` (marks it, activates the next one) |
+| Undo a wrong mark | `aims clear claude [profile]` |
+| Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
+| Log an account in again | tell the user: `aims login claude work` |
+| Pin only this terminal | `eval "$(aims env work)"`; undo with `eval "$(aims env --reset)"` |
+| Check everything | `aims doctor` |
 
-## Handling limits and login errors
+## Limits and login errors
 
-1. Usage limit on the current account: call `aims_failover` (or `aims failover <tool>`),
-   then tell the user which account is now active and how to continue
-   (`aims claude --continue`). Headless runs started via `aims` retry on the next
-   account by themselves only when the failed attempt did nothing; otherwise the
-   account is marked and the next run uses another one. Check what the failed
-   run already changed before re-running it.
-2. "Please run /login", "OAuth token revoked", "refresh token was already used":
-   the login is dead. Run `aims_failover` with `reason: "login"` so new sessions avoid it,
-   and give the user `aims login <tool> <profile>`.
-3. Never copy `.credentials.json` / `auth.json` between profiles: refresh tokens
-   rotate, so a copied login logs both copies out.
+1. **Usage limit.** Call `aims_failover` (or `aims failover <tool>`), then tell
+   the user which account is active now and how to continue
+   (`aims claude --continue`). Headless runs started through aims move to the
+   next account on their own, but only when the failed attempt did nothing;
+   otherwise the account is marked and the next run uses another one. Check
+   what a failed run already changed before running it again.
+2. **Dead login** ("Please run /login", "OAuth token revoked", "refresh token
+   was already used"). Call `aims_failover` with `reason: "login"` so new
+   sessions avoid the account, and give the user `aims login <tool> <profile>`.
+3. **Never copy** `.credentials.json` or `auth.json` between profiles. Refresh
+   tokens rotate, so a copied login logs both copies out.
 
-Keep the user's personal/work separation in mind: do not move work data to a
-personal account (or the reverse) unless the user asks for it.
+Keep the user's accounts apart: do not move work data to a personal account,
+or the reverse, unless the user asks for it.

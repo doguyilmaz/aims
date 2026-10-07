@@ -1,3 +1,5 @@
+[windows] skip 'checks paths in Unix form'
+
 # Codex without a login yet: both profiles are new folders.
 exec aims init --yes --tools codex --share settings --integrations none
 stderr 'codex/personal ~/.aims/profiles/codex/personal'

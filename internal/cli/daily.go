@@ -230,6 +230,7 @@ eval "$(aims env --reset)"`,
 			if err != nil {
 				return err
 			}
+			given := strings.Join(args, " ")
 			var ids []tool.ID
 			profile := ""
 			if len(args) > 0 {
@@ -238,8 +239,12 @@ eval "$(aims env --reset)"`,
 					args = args[1:]
 				}
 			}
-			if len(args) > 0 {
+			switch len(args) {
+			case 0:
+			case 1:
 				profile = args[0]
+			default:
+				return fmt.Errorf("unknown tool %q (expected %s)", given[:strings.IndexByte(given, ' ')], strings.Join(tools.Names(), " or "))
 			}
 			out, err := shell.EnvLines(s, cfg, ids, profile, reset)
 			if err != nil {
@@ -247,7 +252,11 @@ eval "$(aims env --reset)"`,
 			}
 			fmt.Fprint(cmd.OutOrStdout(), out)
 			if ui.IsTerminal(os.Stdout) {
-				ui.Hint(`this only prints; apply it with: eval "$(aims env %s)"`, strings.Join(append(idStrings(ids), profile), " "))
+				line := strings.TrimSpace("aims env " + given)
+				if reset {
+					line += " --reset"
+				}
+				ui.Hint(`this only prints; apply it with: eval "$(%s)"`, line)
 			}
 			return nil
 		},
@@ -255,12 +264,4 @@ eval "$(aims env --reset)"`,
 	cmd.Flags().StringVar(&sh, "shell", "", "bash, zsh, fish or powershell (default: detected)")
 	cmd.Flags().BoolVar(&reset, "reset", false, "unpin this terminal")
 	return cmd
-}
-
-func idStrings(ids []tool.ID) []string {
-	out := make([]string, len(ids))
-	for i, id := range ids {
-		out[i] = string(id)
-	}
-	return out
 }

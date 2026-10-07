@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: aims
+
+before:
+  hooks:
+    - go mod download
+    - ./scripts/completions.sh
+
+builds:
+  - id: aims
+    main: ./cmd/aims
+    binary: aims
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: aims
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+homebrew_casks:
+  - name: aims
+    repository:
+      owner: doguyilmaz
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    homepage: https://doguyilmaz.github.io/aims/
+    description: Several Claude Code and Codex accounts on one machine
+    license: MIT
+    commit_author:
+      name: aims release bot
+      email: noreply@github.com
+    commit_msg_template: "aims {{ .Tag }}"
+    completions:
+      bash: completions/aims.bash
+      zsh: completions/aims.zsh
+      fish: completions/aims.fish
+    hooks:
+      post:
+        # The binary is not notarized; let macOS run it without a Gatekeeper prompt.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aims"]
+          end
+
+scoops:
+  - name: aims
+    repository:
+      owner: doguyilmaz
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: bucket
+    homepage: https://doguyilmaz.github.io/aims/
+    description: Several Claude Code and Codex accounts on one machine
+    license: MIT
+    commit_author:
+      name: aims release bot
+      email: noreply@github.com
+    commit_msg_template: "aims {{ .Tag }} (scoop)"
+
+release:
+  github:
+    owner: doguyilmaz
+    name: aims
+  footer: |
+    Install: `brew install doguyilmaz/tap/aims`, `npm install -g @doguyilmaz/aims`,
+    `go install github.com/doguyilmaz/aims/cmd/aims@{{ .Tag }}`, or
+    `curl -fsSL https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.sh | sh`.

@@ -1,3 +1,5 @@
+[windows] skip 'checks paths in Unix form'
+
 # aims init --yes adopts the existing login and creates the second profile.
 exec claude auth login --email me@gmail.com
 exec aims init --yes --integrations none

@@ -35,6 +35,7 @@ func TestDetect(t *testing.T) {
 		"/home/me/go/bin/aims":                                  GoInstall,
 		"/home/me/.local/bin/aims":                              Manual,
 		"/opt/homebrew-like/aims":                               Manual,
+		`C:/Users/me/scoop/apps/aims/current/aims.exe`:          Scoop,
 	}
 	for exe, want := range cases {
 		if got := Detect(exe, "/home/me/go/bin"); got != want {

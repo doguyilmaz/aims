@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -22,7 +23,8 @@ func newUpgradeCmd(version string) *cobra.Command {
 		Aliases: []string{"update"},
 		Short:   "Upgrade aims with the tool that installed it",
 		Long: "aims never overwrites its own binary. It finds out how it was installed\n" +
-			"(Homebrew, npm, go install or the install script) and runs that tool's upgrade.",
+			"(Homebrew, Scoop, npm or go install) and runs that tool's upgrade; a copy from\n" +
+			"the install script gets the command that installs the new release.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			latest, err := release.Default(release.CacheDir()).Latest(cmd.Context(), true)
@@ -41,7 +43,7 @@ func newUpgradeCmd(version string) *cobra.Command {
 			steps := release.UpgradeCommand(method)
 			if len(steps) == 0 {
 				ui.Info("this copy was installed by hand; get the new one with:")
-				fmt.Println("  " + ui.Kbd(ui.Out, release.InstallLine))
+				fmt.Println("  " + ui.Kbd(ui.Out, release.InstallLine(runtime.GOOS)))
 				return nil
 			}
 			var lines []string
@@ -57,9 +59,10 @@ func newUpgradeCmd(version string) *cobra.Command {
 				c := exec.CommandContext(cmd.Context(), s[0], s[1:]...)
 				c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 				if err := c.Run(); err != nil {
-					// `brew update` refreshes every tap; one broken tap must not block the upgrade.
-					if method == release.Homebrew && i == 0 {
-						ui.Warn("brew update failed (%v); upgrading anyway", err)
+					// The first step refreshes every tap or bucket; one broken
+					// source must not block the upgrade.
+					if len(steps) > 1 && i == 0 {
+						ui.Warn("%s failed (%v); upgrading anyway", strings.Join(s, " "), err)
 						continue
 					}
 					return err
