@@ -57,17 +57,92 @@ func Account(s *Styles, p ops.ProfileStatus) string {
 	return s.Dim.Render("unknown account")
 }
 
-// Usage renders the usage windows as small bars.
+// usageSlots are the windows every row shows, filled or not, so columns line up.
+var usageSlots = []string{"5h", "7d"}
+
+// Usage renders the usage windows as small bars: always 5h and 7d (a dash
+// when unknown), then any other window, then when the fullest one resets.
 func Usage(s *Styles, ws []tool.Window, threshold float64) string {
-	var parts []string
+	const cells = 6
+	byLabel := map[string]tool.Window{}
+	labels := slices.Clone(usageSlots)
 	for _, w := range ws {
-		part := s.Dim.Render(w.Label+" ") + Bar(s, w.Percent, threshold, 8) + fmt.Sprintf(" %3.0f%%", w.Percent)
-		if w.Percent >= 80 && w.ResetsAt.After(time.Now()) {
-			part += s.Dim.Render(" resets " + profiles.Duration(time.Until(w.ResetsAt)))
+		byLabel[w.Label] = w
+		if !slices.Contains(labels, w.Label) {
+			labels = append(labels, w.Label)
 		}
-		parts = append(parts, part)
 	}
-	return strings.Join(parts, "   ")
+	var parts []string
+	var soonest *tool.Window
+	for _, l := range labels {
+		w, ok := byLabel[l]
+		if !ok {
+			parts = append(parts, s.Dim.Render(l+" ")+Bar(s, 0, threshold, cells)+s.Dim.Render("    –"))
+			continue
+		}
+		parts = append(parts, s.Dim.Render(l+" ")+Bar(s, w.Percent, threshold, cells)+fmt.Sprintf(" %3.0f%%", w.Percent))
+		if w.Percent >= 80 && w.ResetsAt.After(time.Now()) && (soonest == nil || w.Percent > soonest.Percent) {
+			soonest = &w
+		}
+	}
+	out := strings.Join(parts, "   ")
+	if soonest != nil {
+		out += s.Dim.Render("   " + soonest.Label + " resets " + profiles.Duration(time.Until(soonest.ResetsAt)))
+	}
+	return out
+}
+
+// Email is who a profile is logged in as, for the table.
+func Email(s *Styles, p ops.ProfileStatus) string {
+	switch {
+	case p.Email != "":
+		return p.Email
+	case p.Method == "token" || p.Method == "api-key":
+		return s.Dim.Render("API key")
+	case p.LoggedIn != nil && !*p.LoggedIn:
+		return s.Dim.Render("no login")
+	}
+	return s.Dim.Render("unknown account")
+}
+
+// ShortPlan names a plan in a word: "self_serve_business_prolite" is
+// "business". The full name stays in the dashboard card and --json.
+func ShortPlan(plan string) string {
+	p := strings.ToLower(plan)
+	for _, k := range []string{"enterprise", "business", "team", "edu", "max", "pro", "plus", "free"} {
+		if strings.Contains(p, k) {
+			return k
+		}
+	}
+	p = strings.ReplaceAll(p, "_", " ")
+	if r := []rune(p); len(r) > 10 {
+		return string(r[:9]) + "…"
+	}
+	return p
+}
+
+// Layout is the table's column widths, measured over every tool so the
+// sections line up.
+type Layout struct{ name, email, plan, state int }
+
+// NewLayout measures report.
+func NewLayout(s *Styles, report []ops.ToolStatus) Layout {
+	var l Layout
+	for _, t := range report {
+		for _, p := range t.Profiles {
+			l.name = max(l.name, lipgloss.Width(p.Name))
+			l.email = max(l.email, lipgloss.Width(Email(s, p)))
+			l.plan = max(l.plan, lipgloss.Width(ShortPlan(p.Plan)))
+			l.state = max(l.state, lipgloss.Width(State(s, p)))
+		}
+	}
+	return l
+}
+
+// Row is a profile's columns after its marker: name, account, plan, state, usage.
+func (l Layout) Row(s *Styles, p ops.ProfileStatus, name, state string, threshold float64) string {
+	return Pad(name, l.name) + "   " + Pad(Email(s, p), l.email) + "   " + Pad(s.Dim.Render(ShortPlan(p.Plan)), l.plan) +
+		"   " + Pad(state, max(l.state, lipgloss.Width(state))) + "   " + Usage(s, p.Usage, threshold)
 }
 
 // Next is the command that fixes a profile's problem, or "".
@@ -90,6 +165,7 @@ func hasLoginReason(p ops.ProfileStatus) bool {
 // RenderStatus is the output of `aims status`.
 func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string {
 	var b strings.Builder
+	l := NewLayout(s, report)
 	for i, t := range report {
 		if i > 0 {
 			b.WriteString("\n")
@@ -106,12 +182,6 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 			b.WriteString("  " + s.Dim.Render("no accounts yet") + "\n")
 			continue
 		}
-		nameW, acctW, stateW := 0, 0, 0
-		for _, p := range t.Profiles {
-			nameW = max(nameW, len(p.Name))
-			acctW = max(acctW, lipgloss.Width(Account(s, p)))
-			stateW = max(stateW, lipgloss.Width(State(s, p)))
-		}
 		for _, p := range t.Profiles {
 			mark := "  "
 			name := p.Name
@@ -119,10 +189,7 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 				mark = s.Accent.Render("● ")
 				name = s.Bold.Render(name)
 			}
-			line := "  " + mark + Pad(name, nameW) + "   " + Pad(Account(s, p), acctW) + "   " + Pad(State(s, p), stateW)
-			if u := Usage(s, p.Usage, threshold); u != "" {
-				line += "   " + u
-			}
+			line := "  " + mark + l.Row(s, p, name, State(s, p), threshold)
 			var tags []string
 			if p.Existing {
 				tags = append(tags, "default login")
@@ -144,7 +211,7 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 			}
 			b.WriteString(strings.TrimRight(line, " ") + "\n")
 			if next := Next(t.ID, p); next != "" {
-				b.WriteString("      " + strings.Repeat(" ", nameW) + s.Dim.Render("→ ") + Kbd(s, next) + "\n")
+				b.WriteString("      " + strings.Repeat(" ", l.name) + s.Dim.Render("→ ") + Kbd(s, next) + "\n")
 			}
 		}
 	}

@@ -42,8 +42,8 @@ env CLAUDE_CONFIG_DIR=
 exec aims status claude
 stdout 'work .*near limit'
 
-# uninstall puts every file back the way it was.
-exec aims uninstall -y
+# clean puts every file back the way it was.
+exec aims clean -y
 ! exists $HOME/.claude/skills/aims
 ! exists $HOME/.codex/skills/aims
 ! grep '"aims"' $HOME/.claude.json
@@ -51,8 +51,8 @@ exec aims uninstall -y
 ! grep 'mcp_servers.aims' $HOME/.codex/config.toml
 grep '"command": "~/my-line.sh"' $HOME/.claude/settings.json
 cmp $HOME/.zshrc zshrc.orig
-exec aims uninstall -y
-stderr 'nothing to remove'
+exec aims clean -y
+stderr 'nothing to clean'
 
 -- settings.json --
 {

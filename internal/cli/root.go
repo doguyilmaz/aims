@@ -128,8 +128,8 @@ aims status --live`,
 		add("daily", newToolCmd(a))
 	}
 	add("accounts", newAddCmd(), newFailoverCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
-	add("connect", newSetupCmd(), newUninstallCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
-	add("maintain", newDoctorCmd(version), newUpgradeCmd(version))
+	add("connect", newSetupCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
+	add("maintain", newDoctorCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}

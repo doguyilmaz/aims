@@ -308,6 +308,7 @@ func (m *dashboard) View() string {
 	b.WriteString("\n " + title + strings.Repeat(" ", max(1, w-lipgloss.Width(title)-lipgloss.Width(ver)-2)) + ver + "\n\n")
 
 	i := 0
+	l := NewLayout(s, m.report)
 	for _, t := range m.report {
 		head := " " + s.Bold.Render(t.Title)
 		where := s.Dim.Render(fsx.Tildify(t.Hub))
@@ -318,11 +319,6 @@ func (m *dashboard) View() string {
 		if len(t.Profiles) == 0 {
 			b.WriteString("     " + s.Dim.Render("no accounts yet, press ") + s.Cmd.Render("a") + "\n\n")
 			continue
-		}
-		nameW, acctW := 0, 0
-		for _, p := range t.Profiles {
-			nameW = max(nameW, len(p.Name))
-			acctW = max(acctW, lipgloss.Width(Account(s, p)))
 		}
 		for _, p := range t.Profiles {
 			cursor := "   "
@@ -339,11 +335,7 @@ func (m *dashboard) View() string {
 			if m.checking[string(t.ID)+"/"+p.Name] {
 				state = m.spin.View() + s.Dim.Render(" checking")
 			}
-			line := cursor + mark + Pad(name, nameW) + "   " + Pad(Account(s, p), acctW) + "   " + Pad(state, 16)
-			if u := Usage(s, p.Usage, m.threshold); u != "" {
-				line += "  " + u
-			}
-			b.WriteString(line + "\n")
+			b.WriteString(cursor + mark + l.Row(s, p, name, state, m.threshold) + "\n")
 			i++
 		}
 		b.WriteString("\n")

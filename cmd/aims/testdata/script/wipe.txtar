@@ -1,0 +1,35 @@
+[windows] skip 'checks paths in Unix form'
+
+# Setup: work is the existing login, personal has its own folder.
+exec claude auth login --email me@company.com
+exec aims init --yes --tools claude --current work --second personal --integrations skill,mcp,shell
+exec aims login claude personal
+cp transcript.jsonl $HOME/.aims/profiles/claude/personal/projects/t.jsonl
+
+# clean takes aims out of the tools and forgets its settings; logins and
+# folders stay, and init picks them up again without a new login.
+exec aims clean -y
+stderr 'forgot ~/.aims/config.json'
+! exists $HOME/.aims/config.json
+! exists $HOME/.claude/skills/aims
+! grep '>>> aims' $HOME/.zshrc
+exists $HOME/.aims/profiles/claude/personal/.credentials.json
+exists $HOME/.claude/projects/t.jsonl
+exec aims init --yes --tools claude --current work --second personal --integrations none
+exec aims status claude
+stdout 'personal .*personal@example.com'
+
+# wipe logs out and deletes the folders aims made; nothing in ~/.claude goes.
+! exec aims wipe
+stderr 'add --yes'
+exec aims wipe -y
+stderr 'personal logged out and deleted ~/.aims/profiles/claude/personal'
+grep 'logout as personal' $WORK/side-effects
+! exists $HOME/.aims
+exists $HOME/.claude/.credentials.json
+exists $HOME/.claude/projects/t.jsonl
+exec aims wipe -y
+stderr 'nothing to wipe'
+
+-- transcript.jsonl --
+{"type":"user"}

@@ -68,7 +68,7 @@ command -v aims >/dev/null 2>&1 && eval "$(aims shell-init zsh)"
 # <<< aims <<<
 ```
 
-It defines small `claude` and `codex` functions that run `aims claude` and `aims codex`, so the commands you already type follow the active account and get failover. It also loads completion for `aims`. The line does nothing if aims is not installed, and `aims uninstall` removes it again.
+It defines small `claude` and `codex` functions that run `aims claude` and `aims codex`, so the commands you already type follow the active account and get failover. It also loads completion for `aims`. The line does nothing if aims is not installed, and `aims clean` removes it again.
 
 For fish, aims writes `~/.config/fish/conf.d/aims.fish`. For PowerShell it prints the line to add to your `$PROFILE`.
 

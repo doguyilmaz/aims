@@ -123,8 +123,7 @@ aims checks for a new release at most once a day, in the background, and mention
 ## Uninstall
 
 ```bash
-aims uninstall                # remove the skill, MCP server, status line and shell line
-aims rm claude work --purge   # optional: log out and delete an account's folder
+aims wipe       # log out and delete the accounts aims created; ~/.claude and ~/.codex stay
 ```
 
-Then remove the binary the way you installed it (`brew uninstall --cask aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). `~/.aims` holds the profile folders and settings; delete it last if you want everything gone. Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.
+Then remove the binary the way you installed it (`brew uninstall --cask aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.

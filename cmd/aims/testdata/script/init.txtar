@@ -11,7 +11,7 @@ stderr 'log in: aims login claude work'
 exists $HOME/.aims/profiles/claude/work/projects
 ! exists $HOME/.aims/profiles/claude/work/.credentials.json
 exec aims status claude
-stdout '● personal +me@gmail.com · max +ready +default login'
+stdout '● personal +me@gmail.com +max +ready .*default login'
 stdout 'work +no login +not logged in'
 stdout '→ aims login claude work'
 

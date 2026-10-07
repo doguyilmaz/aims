@@ -8,7 +8,7 @@ aims can tell Claude Code and Codex which accounts exist and let them act on it:
 ```bash
 aims setup --all          # everything below
 aims setup                # skill and MCP server only
-aims uninstall            # take it all back out
+aims clean                # take it all back out
 ```
 
 `aims init` offers the same choices. Restart running sessions afterwards.
@@ -59,4 +59,4 @@ The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70%
 
 The usage numbers come from Claude Code itself, which passes them to the status line command. aims records them, which is how it knows to skip an account before the limit hits, at no cost.
 
-If you already had a status line command, aims keeps it: your line is shown first, followed by aims' part. `aims uninstall` puts your command back.
+If you already had a status line command, aims keeps it: your line is shown first, followed by aims' part. `aims clean` puts your command back.
