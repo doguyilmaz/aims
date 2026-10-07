@@ -111,7 +111,7 @@ func ensureHome() error { return os.MkdirAll(Home(), 0o700) }
 // ProfilesRoot holds the profile directories aims creates.
 func ProfilesRoot() string { return filepath.Join(Home(), "profiles") }
 
-var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$`)
+var nameRe = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,38}[A-Za-z0-9])?$`)
 
 // ValidName reports whether s can name a profile.
 func ValidName(s string) bool { return nameRe.MatchString(s) }

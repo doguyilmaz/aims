@@ -103,33 +103,82 @@ func reportSteps(steps []ops.Step, after string) error {
 	return nil
 }
 
-func newUninstallCmd() *cobra.Command {
+func newCleanCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove the skill, MCP server, status line and shell integration",
-		Long: "Undoes `aims setup`. Profiles and logins stay; remove those with\n" +
-			"`aims rm <tool> <profile> --purge`.",
+		Use:     "clean",
+		Aliases: []string{"uninstall"},
+		Short:   "Take aims out of your tools and forget its settings; logins stay",
+		Long: "Removes the skill, MCP server, status line and shell line, and forgets aims'\n" +
+			"settings and marks. Every login and account folder stays, so `aims init`\n" +
+			"brings them back without logging in again. ~/.claude and ~/.codex are not touched.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !yes && ui.Interactive() {
 				ok := false
-				if err := ui.NewRail().Confirm("Remove aims from Claude Code, Codex and your shell?", "Profiles and logins are kept.", &ok); err != nil || !ok {
+				if err := ui.NewRail().Confirm("Take aims out of your tools and forget its settings?", "Logins, account folders, conversations and skills stay.", &ok); err != nil || !ok {
 					return err
 				}
 			}
-			steps, err := ops.Uninstall(cmd.Context(), ops.Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect()})
+			steps, err := ops.Clean(cmd.Context())
 			if err != nil {
 				return err
 			}
 			if len(steps) == 0 {
-				ui.Done("nothing to remove")
+				ui.Done("nothing to clean")
 				return nil
 			}
-			return reportSteps(steps, "")
+			return reportSteps(steps, "start again any time with: aims init")
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask")
+	return cmd
+}
+
+func newWipeCmd() *cobra.Command {
+	var yes, force bool
+	cmd := &cobra.Command{
+		Use:   "wipe",
+		Short: "Clean, and also log out and delete the account folders aims created",
+		Long: "Logs out every account aims created and deletes its folder (anything shared that\n" +
+			"was written there moves to ~/.claude or ~/.codex first), then cleans. Your\n" +
+			"conversations, sessions, skills, settings and main logins in ~/.claude and\n" +
+			"~/.codex are never touched. Custom --dir folders are forgotten, not deleted.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deleted, kept, err := ops.WipePlan()
+			if err != nil {
+				return err
+			}
+			if !yes {
+				if !ui.Interactive() {
+					return errors.New("wipe logs out and deletes account folders; add --yes to confirm")
+				}
+				lines := []string{"Conversations, skills, settings and main logins stay."}
+				if len(deleted) > 0 {
+					lines = append([]string{"Deletes: " + strings.Join(deleted, ", ")}, lines...)
+				}
+				if len(kept) > 0 {
+					lines = append(lines, "Keeps (custom folders): "+strings.Join(kept, ", "))
+				}
+				ok := false
+				if err := ui.NewRail().Confirm("Log out and delete the accounts aims created, then clean?", strings.Join(lines, "\n"), &ok); err != nil || !ok {
+					return err
+				}
+			}
+			steps, err := ops.Wipe(cmd.Context(), force)
+			if len(steps) == 0 && err == nil {
+				ui.Done("nothing to wipe")
+				return nil
+			}
+			if rerr := reportSteps(steps, ""); err == nil {
+				err = rerr
+			}
+			return err
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask")
+	cmd.Flags().BoolVar(&force, "force", false, "delete account folders even if something in them is not shared")
 	return cmd
 }
 

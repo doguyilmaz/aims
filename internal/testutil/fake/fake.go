@@ -6,6 +6,7 @@
 //
 //	LIMITED      runs fail with a usage-limit error
 //	EXPIRED      runs fail with a login error
+//	BUSY         claude runs fail with a short-lived rate limit (429)
 //	TOOL_FIRST   runs call a tool (appended to $FAKE_SIDE_EFFECTS) before failing
 //	USAGE        "pct" for the rate limits the codex app-server reports
 //
@@ -183,6 +184,8 @@ func Claude() int {
 		fail = "Invalid API key · Please run /login"
 	case has("LIMITED"):
 		fail = "You've hit your session limit · resets 5pm"
+	case has("BUSY"):
+		fail = `API Error: 429 {"type":"error","error":{"type":"rate_limit_error"}}`
 	}
 	if fail != "" && has("TOOL_FIRST") {
 		if format == "stream-json" {

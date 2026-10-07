@@ -8,7 +8,7 @@ aims can tell Claude Code and Codex which accounts exist and let them act on it:
 ```bash
 aims setup --all          # everything below
 aims setup                # skill and MCP server only
-aims uninstall            # take it all back out
+aims clean                # take it all back out
 ```
 
 `aims init` offers the same choices. Restart running sessions afterwards.
@@ -47,14 +47,16 @@ Use one or the other. With both, the model sees the tools twice.
 
 ## Status line
 
-`aims setup --statusline` sets aims as Claude Code's [status line](https://docs.anthropic.com/en/docs/claude-code/statusline) command. It shows the account of the running session and its plan usage:
+`aims setup --statusline` sets aims as Claude Code's [status line](https://docs.anthropic.com/en/docs/claude-code/statusline) command. It shows the account of the running session and its plan usage in a few characters:
 
 ```text
-~/src/app main  aims work 5h 82% 7d 61%
+~/src/app main  work ▰▱▱▱▱  11% · 7d 47%
+~/src/app main  work ▰▰▰▰▱  82% ↻1h20m · 7d 61%
+~/src/app main  work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
 ```
 
-The weekly window appears once it passes 50%. Over the [threshold](../failover#settings), the line names the next account to fail over to.
+The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account aims would move to.
 
 The usage numbers come from Claude Code itself, which passes them to the status line command. aims records them, which is how it knows to skip an account before the limit hits, at no cost.
 
-If you already had a status line command, aims keeps it: your line is shown first, followed by aims' part. `aims uninstall` puts your command back.
+If you already had a status line command, aims keeps it: your line is shown first, followed by aims' part. `aims clean` puts your command back.

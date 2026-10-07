@@ -201,7 +201,7 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 			from = p
 		}
 	}
-	res, err := ops.Failover(ctx, a, from, in.To, time.Duration(in.Minutes)*time.Minute, in.Reason)
+	res, err := ops.Failover(ctx, a, from, in.To, time.Duration(in.Minutes)*time.Minute, in.Reason, "the AI (aims_failover)")
 	if err != nil {
 		return fail(err)
 	}
@@ -305,8 +305,13 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		profile = "default"
 	}
 	head := fmt.Sprintf("[%s/%s exit %d", a.ID(), profile, res.Code)
-	if res.Failure != tool.FailNone {
-		head += ", " + string(res.Failure) + " error"
+	switch res.Failure {
+	case tool.FailLogin:
+		head += ", login error"
+	case tool.FailLimit:
+		head += ", usage limit"
+	case tool.FailBusy:
+		head += ", rate limited"
 	}
 	head += "]"
 	body := res.FinalText

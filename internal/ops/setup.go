@@ -20,21 +20,19 @@ import (
 // MCPName is the name aims registers its MCP server under.
 const MCPName = "aims"
 
-// Command is how other programs should start this aims: "aims" when that
-// resolves to this binary, otherwise its absolute path. A package manager's
-// versioned path would break on the next upgrade, so PATH wins when it can.
+// Command is how Claude Code and Codex start aims: plain "aims" when it is on
+// PATH, otherwise this binary's full path.
 func Command() []string {
-	self, err := os.Executable()
-	if err != nil {
+	if _, err := exec.LookPath("aims"); err == nil {
 		return []string{"aims"}
 	}
-	self, _ = filepath.EvalSymlinks(self)
-	if p, err := exec.LookPath("aims"); err == nil {
-		if r, err := filepath.EvalSymlinks(p); err == nil && r == self {
-			return []string{"aims"}
+	if self, err := os.Executable(); err == nil {
+		if r, err := filepath.EvalSymlinks(self); err == nil {
+			self = r
 		}
+		return []string{self}
 	}
-	return []string{self}
+	return []string{"aims"}
 }
 
 // Integrations selects what Setup installs or Uninstall removes.
@@ -107,6 +105,7 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		}
 		if in.MCP && installed {
 			for _, h := range mcpHomes(cfg, a) {
+				_, _ = a.UnregisterMCP(ctx, h, MCPName)
 				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: a.RegisterMCP(ctx, h, MCPName, append(command, "mcp"))})
 			}
 		}

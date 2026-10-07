@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -55,8 +56,11 @@ func newDoctorCmd(version string) *cobra.Command {
 			section("aims")
 			exe, _ := os.Executable()
 			ok("aims %s %s", version, s.Dim.Render(fsx.Tildify(exe)))
-			if c := ops.Command(); c[0] != "aims" {
-				bad("`aims` on your PATH is not this binary; tools will start %s", fsx.Tildify(c[0]))
+			switch onPath, err := exec.LookPath("aims"); {
+			case err != nil:
+				bad("aims is not on your PATH; Claude Code and Codex start it as %s", fsx.Tildify(ops.Command()[0]))
+			case fsx.Real(onPath) != fsx.Real(exe):
+				bad("the aims on your PATH is another copy (%s); Claude Code and Codex start that one", fsx.Tildify(onPath))
 			}
 			cfg, err := config.Load()
 			if err != nil {

@@ -234,14 +234,28 @@ func Choose(ctx context.Context, cfg *config.Config, st config.State, a tool.Ada
 	return p
 }
 
-// MarkLimited records that a profile hit a limit. Without an explicit reset
-// time or duration it uses the soonest reset the provider reported, and never
-// stretches a reset time that is already known.
-func MarkLimited(cfg *config.Config, id tool.ID, name, reason string, resetsAt time.Time, d time.Duration) error {
+// Limit describes a limit mark.
+type Limit struct {
+	// Reason is "limit" (the plan's limit, the default) or "busy" (a short
+	// rate limit).
+	Reason string
+	// ResetsAt is when the provider said the limit lifts, if it did.
+	ResetsAt time.Time
+	// For is how long the mark lasts when the reset time is unknown
+	// (default: the configured cooldown).
+	For time.Duration
+	// By names who set the mark ("a live check"); Detail is the provider's message.
+	By, Detail string
+}
+
+// MarkLimited records that a profile hit a limit. Without a reset time or
+// duration it uses the soonest reset the provider reported, and never
+// stretches a mark that is already set.
+func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
 		now := config.Now()
-		until := resetsAt
-		if until.IsZero() && d == 0 {
+		until := l.ResetsAt
+		if until.IsZero() && l.For == 0 {
 			if ps.Until.After(now) {
 				return
 			}
@@ -254,28 +268,46 @@ func MarkLimited(cfg *config.Config, id tool.ID, name, reason string, resetsAt t
 			}
 		}
 		if until.IsZero() {
+			d := l.For
 			if d == 0 {
 				d = time.Duration(cfg.Failover.CooldownMinutes) * time.Minute
 			}
 			until = now.Add(d)
 		}
+		reason := l.Reason
 		if reason == "" {
-			reason = "limited"
+			reason = "limit"
 		}
 		ps.Until, ps.Reason = until.UTC(), reason
+		ps.MarkedBy, ps.Detail, ps.MarkedAt = l.By, firstLine(l.Detail), now.UTC()
 	})
 }
 
 // MarkNeedsLogin records that a profile's login stopped working.
-func MarkNeedsLogin(id tool.ID, name string) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) { ps.NeedsLogin = true })
+func MarkNeedsLogin(id tool.ID, name, by, detail string) error {
+	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+		ps.NeedsLogin = true
+		ps.MarkedBy, ps.Detail, ps.MarkedAt = by, firstLine(detail), config.Now().UTC()
+	})
 }
 
 // Clear forgets cooldowns and login problems.
 func Clear(id tool.ID, name string) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
 		ps.Until, ps.Reason, ps.NeedsLogin = time.Time{}, "", false
+		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 	})
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if r := []rune(s); len(r) > 160 {
+		s = string(r[:160]) + "…"
+	}
+	return s
 }
 
 // RecordUsage stores a usage report.
@@ -306,15 +338,15 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 	case tool.ProbeOK:
 		_ = Clear(id, name)
 	case tool.ProbeLogin:
-		_ = MarkNeedsLogin(id, name)
+		_ = MarkNeedsLogin(id, name, "a live check", p.Detail)
 	case tool.ProbeLimit:
-		var resets time.Time
+		resets := tool.ResetTime(p.Detail, config.Now())
 		for _, w := range p.Windows {
 			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(resets) {
 				resets = w.ResetsAt
 			}
 		}
-		_ = MarkLimited(cfg, id, name, "limit", resets, 0)
+		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, By: "a live check", Detail: p.Detail})
 	}
 	_ = RecordAccount(id, name, p.Email, p.Plan)
 	return p

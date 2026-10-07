@@ -124,10 +124,6 @@ Connects aims to the tools. See [AI integration](../ai-integration).
 | `--shell [name]` | Add the shell integration to your shell's startup file |
 | `--tools` | Only these tools |
 
-### `aims uninstall`
-
-Undoes `aims setup`. Profiles and logins stay. `-y` skips the question.
-
 ### `aims sync [tool]`
 
 Repairs shared links for every profile (each launch does this for the profile it starts) and copies MCP servers added to your main Claude Code login into the other logins.
@@ -145,6 +141,19 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 ### `aims doctor`
 
 Checks the tools, each profile's login and shared folders, and the integrations, and prints the command that fixes each problem. It repairs shared links as it goes; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
+
+### `aims clean`
+
+Takes aims out of your tools (skill, MCP server, status line, shell line) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. Alias: `aims uninstall`. `-y` skips the question.
+
+### `aims wipe`
+
+Logs out every account aims created and deletes its folder, then cleans. Anything shared that was written in a folder moves to `~/.claude` or `~/.codex` first. Your conversations, sessions, skills, settings and main logins are never touched, and custom `--dir` folders are forgotten, not deleted.
+
+| Flag | |
+| --- | --- |
+| `-y`, `--yes` | Do not ask |
+| `--force` | Delete a folder even if something in it is not shared |
 
 ### `aims upgrade`
 

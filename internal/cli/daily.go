@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -118,7 +120,7 @@ func newUseCmd() *cobra.Command {
 		Long:  "Without a tool, every tool that has a profile with that name switches.",
 		Example: `aims use work            # Claude Code and Codex
 aims use claude personal`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: cobra.MaximumNArgs(2),
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
 				return append(tools.Names(), profileNames("")...), cobra.ShellCompDirectiveNoFileComp
@@ -128,11 +130,21 @@ aims use claude personal`,
 			}
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		},
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			var a tool.Adapter
-			name := args[0]
-			if len(args) == 2 {
-				var err error
+			var name string
+			var err error
+			switch len(args) {
+			case 0:
+				if !ui.Interactive() {
+					return errors.New("which account? e.g. aims use work, or aims use claude personal")
+				}
+				if a, name, err = pickProfile(cmd.Context()); err != nil {
+					return err
+				}
+			case 1:
+				name = args[0]
+			default:
 				if a, err = parseTool(args[0]); err != nil {
 					return err
 				}
@@ -153,6 +165,65 @@ aims use claude personal`,
 			return nil
 		},
 	}
+}
+
+// pickProfile asks which tool (or every tool) and which account.
+func pickProfile(ctx context.Context) (tool.Adapter, string, error) {
+	report, err := ops.Status(ctx, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	var withProfiles []ops.ToolStatus
+	for _, t := range report {
+		if len(t.Profiles) > 0 {
+			withProfiles = append(withProfiles, t)
+		}
+	}
+	if len(withProfiles) == 0 {
+		return nil, "", errors.New("no accounts yet; set them up with: aims init")
+	}
+	r := ui.NewRail()
+	toolID := string(withProfiles[0].ID)
+	if len(withProfiles) > 1 {
+		opts := []ui.Option{{Label: "Every tool", Value: "", Hint: "switch each tool that has the account"}}
+		for _, t := range withProfiles {
+			opts = append(opts, ui.Option{Label: t.Title, Value: string(t.ID), Hint: "now " + t.Active})
+		}
+		toolID = ""
+		if err := r.Select("Switch which tool?", "", opts, &toolID); err != nil {
+			return nil, "", err
+		}
+	}
+	var opts []ui.Option
+	pick := ""
+	for _, t := range withProfiles {
+		if toolID != "" && string(t.ID) != toolID {
+			continue
+		}
+		for _, p := range t.Profiles {
+			if slices.ContainsFunc(opts, func(o ui.Option) bool { return o.Value == p.Name }) {
+				continue
+			}
+			hint := p.Email
+			if !p.Usable {
+				hint += " · " + strings.Join(p.Reasons, ", ")
+			}
+			if toolID == "" {
+				hint = ""
+			}
+			opts = append(opts, ui.Option{Label: p.Name, Value: p.Name, Hint: hint})
+			if p.Active && pick == "" {
+				pick = p.Name
+			}
+		}
+	}
+	if err := r.Select("Which account for new sessions?", "", opts, &pick); err != nil {
+		return nil, "", err
+	}
+	if toolID == "" {
+		return nil, pick, nil
+	}
+	return tools.Get(tool.ID(toolID)), pick, nil
 }
 
 // newToolCmd is `aims claude ...` / `aims codex ...`: the tool itself, as the

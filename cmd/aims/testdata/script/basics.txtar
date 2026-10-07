@@ -32,6 +32,10 @@ stdout '2\.1\.0 .*claude'
 stdout '0\.200\.0 .*codex'
 stdout 'aims init'
 
+# Commands that act on an account point at the setup when there is none.
+! exec aims use work
+stderr 'aims has no accounts yet; set them up with: aims init'
+
 # Without a terminal, the wizard explains how to script it.
 ! exec aims init
 stderr 'aims init --yes'

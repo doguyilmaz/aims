@@ -225,6 +225,8 @@ func mergeDir(src, dst, label string) ([]string, error) {
 			}
 		case sfi.Mode().IsRegular() && dfi.Mode().IsRegular() && sameContent(s, d):
 			os.Remove(s)
+		case sfi.Mode()&fs.ModeSymlink != 0:
+			os.Remove(s) // a link holds no data; the shared folder's own entry wins
 		default:
 			alt := unique(d + ".aims-" + label + "-" + stamp())
 			if err := move(s, alt); err != nil {

@@ -75,12 +75,11 @@ Restart the session after `aims setup`. In Claude Code, `/mcp` lists the servers
 ## Starting over
 
 ```bash
-aims uninstall
-aims rm claude work --purge
-rm -rf ~/.aims
+aims clean      # fresh start: logins and account folders stay; then aims init
+aims wipe       # also logs out and deletes the accounts aims created
 ```
 
-This removes aims' integrations, its profile folders and its settings. Your `~/.claude` and `~/.codex`, with every shared conversation and setting, stay where they are.
+Neither touches `~/.claude` or `~/.codex`: every conversation, session, skill, setting and your main logins stay.
 
 ## Getting help
 

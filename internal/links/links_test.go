@@ -301,3 +301,22 @@ func TestMoveNeverReplaces(t *testing.T) {
 		t.Fatal("unique")
 	}
 }
+
+func TestMergeDropsProfileLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need developer mode on Windows")
+	}
+	root := t.TempDir()
+	src, dst := filepath.Join(root, "src"), filepath.Join(root, "dst")
+	testutil.Write(t, filepath.Join(dst, "v1", "bin"), "hub")
+	testutil.Write(t, filepath.Join(src, "v1", "bin"), "hub")
+	os.Symlink(filepath.Join(dst, "v1"), filepath.Join(dst, "current"))
+	os.Symlink(filepath.Join(src, "v1"), filepath.Join(src, "current"))
+	kept, err := mergeDir(src, dst, "p")
+	if err != nil || len(kept) != 0 {
+		t.Fatalf("kept %v, err %v", kept, err)
+	}
+	if target, _ := os.Readlink(filepath.Join(dst, "current")); target != filepath.Join(dst, "v1") {
+		t.Fatalf("hub link changed to %s", target)
+	}
+}

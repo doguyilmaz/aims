@@ -20,6 +20,9 @@ import (
 	"github.com/doguyilmaz/aims/internal/ui"
 )
 
+// appVersion is the running version, for commands that start the setup.
+var appVersion = "dev"
+
 // exitError carries a child's exit status without printing anything.
 type exitError struct{ code int }
 
@@ -28,6 +31,7 @@ func (e exitError) Error() string { return fmt.Sprintf("exit status %d", e.code)
 // Execute runs aims and returns the process exit code.
 func Execute(version string) int {
 	version = resolveVersion(version)
+	appVersion = version
 	ctx := context.Background()
 	args := rewrite(os.Args[1:])
 	root := newRoot(version)
@@ -124,9 +128,18 @@ aims status --live`,
 		add("daily", newToolCmd(a))
 	}
 	add("accounts", newAddCmd(), newFailoverCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
-	add("connect", newSetupCmd(), newUninstallCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
-	add("maintain", newDoctorCmd(version), newUpgradeCmd(version))
+	add("connect", newSetupCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
+	add("maintain", newDoctorCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd())
+	// Commands that act on an account offer the setup when there is none yet.
+	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if !slices.Contains(needAccounts, cmd.Name()) || cmd.Parent() != root {
+			return nil
+		}
+		_, err := offerInit(cmd.Context())
+		return err
+	}
 	root.SetCompletionCommandGroupID("maintain")
 	root.SetHelpCommandGroupID("maintain")
 	installHelp(root)
@@ -154,7 +167,7 @@ func home(ctx context.Context, cmd *cobra.Command, version string) error {
 			fmt.Println("  Run " + ui.Kbd(ui.Out, "aims init") + " whenever you are ready.")
 			return nil
 		}
-		return runInit(ctx, initOptions{version: version})
+		return runInit(ctx, defaultInit(version))
 	}
 	req, err := ui.RunDashboard(ctx, version)
 	if err != nil || req == nil {
@@ -176,11 +189,14 @@ func exitCode(code int) error {
 
 // notify prints launch progress.
 func notify(l launch.Level, msg string) {
-	if l == launch.Warn {
+	switch l {
+	case launch.Warn:
 		ui.Warn("%s", msg)
-		return
+	case launch.Hint:
+		ui.Hint("%s", msg)
+	default:
+		ui.Info("%s", msg)
 	}
-	ui.Info("%s", msg)
 }
 
 // --- argument helpers and completion ---

@@ -32,8 +32,36 @@ type initOptions struct {
 	integrations string
 }
 
+// defaultInit is the setup with no flags given, the way `aims init` runs.
+func defaultInit(version string) initOptions {
+	return initOptions{version: version, current: "personal", second: "work", share: config.ShareAll, integrations: "all"}
+}
+
+// offerInit runs the setup first when aims has no accounts yet, so a command
+// that needs one carries on instead of failing. It returns the config to use.
+func offerInit(ctx context.Context) (*config.Config, error) {
+	cfg, err := config.Load()
+	if err != nil || cfg.HasProfiles() {
+		return cfg, err
+	}
+	if !ui.Interactive() {
+		return nil, errors.New("aims has no accounts yet; set them up with: aims init")
+	}
+	start := true
+	if err := ui.NewRail().Confirm("aims has no accounts yet. Set them up now?", "", &start); err != nil {
+		return nil, err
+	}
+	if !start {
+		return nil, errors.New("not set up yet; run aims init when you are ready")
+	}
+	if err := runInit(ctx, defaultInit(appVersion)); err != nil {
+		return nil, err
+	}
+	return config.Load()
+}
+
 func newInitCmd(version string) *cobra.Command {
-	o := initOptions{version: version}
+	o := defaultInit(version)
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up your accounts step by step",
@@ -48,10 +76,10 @@ aims init --yes --current personal --second work --share settings`,
 	f := cmd.Flags()
 	f.BoolVarP(&o.yes, "yes", "y", false, "no questions: use the flags and defaults (logins are left for later)")
 	f.StringVar(&o.tools, "tools", "", "comma-separated tools (default: every installed one)")
-	f.StringVar(&o.current, "current", "personal", "name for the login you already have")
-	f.StringVar(&o.second, "second", "work", "name for your other account")
-	f.StringVar(&o.share, "share", config.ShareAll, "what accounts share: all, settings or none")
-	f.StringVar(&o.integrations, "integrations", "all", "skill, mcp, statusline, shell (comma-separated), all or none")
+	f.StringVar(&o.current, "current", o.current, "name for the login you already have")
+	f.StringVar(&o.second, "second", o.second, "name for your other account")
+	f.StringVar(&o.share, "share", o.share, "what accounts share: all, settings or none")
+	f.StringVar(&o.integrations, "integrations", o.integrations, "skill, mcp, statusline, shell (comma-separated), all or none")
 	return cmd
 }
 

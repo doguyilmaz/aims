@@ -52,6 +52,13 @@ func login(ctx context.Context, a tool.Adapter, name, share string, extra []stri
 		return err
 	}
 	if cfg.Tools[a.ID()].Profiles[name] == nil {
+		if ui.Interactive() {
+			ok := false
+			q := fmt.Sprintf("There is no %s profile %q. Create it?", a.ID(), name)
+			if err := ui.NewRail().Confirm(q, "Existing: "+strings.Join(cfg.Tools[a.ID()].Order, ", "), &ok); err != nil || !ok {
+				return err
+			}
+		}
 		added, err := ops.AddProfile(a, name, ops.AddOptions{Share: share})
 		if err != nil {
 			return err
@@ -197,7 +204,7 @@ aims failover codex --to work --minutes 90`,
 			if err != nil {
 				return err
 			}
-			res, err := ops.Failover(cmd.Context(), a, from, to, time.Duration(minutes)*time.Minute, reason)
+			res, err := ops.Failover(cmd.Context(), a, from, to, time.Duration(minutes)*time.Minute, reason, "aims failover")
 			if err != nil {
 				if errors.Is(err, ops.ErrNoTarget) {
 					return fmt.Errorf("%w; add one with: aims login %s <name>", err, a.ID())
