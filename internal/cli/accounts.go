@@ -193,8 +193,9 @@ func newFailoverCmd() *cobra.Command {
 		Use:   "failover <tool>",
 		Short: "Mark the current account as limited and switch to the next",
 		Long: "Marks the account you used last as limited (until its reset time when aims\n" +
-			"knows it) and makes the next usable account active. Conversations are\n" +
-			"shared, so --resume continues the one you just left on the new account.",
+			"knows it). New sessions use the next usable account until then and come\n" +
+			"back to the active one on their own. Conversations are shared, so --resume\n" +
+			"continues the one you just left on the next account.",
 		Example: `aims failover claude --resume
 aims failover codex --to work --minutes 90`,
 		Args:              cobra.ExactArgs(1),
@@ -211,11 +212,19 @@ aims failover codex --to work --minutes 90`,
 				}
 				return err
 			}
+			to := ui.Err.Bold.Render(res.To)
+			switch {
+			case res.Login && res.Switched:
+				ui.Done("%s now uses %s; %s is marked as logged out", a.Title(), to, res.From)
+			case res.Login:
+				ui.Done("%s is marked as logged out; new %s sessions use %s until it is logged in again", res.From, a.Title(), to)
+			case res.Switched:
+				ui.Done("%s now uses %s; %s rests (%s)", a.Title(), to, res.From, ui.Until(res.Until))
+			default:
+				ui.Done("%s rests (%s); new %s sessions use %s until then", res.From, ui.Until(res.Until), a.Title(), to)
+			}
 			if res.Login {
-				ui.Done("%s now uses %s; %s is marked as logged out", a.Title(), ui.Err.Bold.Render(res.To), res.From)
 				ui.Hint("log it in again: aims login %s %s", a.ID(), res.From)
-			} else {
-				ui.Done("%s now uses %s; %s rests (%s)", a.Title(), ui.Err.Bold.Render(res.To), res.From, ui.Until(res.Until))
 			}
 			if res.FromLastUsed {
 				ui.Hint("%s was marked because it was used last; another one? aims clear %s %s && aims failover %s --from <name>", res.From, a.ID(), res.From, a.ID())
@@ -236,7 +245,7 @@ aims failover codex --to work --minutes 90`,
 		},
 	}
 	cmd.Flags().StringVar(&from, "from", "", "profile to mark (default: the one used last)")
-	cmd.Flags().StringVar(&to, "to", "", "profile to switch to (default: the next usable one)")
+	cmd.Flags().StringVar(&to, "to", "", "make this profile active instead (default: the next usable one, until the mark lifts)")
 	cmd.Flags().IntVar(&minutes, "minutes", 0, "rest period when the reset time is unknown")
 	cmd.Flags().StringVar(&reason, "reason", "", "limit (default) or login")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue the last conversation on the new account")
@@ -270,9 +279,12 @@ func newClearCmd() *cobra.Command {
 
 func newOrderCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "order <tool> <profile>...",
-		Short:   "Set the order failover tries profiles in",
-		Example: `aims order claude work personal`,
+		Use:   "order <tool> <profile>...",
+		Short: "Set which account comes first and which stand in for it",
+		Long: "The first profile becomes the active one: new sessions use it. While it is\n" +
+			"limited or logged out they use the next usable one in this order, and come\n" +
+			"back to the first once it works again.",
+		Example: `aims order claude personal work`,
 		Args:    cobra.MinimumNArgs(2),
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
@@ -289,7 +301,12 @@ func newOrderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ui.Done("%s failover order: %s", a.Title(), strings.Join(order, " → "))
+			msg := fmt.Sprintf("New %s sessions use %s", a.Title(), ui.Err.Bold.Render(order[0]))
+			if len(order) > 1 {
+				msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
+			}
+			ui.Done("%s", msg)
+			warnPinned(a, order[0])
 			return nil
 		},
 	}

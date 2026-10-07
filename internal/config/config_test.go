@@ -25,8 +25,15 @@ func TestLoadDefaultsAndNormalize(t *testing.T) {
 		t.Errorf("defaults: %+v", c.Failover)
 	}
 	tl := c.Tools["claude"]
-	if strings.Join(tl.Order, ",") != "b,a,c" || tl.Active != "" || tl.Profiles["c"] == nil {
+	// An unknown active profile falls back to the first in order.
+	if strings.Join(tl.Order, ",") != "b,a,c" || tl.Active != "b" || tl.Profiles["c"] == nil {
 		t.Errorf("normalize: order=%v active=%q", tl.Order, tl.Active)
+	}
+	// The active profile always leads the order.
+	tl.Active = "c"
+	c.normalize()
+	if strings.Join(tl.Order, ",") != "c,b,a" {
+		t.Errorf("active first: order=%v", tl.Order)
 	}
 	if c.Tools["codex"] == nil || c.Tools["codex"].Profiles == nil {
 		t.Error("every known tool gets an entry")

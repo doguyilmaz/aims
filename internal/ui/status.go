@@ -203,6 +203,9 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 			if p.Pinned {
 				tags = append(tags, "pinned in this terminal")
 			}
+			if p.StandsIn != "" {
+				tags = append(tags, "standing in for "+p.StandsIn)
+			}
 			if p.MarkedBy != "" {
 				tags = append(tags, "marked by "+p.MarkedBy)
 			}
@@ -254,6 +257,9 @@ func PlainStatus(report []ops.ToolStatus) string {
 				if !slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.HasPrefix(r, w.Label+" at ") }) {
 					fmt.Fprintf(&b, ", %s %.0f%%", w.Label, w.Percent)
 				}
+			}
+			if p.StandsIn != "" {
+				fmt.Fprintf(&b, "; new sessions use it until %s works again", p.StandsIn)
 			}
 			b.WriteString("\n")
 		}

@@ -213,7 +213,10 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+			if res.Switched {
+				return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+			}
+			return flashMsg{fmt.Sprintf("%s rests (%s); new sessions use %s until then", res.From, Until(res.Until), res.To), false}
 		}
 	}
 	sel, ok := m.selected()
@@ -249,7 +252,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Failover):
 		// Marking an account takes it out of use for hours: ask first.
 		m.confirm = &sel
-		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited and make the next account active? y/n", sel.toolID, sel.name), false
+		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited, so new sessions use the next account until it resets? y/n", sel.toolID, sel.name), false
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {
 			if _, err := ops.ClearMarks(tools.Get(sel.toolID), sel.name); err != nil {
@@ -389,6 +392,9 @@ func (m *dashboard) card(sel selection, width int) string {
 	}
 	if p.Pinned {
 		tags = append(tags, "pinned in this terminal")
+	}
+	if p.StandsIn != "" {
+		tags = append(tags, "standing in for "+p.StandsIn)
 	}
 	head := s.Bold.Render(string(sel.toolID)+" / "+p.Name) + "  " + s.Dim.Render(strings.Join(tags, " · "))
 	label := func(l string) string { return s.Dim.Render(Pad(l, 10)) }

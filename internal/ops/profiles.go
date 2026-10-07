@@ -275,7 +275,8 @@ func Use(a tool.Adapter, name string) ([]tool.Adapter, error) {
 	return changed, err
 }
 
-// SetOrder puts names first in the failover order.
+// SetOrder puts names first in the order. The first becomes the active
+// profile; the others stand in for it, in order, while it is unusable.
 func SetOrder(a tool.Adapter, names []string) ([]string, error) {
 	cfg, err := config.Update(func(c *config.Config) error {
 		t := c.Tools[a.ID()]
@@ -286,6 +287,7 @@ func SetOrder(a tool.Adapter, names []string) ([]string, error) {
 		}
 		rest := slices.DeleteFunc(slices.Clone(t.Order), func(n string) bool { return slices.Contains(names, n) })
 		t.Order = append(slices.Clone(names), rest...)
+		t.Active = names[0]
 		return nil
 	})
 	if err != nil {
@@ -315,6 +317,9 @@ type FailoverResult struct {
 	Until  time.Time `json:"until,omitzero"`
 	Login  bool      `json:"needsLogin,omitempty"`
 	Pinned string    `json:"pinned,omitempty"`
+	// Switched: To is now the active profile. Otherwise it only stands in
+	// until From works again.
+	Switched bool `json:"switched,omitempty"`
 	// FromLastUsed: From was chosen because it was used last.
 	FromLastUsed bool `json:"-"`
 }
@@ -322,8 +327,10 @@ type FailoverResult struct {
 // ErrNoTarget means every other profile is unusable too.
 var ErrNoTarget = errors.New("no other usable profile")
 
-// Failover marks a profile as limited (or logged out) and makes the next
-// usable one active.
+// Failover marks a profile as limited (or logged out). New sessions skip it
+// while the mark lasts and use To, the next usable profile, then come back to
+// it on their own. With to, or with automatic failover off, To becomes the
+// active profile instead, as with Use.
 // It changes nothing when there is no profile to switch to.
 // by names who asked ("aims failover", "the dashboard"), for the mark.
 func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason, by string) (FailoverResult, error) {
@@ -348,9 +355,15 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		if t.Profiles[to] == nil {
 			return res, fmt.Errorf("no %s profile %q", id, to)
 		}
-		res.To = to
+		if to == res.From {
+			return res, fmt.Errorf("%s is the profile being marked; --to names the one to use instead", to)
+		}
+		res.To, res.Switched = to, true
 	} else {
-		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, "", []string{res.From})
+		// The profile the next session gets: the preferred one, unless it is
+		// the one being marked or unusable itself.
+		preferred, _ := cfg.Preferred(id, "")
+		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, []string{res.From})
 		if pick.Name == "" {
 			var why []string
 			for _, s := range pick.Skipped {
@@ -362,6 +375,8 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 			return res, ErrNoTarget
 		}
 		res.To = pick.Name
+		// Without automatic failover nothing would skip the marked profile.
+		res.Switched = !cfg.Failover.Auto
 	}
 	switch reason {
 	case "", "limit":
@@ -377,8 +392,10 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 	default:
 		return res, fmt.Errorf("reason must be limit or login, not %q", reason)
 	}
-	if _, err := config.Update(func(c *config.Config) error { c.Tools[id].Active = res.To; return nil }); err != nil {
-		return res, err
+	if res.Switched {
+		if _, err := config.Update(func(c *config.Config) error { c.Tools[id].Active = res.To; return nil }); err != nil {
+			return res, err
+		}
 	}
 	res.Until = config.LoadState().Get(id, res.From).Until
 	return res, nil

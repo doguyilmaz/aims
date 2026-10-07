@@ -157,13 +157,18 @@ aims use claude personal`,
 			var titles []string
 			for _, c := range changed {
 				titles = append(titles, c.Title())
-				if pin := config.Pinned(c.ID()); pin != "" && pin != name {
-					ui.Warn("this terminal is pinned to %s %q; %s to follow the active profile", c.ID(), pin, ui.Kbd(ui.Err, `eval "$(aims env --reset)"`))
-				}
+				warnPinned(c, name)
 			}
 			ui.Done("New %s sessions use %s", strings.Join(titles, " and "), ui.Err.Bold.Render(name))
 			return nil
 		},
+	}
+}
+
+// warnPinned says when this terminal will not follow a new active profile.
+func warnPinned(a tool.Adapter, active string) {
+	if pin := config.Pinned(a.ID()); pin != "" && pin != active {
+		ui.Warn("this terminal is pinned to %s %q; %s to follow the active profile", a.ID(), pin, ui.Kbd(ui.Err, `eval "$(aims env --reset)"`))
 	}
 }
 

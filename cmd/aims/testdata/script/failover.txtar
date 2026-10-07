@@ -80,24 +80,43 @@ cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
 stdout 'Please run /login'
 ! stderr 'retrying'
 
-# aims failover marks a profile by hand and moves new sessions on.
+# aims failover marks a profile by hand. New sessions skip it while the mark
+# lasts and come back to the active profile on their own.
 exec aims clear claude
 rm $HOME/.aims/profiles/claude/work/EXPIRED
 exec aims use personal
 # It marks the profile used last (work, by the pinned run above).
 exec aims failover claude --minutes 30
-stderr 'Claude Code now uses personal; work rests \(30m, until \d\d:\d\d\)'
+stderr 'work rests \(30m, until \d\d:\d\d\); new Claude Code sessions use personal until then'
 stderr 'work was marked because it was used last'
-exec aims failover claude --from personal --to work --minutes 90
-stderr 'now uses work; personal rests \(1h30m'
+exec aims clear claude work
+exec aims failover claude --from personal --minutes 90
+stderr 'personal rests \(1h30m, until \d\d:\d\d\); new Claude Code sessions use work until then'
 exec aims status claude
-stdout '● work .*limited 30m'
+stdout '● personal .*limited 1h30m'
+stdout 'work .*ready .*standing in for personal'
+exec aims claude
+stdout 'claude interactive as work'
+stderr 'skipping "personal" \(limit for 1h30m, marked by aims failover\), using "work"'
+exec aims clear claude personal
+exec aims claude
+stdout 'claude interactive as default'
+exec aims status claude
+! stdout 'standing in'
+
+# --to makes another profile active instead.
+exec aims failover claude --from personal --to work --minutes 90
+stderr 'Claude Code now uses work; personal rests \(1h30m'
+exec aims status claude
+stdout '● work .*ready'
 stdout 'personal .*limited 1h30m'
-! exec aims failover claude
+! exec aims failover claude --from work
 stderr 'no other usable'
+! exec aims failover claude --from work --to work
+stderr 'work is the profile being marked'
 exec aims clear claude
 exec aims failover claude --from work --to personal --reason login
-stderr 'work is marked as logged out'
+stderr 'Claude Code now uses personal; work is marked as logged out'
 stderr 'aims login claude work'
 exec aims status claude
 stdout 'work .*login expired'

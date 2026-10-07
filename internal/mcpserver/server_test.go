@@ -120,7 +120,7 @@ func TestFailoverUsesSessionProfile(t *testing.T) {
 	t.Setenv("AIMS_SESSION_PROFILE", "claude:personal")
 	cs := connect(t)
 	out, isErr := call(t, cs, "aims_failover", map[string]any{"tool": "claude", "minutes": 45})
-	if isErr || !strings.Contains(out, `"personal" is cooling down`) || !strings.Contains(out, `"work" is now active`) || !strings.Contains(out, "aims claude --continue") {
+	if isErr || !strings.Contains(out, `"personal" is cooling down`) || !strings.Contains(out, `new sessions use "work" meanwhile`) || !strings.Contains(out, "aims claude --continue") {
 		t.Fatalf("failover: %s", out)
 	}
 	out, _ = call(t, cs, "aims_clear", map[string]any{"tool": "claude"})

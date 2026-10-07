@@ -9,6 +9,14 @@ Claude Code reads its state from `CLAUDE_CONFIG_DIR` (default `~/.claude`), Code
 
 The profile that adopted your existing login is special. It runs with the variable exactly as you had it, normally unset. This matters for Claude Code on macOS, which keeps the login in the keychain under a name derived from the exact `CLAUDE_CONFIG_DIR` string (`Claude Code-credentials` when unset, `Claude Code-credentials-<hash>` otherwise). Spelling out `~/.claude` would point at a different, empty login.
 
+## Tools started without aims
+
+An editor extension, a desktop app, a script, a cron job, or plain `claude` in a terminal without the [shell integration](../everyday#plain-claude-and-codex) starts the tool without aims. Unless `CLAUDE_CONFIG_DIR` or `CODEX_HOME` is set, it uses the tool's own folder, which is why aims leaves your existing login there:
+
+- It runs as the account `aims init` adopted (tagged `default login` in `aims status`), whatever `aims use` says, and without failover.
+- It sees every shared conversation, setting and skill, because those live in that folder. Tools that read `~/.claude/projects` or `~/.codex/sessions`, such as usage trackers, see the conversations of every account that shares history.
+- The other accounts live in `~/.aims/profiles` and are used only by what aims starts. A program started from a terminal pinned with `aims env` inherits the variable and uses that account too.
+
 ## Links to the hub
 
 Everything except the login links from the profile folder to the tool's normal folder, the hub. A conversation saved under one account is therefore a file every account sees, which is why `--continue` works across accounts. The links are symlinks on macOS and Linux. On Windows they are symlinks when Developer Mode allows them, and otherwise junctions for folders and hard links for files.

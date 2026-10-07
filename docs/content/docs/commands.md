@@ -44,7 +44,7 @@ Every account with its login, plan usage and marks. Alias: `aims ls`.
 
 ### `aims use [tool] <profile>`
 
-Makes a profile the active account for new sessions. Without a tool, every tool that has a profile with that name switches.
+Makes a profile the active account for new sessions and puts it first in the failover order. Without a tool, every tool that has a profile with that name switches.
 
 ### `aims claude [args]`, `aims codex [args]`
 
@@ -78,12 +78,12 @@ Adds a profile without logging in.
 
 ### `aims failover <tool>`
 
-Marks the account you used last as limited and makes the next usable one active.
+Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one.
 
 | Flag | |
 | --- | --- |
 | `--from` | The profile to mark (default: the one used last) |
-| `--to` | The profile to switch to (default: the next usable one) |
+| `--to` | Make this profile active instead, as `aims use` would |
 | `--minutes` | How long the mark lasts when the reset time is unknown |
 | `--reason` | `limit` (default) or `login`. A login mark lasts until `aims login`. |
 | `--resume` | Continue the last conversation on the new account |
@@ -94,7 +94,7 @@ Removes limit and login marks.
 
 ### `aims order <tool> <profile>...`
 
-Sets the order failover tries profiles in.
+Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
 
 ### `aims logout <tool> <profile>`
 
