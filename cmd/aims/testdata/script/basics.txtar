@@ -26,6 +26,12 @@ stdout 'claude interactive as default'
 exec aims status
 stdout 'no accounts yet'
 
+# doctor names the tools by version and points at what to fix.
+exec aims doctor
+stdout '2\.1\.0 .*claude'
+stdout '0\.200\.0 .*codex'
+stdout 'aims init'
+
 # Without a terminal, the wizard explains how to script it.
 ! exec aims init
 stderr 'aims init --yes'

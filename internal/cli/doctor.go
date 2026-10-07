@@ -27,7 +27,7 @@ func toolVersion(bin string) string {
 		return ""
 	}
 	if l := proc.Lines(out); len(l) > 0 {
-		return strings.TrimSuffix(strings.TrimSuffix(l[0], " (Claude Code)"), "codex-cli ")
+		return strings.TrimPrefix(strings.TrimSuffix(l[0], " (Claude Code)"), "codex-cli ")
 	}
 	return ""
 }
