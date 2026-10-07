@@ -1,0 +1,22 @@
+/* Brand colours, from the logo's violet: #5b43e6 on light, #9d8cff on dark. */
+:root {
+  --primary-hue: 249deg;
+  --primary-saturation: 77%;
+  --primary-lightness: 58%;
+}
+
+.dark {
+  --primary-hue: 249deg;
+  --primary-saturation: 100%;
+  --primary-lightness: 77%;
+}
+
+/* Commands in the feature cards read better unbroken. */
+.hextra-feature-card code {
+  white-space: nowrap;
+}
+
+/* Terminal transcripts: keep box drawing and bars aligned. */
+pre code {
+  font-variant-ligatures: none;
+}

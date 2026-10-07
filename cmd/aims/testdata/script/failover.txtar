@@ -1,0 +1,98 @@
+# Setup: personal (existing login) and work, both logged in.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+
+# personal is out of quota. A headless run that failed before calling any
+# tool is repeated on work, and only work's answer is printed.
+cp LIMITED $HOME/.claude/LIMITED
+exec aims claude -p --output-format stream-json -- hello
+stdout '"result":"answer from work: hello"'
+! stdout 'hit your session limit'
+stderr 'claude/personal hit a limit error before doing anything, retrying with "work"'
+exec aims status claude
+stdout 'personal .*limited 5h'
+
+# The next run goes to work straight away.
+exec aims claude -p -- again
+stdout 'answer from work: again'
+stderr 'skipping "personal" \(limit for 5h\)'
+
+# A run that already called a tool is not repeated, even with a profile to spare.
+exec aims clear claude personal
+rm $HOME/.claude/LIMITED
+cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
+cp LIMITED $HOME/.aims/profiles/claude/work/TOOL_FIRST
+exec aims use work
+! exec aims claude -p --output-format stream-json -- touch-things
+stdout 'hit your session limit'
+stderr 'not retried: the run may already have changed things'
+grep -count=1 'tool ran as work' $WORK/side-effects
+
+# Text output hides tool calls: a limit there is not retried either...
+exec aims clear claude
+rm $HOME/.aims/profiles/claude/work/TOOL_FIRST
+exec aims use work
+! exec aims claude -p -- text-mode
+stdout 'hit your session limit'
+stderr 'not retried'
+
+# Nor is a login error: plain output cannot show that no tool ran. The
+# account is marked, and the next run goes elsewhere.
+exec aims clear claude
+rm $HOME/.aims/profiles/claude/work/LIMITED
+cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
+! exec aims claude -p -- text-login
+stdout 'Please run /login'
+stderr 'claude/work hit a login error; new runs will use another profile \(not retried'
+exec aims status claude
+stdout 'work .*login expired'
+stdout '→ aims login claude work'
+exec aims claude -p -- next-run
+stdout 'answer from default: next-run'
+
+# A run that succeeds clears the account's old marks.
+rm $HOME/.aims/profiles/claude/work/EXPIRED
+exec aims claude@work -p -- works-again
+stdout 'answer from work: works-again'
+exec aims status claude
+stdout 'work .*ready'
+
+# A pinned profile turns automatic failover off.
+exec aims clear claude
+cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
+! exec aims claude@work -p -- pinned
+stdout 'Please run /login'
+! stderr 'retrying'
+
+# aims failover marks a profile by hand and moves new sessions on.
+exec aims clear claude
+rm $HOME/.aims/profiles/claude/work/EXPIRED
+exec aims use personal
+# It marks the profile used last (work, by the pinned run above).
+exec aims failover claude --minutes 30
+stderr 'Claude Code now uses personal; work rests \(30m, until \d\d:\d\d\)'
+stderr 'work was marked because it was used last'
+exec aims failover claude --from personal --to work --minutes 90
+stderr 'now uses work; personal rests \(1h30m'
+exec aims status claude
+stdout '● work .*limited 30m'
+stdout 'personal .*limited 1h30m'
+! exec aims failover claude
+stderr 'no other usable'
+exec aims clear claude
+exec aims failover claude --from work --to personal --reason login
+stderr 'work is marked as logged out'
+stderr 'aims login claude work'
+exec aims status claude
+stdout 'work .*login expired'
+exec aims login claude work
+exec aims status claude
+stdout 'work .*ready'
+! exec aims failover claude --reason tired
+stderr 'reason must be limit or login'
+exec aims clear claude personal
+exec aims status claude
+stdout 'personal .*ready'
+
+-- LIMITED --

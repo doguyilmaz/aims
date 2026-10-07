@@ -1,0 +1,56 @@
+[windows] skip 'checks paths in Unix form'
+
+# Setup: the existing login is personal, work has its own.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+
+# The active profile runs with the tool's own folder (no CLAUDE_CONFIG_DIR).
+exec aims claude --model opus
+stdout 'claude interactive as default args=\["--model" "opus"\] session=claude:personal'
+
+# tool@profile picks one for this run only.
+exec aims claude@work hello
+stdout 'claude interactive as work args=\["hello"\] session=claude:work'
+exec aims run claude@work
+stdout 'claude interactive as work'
+
+# `use` changes what new sessions get.
+exec aims use work
+stderr 'work'
+exec aims claude
+stdout 'claude interactive as work'
+
+# A pinned terminal wins over the active profile.
+env AIMS_CLAUDE_PROFILE=personal
+exec aims claude
+stdout 'claude interactive as default'
+env AIMS_CLAUDE_PROFILE=
+
+# Variables that would override the login are dropped, unless the profile sets them.
+env ANTHROPIC_API_KEY=sk-from-shell
+exec aims claude
+stdout 'api_key=""'
+stderr 'ignoring ANTHROPIC_API_KEY'
+env ANTHROPIC_API_KEY=
+
+# The tool's exit status comes through.
+env FAKE_EXIT=7
+! exec aims claude
+stdout 'interactive'
+env FAKE_EXIT=
+
+# Unknown profiles and tools are errors, not launches.
+! exec aims claude@nobody
+stderr 'no claude profile "nobody"'
+! exec aims run gemini
+stderr 'unknown tool "gemini"'
+
+# env prints shell lines for the profile.
+exec aims env claude work
+stdout 'export CLAUDE_CONFIG_DIR=.*profiles/claude/work'
+stdout 'export AIMS_CLAUDE_PROFILE=''work'''
+exec aims env claude personal
+stdout 'unset CLAUDE_CONFIG_DIR'
+exec aims env --shell fish claude work
+stdout 'set -gx CLAUDE_CONFIG_DIR'

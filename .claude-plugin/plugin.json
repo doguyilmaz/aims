@@ -1,19 +1,18 @@
 {
   "name": "aims",
   "version": "0.1.0",
-  "description": "Multiple Claude Code / Codex accounts (personal, work) with instant switching and failover: MCP server + skill for the aims CLI.",
+  "description": "Lets Claude Code see, switch and use your other accounts through the aims CLI (MCP server and skill). Needs aims on your PATH.",
   "author": {
     "name": "Dogu Yilmaz"
   },
-  "repository": "https://github.com/doguyilmaz/ai-multi-session",
+  "homepage": "https://doguyilmaz.github.io/aims/",
+  "repository": "https://github.com/doguyilmaz/aims",
   "license": "MIT",
+  "keywords": ["accounts", "profiles", "failover", "usage limits", "codex"],
   "mcpServers": {
     "aims": {
-      "command": "bun",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/src/cli.ts",
-        "mcp"
-      ]
+      "command": "aims",
+      "args": ["mcp"]
     }
   }
 }

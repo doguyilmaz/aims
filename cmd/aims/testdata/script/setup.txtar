@@ -1,0 +1,69 @@
+[windows] skip 'the previous status line is a shell script'
+
+# Setup: a Claude Code login with its own status line, and Codex.
+exec claude auth login --email me@gmail.com
+exec codex login
+cp settings.json $HOME/.claude/settings.json
+cp zshrc $HOME/.zshrc
+cp zshrc zshrc.orig
+exec aims init --yes --integrations none
+exec aims login claude work
+
+# setup --all connects everything and keeps the previous status line.
+exec aims setup --all
+stderr 'claude skill ~/.claude/skills/aims'
+stderr 'codex MCP server ~/.codex'
+stderr 'claude status line'
+stderr 'shell integration ~/.zshrc'
+exists $HOME/.claude/skills/aims/SKILL.md
+exists $HOME/.codex/skills/aims/SKILL.md
+grep '"aims"' $HOME/.claude.json
+grep '"aims"' $HOME/.aims/profiles/claude/work/.claude.json
+grep '\[mcp_servers.aims\]' $HOME/.codex/config.toml
+grep 'statusline' $HOME/.claude/settings.json
+grep '"model": "opus"' $HOME/.claude/settings.json
+grep 'my-line' $HOME/.aims/config.json
+grep '>>> aims >>>' $HOME/.zshrc
+
+# Running it again is harmless.
+exec aims setup --all
+grep -count=1 '>>> aims >>>' $HOME/.zshrc
+grep -count=1 'mcp_servers.aims' $HOME/.codex/config.toml
+
+# The status line shows the previous line, then the account and its usage,
+# and records the usage for failover.
+chmod 755 $HOME/my-line.sh
+env NO_COLOR=1
+env CLAUDE_CONFIG_DIR=$HOME/.aims/profiles/claude/work
+stdin statusline.json
+exec aims statusline
+stdout '^mine  aims work 5h 97% · aims failover claude \(personal\)$'
+env CLAUDE_CONFIG_DIR=
+exec aims status claude
+stdout 'work .*near limit'
+
+# uninstall puts every file back the way it was.
+exec aims uninstall -y
+! exists $HOME/.claude/skills/aims
+! exists $HOME/.codex/skills/aims
+! grep '"aims"' $HOME/.claude.json
+! grep '"aims"' $HOME/.aims/profiles/claude/work/.claude.json
+! grep 'mcp_servers.aims' $HOME/.codex/config.toml
+grep '"command": "~/my-line.sh"' $HOME/.claude/settings.json
+cmp $HOME/.zshrc zshrc.orig
+exec aims uninstall -y
+stderr 'nothing to remove'
+
+-- settings.json --
+{
+  "model": "opus",
+  "statusLine": {"type": "command", "command": "~/my-line.sh"}
+}
+-- zshrc --
+# my zshrc
+alias ll='ls -l'
+-- statusline.json --
+{"session_id":"x","rate_limits":{"five_hour":{"used_percentage":97,"resets_at":4102444800},"seven_day":{"used_percentage":20}}}
+-- home/my-line.sh --
+#!/bin/sh
+echo mine
