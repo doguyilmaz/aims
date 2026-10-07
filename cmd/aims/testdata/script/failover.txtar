@@ -69,6 +69,17 @@ stdout '● work .*limited 30m'
 stdout 'personal .*limited 1h30m'
 ! exec aims failover claude
 stderr 'no other usable'
+exec aims clear claude
+exec aims failover claude --from work --to personal --reason login
+stderr 'work is marked as logged out'
+stderr 'aims login claude work'
+exec aims status claude
+stdout 'work .*login expired'
+exec aims login claude work
+exec aims status claude
+stdout 'work .*ready'
+! exec aims failover claude --reason tired
+stderr 'reason must be limit or login'
 exec aims clear claude personal
 exec aims status claude
 stdout 'personal .*ready'

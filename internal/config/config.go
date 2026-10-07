@@ -105,6 +105,9 @@ func Home() string {
 func configPath() string { return filepath.Join(Home(), "config.json") }
 func statePath() string  { return filepath.Join(Home(), "state.json") }
 
+// ensureHome creates ~/.aims readable by its owner only, before the first write.
+func ensureHome() error { return os.MkdirAll(Home(), 0o700) }
+
 // ProfilesRoot holds the profile directories aims creates.
 func ProfilesRoot() string { return filepath.Join(Home(), "profiles") }
 
@@ -170,11 +173,17 @@ func (c *Config) normalize() {
 
 // Save writes the config atomically.
 func (c *Config) Save() error {
+	if err := ensureHome(); err != nil {
+		return err
+	}
 	return fsx.WithLock(configPath(), func() error { return fsx.WriteJSON(configPath(), c, 0o600) })
 }
 
 // Update loads the config, applies fn and saves, under the config lock.
 func Update(fn func(*Config) error) (*Config, error) {
+	if err := ensureHome(); err != nil {
+		return nil, err
+	}
 	var out *Config
 	err := fsx.WithLock(configPath(), func() error {
 		c, err := Load()

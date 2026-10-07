@@ -61,6 +61,9 @@ func TestUpdateRoundTrip(t *testing.T) {
 	if err != nil || (fi.Mode().Perm()&0o077 != 0 && os.PathSeparator == '/') {
 		t.Fatalf("config must be private: %v %v", fi.Mode(), err)
 	}
+	if di, err := os.Stat(filepath.Join(home, ".aims")); err == nil && os.PathSeparator == '/' && di.Mode().Perm() != 0o700 {
+		t.Fatalf("~/.aims is %v", di.Mode().Perm())
+	}
 	c, _ := Load()
 	if c.Tools["claude"].Profiles["work"].ShareMode() != ShareSettings || c.Tools["claude"].Active != "work" {
 		t.Fatal("round trip")

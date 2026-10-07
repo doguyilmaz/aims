@@ -51,6 +51,9 @@ func (s State) Get(id tool.ID, name string) *ProfileState {
 
 // UpdateState applies fn to one profile's state under the state lock.
 func UpdateState(id tool.ID, name string, fn func(*ProfileState)) error {
+	if err := ensureHome(); err != nil {
+		return err
+	}
 	return fsx.WithLock(statePath(), func() error {
 		s := LoadState()
 		if s[id] == nil {

@@ -204,7 +204,12 @@ aims failover codex --to work --minutes 90`,
 				}
 				return err
 			}
-			ui.Done("%s now uses %s; %s rests (%s)", a.Title(), ui.Err.Bold.Render(res.To), res.From, ui.Until(res.Until))
+			if res.Login {
+				ui.Done("%s now uses %s; %s is marked as logged out", a.Title(), ui.Err.Bold.Render(res.To), res.From)
+				ui.Hint("log it in again: aims login %s %s", a.ID(), res.From)
+			} else {
+				ui.Done("%s now uses %s; %s rests (%s)", a.Title(), ui.Err.Bold.Render(res.To), res.From, ui.Until(res.Until))
+			}
 			if res.FromLastUsed {
 				ui.Hint("%s was marked because it was used last; another one? aims clear %s %s && aims failover %s --from <name>", res.From, a.ID(), res.From, a.ID())
 			}
@@ -289,12 +294,12 @@ func newRemoveCmd() *cobra.Command {
 		Use:     "rm <tool> <profile>",
 		Aliases: []string{"remove"},
 		Short:   "Remove a profile",
-		Long: "Forgets the profile. With --purge its folder (and the login in it) is deleted\n" +
-			"too, after anything shared that was written there moved to the shared folder.\n" +
+		Long: "Forgets the profile. With --purge it is logged out and its folder deleted,\n" +
+			"after anything shared that was written there moved to the shared folder.\n" +
 			"Shared history and settings are never deleted.",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeToolProfile,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := parseTool(args[0])
 			if err != nil {
 				return err
@@ -319,8 +324,11 @@ func newRemoveCmd() *cobra.Command {
 					return nil
 				}
 			}
-			res, err := ops.RemoveProfile(a, args[1], purge, force)
+			res, err := ops.RemoveProfile(cmd.Context(), a, args[1], purge, force)
 			reportLinks(a.ID(), args[1], res.Reports)
+			if res.LogoutErr != nil {
+				ui.Warn("could not log %s/%s out first (%v); its login may stay in the system keychain", a.ID(), args[1], res.LogoutErr)
+			}
 			if err != nil {
 				return err
 			}

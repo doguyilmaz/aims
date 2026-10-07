@@ -15,6 +15,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
@@ -130,17 +131,19 @@ func checkCustomDir(c *config.Config, dir string) (string, error) {
 	return dir, nil
 }
 
-// Removed describes a removed profile.
+// Removed describes a removed profile. LogoutErr is set when logging out
+// before a purge failed; the purge goes ahead.
 type Removed struct {
-	Dir     string
-	Purged  bool
-	Reports []links.Report
+	Dir       string
+	Purged    bool
+	Reports   []links.Report
+	LogoutErr error
 }
 
 // RemoveProfile forgets a profile. With purge it also deletes the profile
 // directory, after moving anything shared that the tool wrote there into the
 // hub; it never deletes a directory aims did not create.
-func RemoveProfile(a tool.Adapter, name string, purge, force bool) (Removed, error) {
+func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, force bool) (Removed, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return Removed{}, err
@@ -168,6 +171,10 @@ func RemoveProfile(a tool.Adapter, name string, purge, force bool) (Removed, err
 				return out, fmt.Errorf("not deleting %s: %s; resolve it or add --force", fsx.Tildify(out.Dir), strings.Join(stuck, "; "))
 			}
 		}
+		// The login may live in the keychain or a keyring, outside the folder.
+		if acct := a.Account(ctx, profiles.Home(cfg, a, name)); profiles.Bin(a) != "" && (acct.LoggedIn == nil || *acct.LoggedIn) {
+			out.LogoutErr = Logout(ctx, a, name)
+		}
 	}
 	if _, err := config.Update(func(c *config.Config) error {
 		t := c.Tools[a.ID()]
@@ -194,6 +201,28 @@ func RemoveProfile(a tool.Adapter, name string, purge, force bool) (Removed, err
 		out.Purged = true
 	}
 	return out, nil
+}
+
+// Logout runs the tool's own logout for a profile, quietly. Purging a
+// profile does this first: on macOS and with a keyring the login lives
+// outside the folder and would otherwise outlive it.
+func Logout(ctx context.Context, a tool.Adapter, name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	h := profiles.Home(cfg, a, name)
+	if h.Bin == "" {
+		return fmt.Errorf("%s is not installed", a.Title())
+	}
+	out, code, err := proc.CombinedOutput(h.Bin, a.Commands().Logout, h.Env, time.Minute)
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		return &tool.CommandError{Output: out, Code: code}
+	}
+	return config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil })
 }
 
 // Use makes name the active profile of a, or of every tool that has a profile
@@ -257,9 +286,11 @@ func LastUsed(cfg *config.Config, st config.State, id tool.ID) string {
 
 // FailoverResult describes a switch.
 type FailoverResult struct {
-	From   string    `json:"from"`
-	To     string    `json:"to"`
-	Until  time.Time `json:"until"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Until is when From may be used again; zero when it needs a new login.
+	Until  time.Time `json:"until,omitzero"`
+	Login  bool      `json:"needsLogin,omitempty"`
 	Pinned string    `json:"pinned,omitempty"`
 	// FromLastUsed: From was chosen because it was used last.
 	FromLastUsed bool `json:"-"`
@@ -268,7 +299,8 @@ type FailoverResult struct {
 // ErrNoTarget means every other profile is unusable too.
 var ErrNoTarget = errors.New("no other usable profile")
 
-// Failover marks a profile as limited and makes the next usable one active.
+// Failover marks a profile as limited (or logged out) and makes the next
+// usable one active.
 // It changes nothing when there is no profile to switch to.
 func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason string) (FailoverResult, error) {
 	cfg, err := config.Load()
@@ -307,11 +339,19 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		}
 		res.To = pick.Name
 	}
-	if reason == "" {
-		reason = "limit"
-	}
-	if err := profiles.MarkLimited(cfg, id, res.From, reason, time.Time{}, d); err != nil {
-		return res, err
+	switch reason {
+	case "", "limit":
+		if err := profiles.MarkLimited(cfg, id, res.From, "limit", time.Time{}, d); err != nil {
+			return res, err
+		}
+	case "login":
+		// A dead login does not recover on its own; `aims login` clears this.
+		if err := profiles.MarkNeedsLogin(id, res.From); err != nil {
+			return res, err
+		}
+		res.Login = true
+	default:
+		return res, fmt.Errorf("reason must be limit or login, not %q", reason)
 	}
 	if _, err := config.Update(func(c *config.Config) error { c.Tools[id].Active = res.To; return nil }); err != nil {
 		return res, err

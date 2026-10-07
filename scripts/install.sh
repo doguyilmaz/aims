@@ -3,11 +3,12 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.sh | sh
 #
-# AIMS_VERSION   release tag to install (default: the latest)
-# AIMS_BIN_DIR   where to put the binary (default: ~/.local/bin)
+# AIMS_VERSION    release tag to install (default: the latest)
+# AIMS_BIN_DIR    where to put the binary (default: ~/.local/bin)
+# AIMS_BASE_URL   releases page or a mirror of it
 set -eu
 
-repo="doguyilmaz/aims"
+base_url="${AIMS_BASE_URL:-https://github.com/doguyilmaz/aims/releases}"
 bin_dir="${AIMS_BIN_DIR:-$HOME/.local/bin}"
 
 say() { printf '%s\n' "$*"; }
@@ -37,9 +38,9 @@ version="${AIMS_VERSION:-}"
 if [ -z "$version" ]; then
 	# The latest release page redirects to its tag; no API token needed.
 	if has curl; then
-		url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")
+		url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$base_url/latest")
 	else
-		url=$(wget -S --spider "https://github.com/$repo/releases/latest" 2>&1 | sed -n 's/^ *Location: *//p' | tail -n 1)
+		url=$(wget -S --spider "$base_url/latest" 2>&1 | sed -n 's/^ *Location: *//p' | tail -n 1)
 	fi
 	version="${url##*/}"
 fi
@@ -49,7 +50,7 @@ v[0-9]*) ;;
 esac
 
 archive="aims_${version#v}_${os}_${arch}.tar.gz"
-base="https://github.com/$repo/releases/download/$version"
+base="$base_url/download/$version"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 

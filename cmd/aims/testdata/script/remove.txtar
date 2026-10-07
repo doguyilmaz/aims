@@ -15,6 +15,13 @@ stderr 'removed claude profile work and deleted ~/.aims/profiles/claude/work'
 exists $HOME/.claude/projects/repo/t.jsonl
 exists $HOME/.claude/.credentials.json
 
+# A logged-in profile is logged out before its folder goes, so no login
+# is left behind in a keychain.
+exec aims login claude temp
+exec aims rm claude temp --purge -y
+grep 'logout as temp' $WORK/side-effects
+! exists $HOME/.aims/profiles/claude/temp
+
 # The adopted login is never deleted, --purge or not.
 exec aims rm claude personal --purge -y
 ! stderr 'deleted'

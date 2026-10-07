@@ -236,7 +236,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false} // the dashboard marks limits only
 		}
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {

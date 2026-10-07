@@ -219,3 +219,20 @@ func TestSameDirIsNoop(t *testing.T) {
 		t.Fatal("created the hub for nothing")
 	}
 }
+
+func TestDetachHardLink(t *testing.T) {
+	hub, dir := dirs(t)
+	testutil.Write(t, filepath.Join(hub, "settings.json"), "shared")
+	os.MkdirAll(dir, 0o755)
+	if err := os.Link(filepath.Join(hub, "settings.json"), filepath.Join(dir, "settings.json")); err != nil {
+		t.Skip("no hard links here")
+	}
+	reps := Detach(hub, dir, func(string) bool { return true }, layout)
+	if len(reps) != 1 || reps[0].Action != Detached {
+		t.Fatalf("detach: %+v", reps)
+	}
+	testutil.Write(t, filepath.Join(dir, "settings.json"), "mine now")
+	if testutil.Read(t, filepath.Join(hub, "settings.json")) != "shared" {
+		t.Fatal("the profile still writes into the hub")
+	}
+}
