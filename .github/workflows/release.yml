@@ -29,13 +29,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC, set up on npmjs.com for @doguyilmaz/aims) needs
+      # no secret; an NPM_TOKEN secret is used instead when there is one.
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::notice::NPM_TOKEN is not set; skipping npm."
-            exit 0
+          set -euo pipefail
+          npm install -g npm@latest >/dev/null
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi
           node scripts/npm/build.mjs "$GITHUB_REF_NAME" --publish
