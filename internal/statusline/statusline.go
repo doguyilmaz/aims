@@ -73,6 +73,7 @@ func changed(prev *config.Usage, next []tool.Window) bool {
 }
 
 const (
+	bold   = "\x1b[1m"
 	dim    = "\x1b[2m"
 	green  = "\x1b[32m"
 	yellow = "\x1b[33m"
@@ -80,34 +81,70 @@ const (
 	reset  = "\x1b[0m"
 )
 
+// segment is aims' part of the line, as short as it can be while still
+// answering "which account, how much is left, what next":
+//
+//	work ▰▱▱▱▱  11% · 7d 47%
+//	work ▰▰▰▰▱  82% ↻1h20m · 7d 61%
+//	work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
 func segment(ctx context.Context, cfg *config.Config, name string, windows []tool.Window) string {
-	color := os.Getenv("NO_COLOR") == ""
+	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), func() string {
+		return profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}).Name
+	}, config.Now(), os.Getenv("NO_COLOR") == "")
+}
+
+func render(cfg *config.Config, name string, windows []tool.Window, ps *config.ProfileState, next func() string, now time.Time, color bool) string {
 	paint := func(c, s string) string {
 		if !color {
 			return s
 		}
 		return c + s + reset
 	}
-	out := paint(dim, "aims ") + name
-	for _, w := range windows {
-		if w.Label != "5h" && w.Percent < 50 {
-			continue // the weekly window matters only once it is filling up
-		}
-		c := green
+	level := func(pct float64) string {
 		switch {
-		case w.Percent >= cfg.Failover.Threshold:
-			c = red
-		case w.Percent >= 70:
-			c = yellow
+		case pct >= cfg.Failover.Threshold:
+			return red
+		case pct >= 70:
+			return yellow
 		}
-		out += " " + paint(dim, w.Label) + " " + paint(c, fmt.Sprintf("%.0f%%", w.Percent))
+		return green
 	}
+	parts := []string{paint(bold, name)}
+	limited := false
+	if ps != nil && ps.Until.After(now) {
+		parts = append(parts, paint(red, "limited")+paint(dim, " ↻"+profiles.Duration(ps.Until.Sub(now))))
+		limited = true
+	}
+	var tail []string
 	for _, w := range windows {
+		c := level(w.Percent)
+		var p string
+		if w.Label == "5h" {
+			cells := int(w.Percent/20 + 0.5)
+			cells = max(0, min(cells, 5))
+			p = paint(c, strings.Repeat("▰", cells)) + paint(dim, strings.Repeat("▱", 5-cells)) + "  " + paint(c, fmt.Sprintf("%.0f%%", w.Percent))
+		} else {
+			p = paint(dim, w.Label+" ") + paint(c, fmt.Sprintf("%.0f%%", w.Percent))
+		}
+		if w.Percent >= 70 && w.ResetsAt.After(now) {
+			p += paint(dim, " ↻"+profiles.Duration(w.ResetsAt.Sub(now)))
+		}
 		if w.Percent >= cfg.Failover.Threshold {
-			if next := profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}); next.Name != "" {
-				out += paint(yellow, " · aims failover claude ("+next.Name+")")
-			}
-			break
+			limited = true
+		}
+		if w.Label == "5h" {
+			parts = append(parts, p)
+		} else {
+			tail = append(tail, p)
+		}
+	}
+	out := strings.Join(parts, " ")
+	if len(tail) > 0 {
+		out += paint(dim, " · ") + strings.Join(tail, paint(dim, " · "))
+	}
+	if limited {
+		if n := next(); n != "" {
+			out += paint(yellow, " → "+n)
 		}
 	}
 	return out

@@ -119,8 +119,14 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			o.say(Warn, "no %s profile looks usable (%s); trying %q anyway", a.ID(), describe(pick.Skipped), preferred)
 		case pick.Name != preferred:
 			o.say(Info, "%s: skipping %s, using %q", a.ID(), describe(pick.Skipped), pick.Name)
-			if marked := markedOnly(pick.Skipped); len(marked) > 0 {
-				o.say(Hint, "works again? aims clear %s %s", a.ID(), strings.Join(marked, " "))
+			for _, e := range pick.Skipped {
+				switch {
+				case e.State == nil || (e.Account.LoggedIn != nil && !*e.Account.LoggedIn):
+				case e.State.NeedsLogin:
+					o.say(Hint, "log %s in again: aims login %s %s", e.Name, a.ID(), e.Name)
+				case e.State.Until.After(config.Now()):
+					o.say(Hint, "%s works again? aims clear %s %s", e.Name, a.ID(), e.Name)
+				}
 			}
 			name = pick.Name
 		}
@@ -285,19 +291,4 @@ func describe(evs []profiles.Evaluation) string {
 		parts[i] = fmt.Sprintf("%q (%s)", e.Name, why)
 	}
 	return strings.Join(parts, ", ")
-}
-
-// markedOnly names the skipped profiles that are unusable only because of a
-// limit or login mark, which `aims clear` removes.
-func markedOnly(evs []profiles.Evaluation) []string {
-	var out []string
-	for _, e := range evs {
-		if e.Account.LoggedIn != nil && !*e.Account.LoggedIn {
-			continue
-		}
-		if e.State != nil && (e.State.NeedsLogin || e.State.Until.After(config.Now())) {
-			out = append(out, e.Name)
-		}
-	}
-	return out
 }

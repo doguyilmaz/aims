@@ -18,7 +18,7 @@ stdout 'personal .*limited [0-9hm]+ .*marked by a failed run'
 exec aims claude -p -- again
 stdout 'answer from work: again'
 stderr 'skipping "personal" \(limit for [0-9hm]+, marked by a failed run\), using "work"'
-stderr 'works again\? aims clear claude personal'
+stderr 'personal works again\? aims clear claude personal'
 
 # A run that already called a tool is not repeated, even with a profile to spare.
 exec aims clear claude personal
@@ -52,6 +52,7 @@ stdout 'work .*login expired'
 stdout '→ aims login claude work'
 exec aims claude -p -- next-run
 stdout 'answer from default: next-run'
+stderr 'log work in again: aims login claude work'
 
 # A run that succeeds clears the account's old marks.
 rm $HOME/.aims/profiles/claude/work/EXPIRED

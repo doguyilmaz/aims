@@ -37,7 +37,7 @@ env NO_COLOR=1
 env CLAUDE_CONFIG_DIR=$HOME/.aims/profiles/claude/work
 stdin statusline.json
 exec aims statusline
-stdout '^mine  aims work 5h 97% · aims failover claude \(personal\)$'
+stdout '^mine  work ▰▰▰▰▰  97% ↻[0-9dhm]+ · 7d 20% → personal$'
 env CLAUDE_CONFIG_DIR=
 exec aims status claude
 stdout 'work .*near limit'

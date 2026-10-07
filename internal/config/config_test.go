@@ -145,7 +145,7 @@ func TestValidName(t *testing.T) {
 			t.Errorf("%q rejected", n)
 		}
 	}
-	for _, n := range []string{"", "../x", "a/b", ".hidden", "-flag", "a b", strings.Repeat("x", 41)} {
+	for _, n := range []string{"", "../x", "a/b", ".hidden", "-flag", "a b", "work.", "work-", strings.Repeat("x", 41)} {
 		if ValidName(n) {
 			t.Errorf("%q accepted", n)
 		}
