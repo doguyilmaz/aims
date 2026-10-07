@@ -34,6 +34,15 @@ stdout 'no accounts yet'
 stderr 'is inside ~/.claude'
 ! exec aims add claude bad --dir $HOME
 stderr 'contains your home folder'
+! exec aims add claude bad --dir $WORK/repo
+stderr 'is a git repository'
+! exec aims add claude bad --dir $WORK/notes
+stderr 'does not look like a Claude Code folder'
+[!windows] symlink $WORK/alias -> $HOME/.claude
+[!windows] ! exec aims add claude bad --dir $WORK/alias
+[!windows] stderr 'is ~/.claude under another name'
+exec aims add claude old --dir $WORK/old-claude-dir
+stderr 'old'
 exec aims add claude ext --dir $WORK/elsewhere/ext
 stderr 'ext'
 exists $WORK/elsewhere/ext/projects
@@ -48,5 +57,13 @@ stderr 'name'
 ! exec aims rm claude nobody -y
 stderr 'no claude profile "nobody"'
 
+-- repo/.git/HEAD --
+ref: refs/heads/main
+-- repo/CLAUDE.md --
+project rules
+-- notes/todo.txt --
+buy milk
+-- old-claude-dir/.claude.json --
+{}
 -- transcript.jsonl --
 {"type":"user"}

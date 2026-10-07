@@ -66,7 +66,7 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 			}
 			p = &config.Profile{CreatedAt: p.CreatedAt, Existing: true}
 		} else if o.Dir != "" {
-			dir, err := checkCustomDir(c, fsx.Abs(o.Dir))
+			dir, err := checkCustomDir(c, a, fsx.Abs(o.Dir))
 			if err != nil {
 				return err
 			}
@@ -101,34 +101,57 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 
 // checkCustomDir refuses a profile directory that overlaps something aims
 // links into or might delete: home, a hub, ~/.aims or another profile.
-func checkCustomDir(c *config.Config, dir string) (string, error) {
+func checkCustomDir(c *config.Config, a tool.Adapter, dir string) (string, error) {
 	home := fsx.Home()
 	protected := []string{config.Home()}
-	for _, a := range tools.All() {
-		protected = append(protected, filepath.Join(home, a.Layout().DefaultHome))
-		if h := c.Tools[a.ID()].Hub; h != "" {
+	for _, t := range tools.All() {
+		protected = append(protected, filepath.Join(home, t.Layout().DefaultHome))
+		if h := c.Tools[t.ID()].Hub; h != "" {
 			protected = append(protected, h)
 		}
 	}
-	if fsx.Within(home, dir) {
+	// Inside sees through symlinks and letter case: ~/link-to-claude and
+	// ~/.Claude are ~/.claude.
+	if fsx.Inside(home, dir) {
 		return "", fmt.Errorf("%s contains your home folder; pick a dedicated folder", dir)
 	}
 	for _, p := range protected {
-		if fsx.Within(p, dir) {
+		if fsx.Inside(p, dir) && fsx.Inside(dir, p) {
+			return "", fmt.Errorf("%s is %s under another name", dir, fsx.Tildify(p))
+		}
+		if fsx.Inside(p, dir) {
 			return "", fmt.Errorf("%s contains %s; pick a dedicated folder", dir, fsx.Tildify(p))
 		}
-		if fsx.Within(dir, p) {
+		if fsx.Inside(dir, p) {
 			return "", fmt.Errorf("%s is inside %s; pick a folder outside it", dir, fsx.Tildify(p))
 		}
 	}
-	for _, a := range tools.All() {
-		for _, n := range c.Tools[a.ID()].Order {
-			if o := c.Dir(a.ID(), n); fsx.Within(dir, o) || fsx.Within(o, dir) {
-				return "", fmt.Errorf("%s overlaps the %s profile %q (%s)", dir, a.ID(), n, fsx.Tildify(o))
+	for _, t := range tools.All() {
+		for _, n := range c.Tools[t.ID()].Order {
+			if o := c.Dir(t.ID(), n); fsx.Inside(dir, o) || fsx.Inside(o, dir) {
+				return "", fmt.Errorf("%s overlaps the %s profile %q (%s)", dir, t.ID(), n, fsx.Tildify(o))
 			}
 		}
 	}
-	return dir, nil
+	// An existing folder must be a config folder of this tool: aims links and
+	// merges its entries, which would rewrite a project's CLAUDE.md or plugins/.
+	entries, err := os.ReadDir(dir)
+	switch {
+	case os.IsNotExist(err):
+		return dir, nil
+	case err != nil:
+		return "", err
+	case len(entries) == 0:
+		return dir, nil
+	case fsx.Lstat(filepath.Join(dir, ".git")) != nil:
+		return "", fmt.Errorf("%s is a git repository; a profile needs a folder of its own", dir)
+	}
+	for _, m := range a.Layout().Markers {
+		if fsx.Lstat(filepath.Join(dir, m)) != nil {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not empty and does not look like a %s folder; pick an empty or new folder", dir, a.Title())
 }
 
 // Removed describes a removed profile. LogoutErr is set when logging out

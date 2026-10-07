@@ -57,6 +57,7 @@ func (*Adapter) Layout() tool.Layout {
 		History:        tool.Names("projects", "file-history", "todos", "plans", "tasks", "history.jsonl"),
 		ConflictingEnv: []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"},
 		SkillsDir:      "skills",
+		Markers:        []string{".credentials.json", ".claude.json", "projects", "settings.json"},
 	}
 }
 
@@ -80,6 +81,9 @@ func (*Adapter) HeadlessArgs(o tool.HeadlessOptions) []string {
 		args = append(args, "--continue")
 	}
 	args = append(args, "-p", "--output-format", "stream-json", "--verbose")
+	if o.ReadOnly {
+		args = append(args, "--permission-mode", "plan")
+	}
 	if o.Model != "" {
 		args = append(args, "--model", o.Model)
 	}

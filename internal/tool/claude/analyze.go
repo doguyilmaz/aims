@@ -19,6 +19,7 @@ func (*Adapter) NewAnalyzer(args []string) tool.Analyzer {
 type analyzer struct {
 	format  string
 	lastOut tool.Tail
+	outN    int
 	errs    tool.Tail
 	result  *result
 	toolUse bool
@@ -37,6 +38,9 @@ func (a *analyzer) Line(stderr bool, line string) {
 	}
 	if a.format == "text" {
 		a.lastOut.Add(line)
+		if strings.TrimSpace(line) != "" {
+			a.outN++
+		}
 		return
 	}
 	if !strings.HasPrefix(line, "{") {
@@ -75,8 +79,9 @@ func (a *analyzer) ErrorText() string {
 	switch {
 	case a.result != nil && a.result.IsError:
 		parts = append(parts, strings.TrimSpace(a.result.Result+" "+a.result.Subtype))
-	case a.result == nil:
-		// Text mode prints only the final result, so a failed run's stdout is the error.
+	case a.result == nil && a.outN <= 2:
+		// Text mode prints only the final result, so a failed run's short
+		// stdout is the error. Anything longer is an answer, never read here.
 		parts = append(parts, a.lastOut.String())
 	}
 	parts = append(parts, a.errs.String())

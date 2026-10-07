@@ -26,8 +26,8 @@ func TestAdapters(t *testing.T) {
 		if !idRe.MatchString(string(id)) {
 			t.Errorf("%q: ids are lowercase words (they appear in tool@profile)", id)
 		}
-		if a.Title() == "" || l.Bin == "" || l.HomeEnv == "" || l.DefaultHome == "" {
-			t.Errorf("%s: Title, Bin, HomeEnv and DefaultHome are required", id)
+		if a.Title() == "" || l.Bin == "" || l.HomeEnv == "" || l.DefaultHome == "" || len(l.Markers) == 0 {
+			t.Errorf("%s: Title, Bin, HomeEnv, DefaultHome and Markers are required", id)
 		}
 		if want := "AIMS_" + strings.ToUpper(string(id)) + "_BIN"; l.BinEnv != want {
 			t.Errorf("%s: BinEnv is %q, want %q", id, l.BinEnv, want)

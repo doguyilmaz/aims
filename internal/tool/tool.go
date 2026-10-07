@@ -93,6 +93,10 @@ type Layout struct {
 	ConflictingEnv []string
 	// SkillsDir is where skills live inside the home ("" if unsupported).
 	SkillsDir string
+	// Markers are entries only the tool's own folder has. An existing folder
+	// given as a profile's --dir must hold one, so a code repository (with its
+	// own CLAUDE.md or plugins/) is never mistaken for a config folder.
+	Markers []string
 }
 
 // IsShared reports whether a home entry is shared between profiles.
@@ -143,6 +147,9 @@ type HeadlessOptions struct {
 	Prompt   string
 	Model    string
 	Continue bool
+	// ReadOnly asks the tool not to edit files or run changing commands,
+	// whatever its settings allow.
+	ReadOnly bool
 }
 
 // Home is one login of a tool, as the adapter sees it.

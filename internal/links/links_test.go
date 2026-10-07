@@ -236,3 +236,68 @@ func TestDetachHardLink(t *testing.T) {
 		t.Fatal("the profile still writes into the hub")
 	}
 }
+
+// The profile folder is the hub under another name: nothing may be merged
+// into itself (that would delete the history it holds).
+func TestProfileAliasingHubIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need developer mode on Windows")
+	}
+	hub, dir := dirs(t)
+	testutil.Write(t, filepath.Join(hub, "projects", "p", "t.jsonl"), "conversation")
+	if err := os.Symlink(hub, dir); err != nil {
+		t.Fatal(err)
+	}
+	reps := Ensure(Options{Hub: hub, Dir: dir, Layout: layout})
+	if len(reps) != 1 || reps[0].Action != Conflict || !strings.Contains(reps[0].Detail, "overlaps") {
+		t.Fatalf("reports: %+v", reps)
+	}
+	if testutil.Read(t, filepath.Join(hub, "projects", "p", "t.jsonl")) != "conversation" {
+		t.Fatal("history lost")
+	}
+	if _, err := mergeDir(filepath.Join(dir, "projects"), filepath.Join(hub, "projects"), "x"); err == nil {
+		t.Fatal("merged a folder into itself")
+	}
+	if testutil.Read(t, filepath.Join(hub, "projects", "p", "t.jsonl")) != "conversation" {
+		t.Fatal("history lost by mergeDir")
+	}
+}
+
+// Two profiles repaired in the same second keep both old versions.
+func TestBackupsNeverOverwrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file links need developer mode on Windows")
+	}
+	hub, dir := dirs(t)
+	dir2 := dir + "2"
+	past := time.Now().Add(-time.Hour)
+	testutil.Write(t, filepath.Join(hub, "settings.json"), "hub")
+	os.Chtimes(filepath.Join(hub, "settings.json"), past, past)
+	testutil.Write(t, filepath.Join(dir, "settings.json"), "one")
+	testutil.Write(t, filepath.Join(dir2, "settings.json"), "two")
+	Ensure(Options{Hub: hub, Dir: dir, Layout: layout, Label: "one"})
+	os.Chtimes(filepath.Join(hub, "settings.json"), past, past)
+	Ensure(Options{Hub: hub, Dir: dir2, Layout: layout, Label: "two"})
+
+	seen := map[string]bool{}
+	files, _ := filepath.Glob(filepath.Join(hub, "settings.json*"))
+	for _, f := range files {
+		seen[testutil.Read(t, f)] = true
+	}
+	if !seen["hub"] || !seen["one"] || !seen["two"] {
+		t.Fatalf("a version was lost: %v", files)
+	}
+}
+
+func TestMoveNeverReplaces(t *testing.T) {
+	root := t.TempDir()
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	testutil.Write(t, a, "a")
+	testutil.Write(t, b, "b")
+	if err := move(a, b); err == nil || testutil.Read(t, b) != "b" {
+		t.Fatal("move replaced an existing file")
+	}
+	if unique(b) == b || unique(filepath.Join(root, "c")) != filepath.Join(root, "c") {
+		t.Fatal("unique")
+	}
+}

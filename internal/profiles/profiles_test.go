@@ -1,9 +1,11 @@
 package profiles
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -137,6 +139,42 @@ func TestDuration(t *testing.T) {
 	} {
 		if got := Duration(d); got != want {
 			t.Errorf("Duration(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+// Launches running at the same moment take turns repairing links, so no
+// version of a file is lost.
+func TestConcurrentSyncKeepsEveryVersion(t *testing.T) {
+	cfg, a := setup(t)
+	hub := cfg.EnsureHub("codex")
+	past := time.Now().Add(-time.Hour)
+	for round := range 20 {
+		dir := cfg.Dir("codex", "a")
+		testutil.Write(t, filepath.Join(hub, "config.toml"), "hub")
+		os.Chtimes(filepath.Join(hub, "config.toml"), past, past)
+		os.Remove(filepath.Join(dir, "config.toml"))
+		testutil.Write(t, filepath.Join(dir, "config.toml"), "profile")
+		var wg sync.WaitGroup
+		for range 2 {
+			wg.Add(1)
+			go func() { defer wg.Done(); Sync(cfg, a, "a", false) }()
+		}
+		wg.Wait()
+		seen := map[string]bool{}
+		files, _ := filepath.Glob(filepath.Join(hub, "config.toml*"))
+		for _, f := range files {
+			if b, err := os.ReadFile(f); err == nil {
+				seen[string(b)] = true
+			}
+		}
+		if !seen["hub"] || !seen["profile"] || testutil.Read(t, filepath.Join(hub, "config.toml")) != "profile" {
+			t.Fatalf("round %d lost a version: %v", round, files)
+		}
+		for _, f := range files {
+			if f != filepath.Join(hub, "config.toml") {
+				os.Remove(f)
+			}
 		}
 	}
 }

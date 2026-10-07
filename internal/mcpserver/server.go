@@ -46,6 +46,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "aims_switch",
 		Description: "Make a profile the active account for new sessions of one tool, or of every tool that has a profile with that name. The running session keeps its account.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(false), IdempotentHint: true, OpenWorldHint: ptr(false)},
 	}, switchTool)
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -57,12 +58,15 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "aims_clear",
 		Description: "Clear the cooldown and login marks of one profile, or of all profiles of a tool.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(false), IdempotentHint: true, OpenWorldHint: ptr(false)},
 	}, clearTool)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_run",
 		Description: "Run a self-contained task right now with another account (`claude -p` or `codex exec`), failing over to the next account on a limit or login error " +
-			"when the failed attempt did nothing. Uses the tool's default permissions and returns its final answer. Tool: " + toolList + ".",
+			"when the failed attempt did nothing. Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
+			"with write=true the tool's own settings decide what it may change. Tool: " + toolList + ".",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, runTool)
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -236,6 +240,7 @@ func clearTool(_ context.Context, _ *mcp.CallToolRequest, in clearIn) (*mcp.Call
 type runIn struct {
 	Tool           string `json:"tool" jsonschema:"claude or codex"`
 	Prompt         string `json:"prompt" jsonschema:"the task"`
+	Write          bool   `json:"write,omitempty" jsonschema:"let the run edit files and run commands, as far as the tool's settings allow; default: read-only"`
 	Profile        string `json:"profile,omitempty" jsonschema:"run as this profile (no failover); default: the active one"`
 	Cwd            string `json:"cwd,omitempty" jsonschema:"working directory; default: where the MCP server runs"`
 	Model          string `json:"model,omitempty"`
@@ -270,6 +275,9 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 	if strings.TrimSpace(in.Prompt) == "" {
 		return fail(errors.New("prompt is empty"))
 	}
+	if os.Getenv(nestedVar) != "" {
+		return fail(errors.New("this session was itself started by aims_run; it cannot start another"))
+	}
 	timeout := time.Duration(in.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
@@ -278,7 +286,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 	res, err := launch.Run(ctx, launch.Options{
 		Tool:     a,
 		Profile:  in.Profile,
-		Args:     a.HeadlessArgs(tool.HeadlessOptions{Prompt: in.Prompt, Model: in.Model, Continue: in.Continue}),
+		Args:     a.HeadlessArgs(tool.HeadlessOptions{Prompt: in.Prompt, Model: in.Model, Continue: in.Continue, ReadOnly: !in.Write}),
 		Headless: true,
 		NoStdin:  true, // stdin is the MCP connection
 		Stdout:   out,
@@ -287,6 +295,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		Timeout:  timeout,
 		// The child is not nested in, or attached to the IDE of, this session.
 		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"},
+		ExtraEnv: []string{nestedVar + "=1"},
 	})
 	if err != nil {
 		return fail(err)
@@ -335,6 +344,12 @@ func loginHelpTool(_ context.Context, _ *mcp.CallToolRequest, in loginIn) (*mcp.
 	}
 	return text(fmt.Sprintf("Ask the user to run this in a terminal (it opens a browser):\n\n  aims login %s %s\n\n%s", a.ID(), in.Profile, a.Commands().LoginTip)), nil, nil
 }
+
+// nestedVar marks a tool started by aims_run, so the aims MCP server it
+// loads in turn refuses to start yet another run.
+const nestedVar = "AIMS_RUN_NESTED"
+
+func ptr[T any](v T) *T { return &v }
 
 func idsOrAll(ids []tool.ID) []tool.ID {
 	if len(ids) == 0 {

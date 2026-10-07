@@ -196,3 +196,12 @@ func TestAccount(t *testing.T) {
 		t.Fatalf("API key profile: %+v", acct)
 	}
 }
+
+// A text-mode answer that talks about limits is not an error message.
+func TestTextAnswerIsNotAnError(t *testing.T) {
+	an := New().NewAnalyzer([]string{"-p", "explain 429s"})
+	feed(an, "A 429 means you hit a rate limit.", "Back off and retry.", "Or ask for a higher quota exceeded threshold.")
+	if an.ErrorText() != "" {
+		t.Fatalf("answer read as an error: %q", an.ErrorText())
+	}
+}

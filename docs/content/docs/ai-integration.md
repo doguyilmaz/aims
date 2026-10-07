@@ -23,12 +23,12 @@ aims uninstall            # take it all back out
 | `aims_switch` | Make a profile active for new sessions of one tool, or of every tool that has it. |
 | `aims_failover` | This account hit its limit or lost its login: mark it and activate the next one. Answers with the command that continues the conversation there. |
 | `aims_clear` | Remove marks from one profile or all of a tool's profiles. |
-| `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. |
+| `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. Read-only unless the call sets `write`. |
 | `aims_login_help` | The command a person must run to log a profile in. The model cannot complete a browser login, and does not try. |
 
 A session cannot change its own login. The server's instructions say so, so the model tells you to restart (`aims claude --continue`) instead of pretending it switched. Each session started through aims carries `AIMS_SESSION_PROFILE` (for example `claude:work`), which `aims_status` reports and `aims_failover` uses as the account to mark.
 
-`aims_run` uses the tool's default permissions: a headless Claude Code run cannot use tools that would ask for approval. When the MCP client disconnects, aims stops any run it started.
+`aims_run` is read-only by default: Claude Code runs in plan mode and Codex in its read-only sandbox, whatever your settings allow. With `write: true` the run gets your normal settings, which for a headless Claude Code run still excludes anything that would ask for approval. Unless you approved the tool for good, your client shows the call, `write` included, before it runs. A run started this way cannot start another `aims_run`, and when the MCP client disconnects, aims stops any run it started.
 
 ## Skill
 

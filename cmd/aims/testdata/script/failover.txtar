@@ -37,19 +37,30 @@ exec aims use work
 stdout 'hit your session limit'
 stderr 'not retried'
 
-# ...but a login error is, since it stops the very first request.
+# Nor is a login error: plain output cannot show that no tool ran. The
+# account is marked, and the next run goes elsewhere.
 exec aims clear claude
 rm $HOME/.aims/profiles/claude/work/LIMITED
 cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
-exec aims claude -p -- text-login
-stdout 'answer from default: text-login'
-stderr 'hit a login error before doing anything'
+! exec aims claude -p -- text-login
+stdout 'Please run /login'
+stderr 'claude/work hit a login error; new runs will use another profile \(not retried'
 exec aims status claude
 stdout 'work .*login expired'
 stdout '→ aims login claude work'
+exec aims claude -p -- next-run
+stdout 'answer from default: next-run'
+
+# A run that succeeds clears the account's old marks.
+rm $HOME/.aims/profiles/claude/work/EXPIRED
+exec aims claude@work -p -- works-again
+stdout 'answer from work: works-again'
+exec aims status claude
+stdout 'work .*ready'
 
 # A pinned profile turns automatic failover off.
 exec aims clear claude
+cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
 ! exec aims claude@work -p -- pinned
 stdout 'Please run /login'
 ! stderr 'retrying'

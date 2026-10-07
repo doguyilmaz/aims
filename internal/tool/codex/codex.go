@@ -44,6 +44,7 @@ func (*Adapter) Layout() tool.Layout {
 		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
 		ConflictingEnv: []string{"CODEX_API_KEY"},
 		SkillsDir:      "skills",
+		Markers:        []string{"auth.json", "config.toml", "sessions", "history.jsonl"},
 	}
 }
 
@@ -88,6 +89,9 @@ func (*Adapter) HeadlessArgs(o tool.HeadlessOptions) []string {
 		args = append(args, "resume", "--last")
 	}
 	args = append(args, "--json", "--skip-git-repo-check")
+	if o.ReadOnly {
+		args = append(args, "--sandbox", "read-only")
+	}
 	if o.Model != "" {
 		args = append(args, "--model", o.Model)
 	}

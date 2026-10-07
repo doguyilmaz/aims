@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -116,6 +117,14 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 	}
 	hub := cfg.EnsureHub(a.ID())
 	dir := cfg.Dir(a.ID(), name)
+	// Profiles of a tool share one hub: two launches repairing links at once
+	// could move the same file twice. A launch that cannot get the lock skips
+	// the repair; the links it needs are almost always in place already.
+	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
+	if err != nil || !ok {
+		return []links.Report{{Name: dir, Action: links.Conflict, Quiet: true, Detail: "another aims process is repairing the shared folders; skipped"}}
+	}
+	defer unlock()
 	private := Private(p, a.Layout())
 	out := links.Detach(hub, dir, private, a.Layout())
 	if p.ShareMode() == config.ShareNone {

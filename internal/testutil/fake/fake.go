@@ -8,6 +8,9 @@
 //	EXPIRED      runs fail with a login error
 //	TOOL_FIRST   runs call a tool (appended to $FAKE_SIDE_EFFECTS) before failing
 //	USAGE        "pct" for the rate limits the codex app-server reports
+//
+// $FAKE_SIDE_EFFECTS names a file that collects what they did, and with
+// $FAKE_RECORD_ARGS set, the arguments of each headless claude run.
 package fake
 
 import (
@@ -163,6 +166,9 @@ func Claude() int {
 			return code
 		}
 		return 0
+	}
+	if os.Getenv("FAKE_RECORD_ARGS") != "" {
+		record("claude " + strings.Join(args, " "))
 	}
 	format := flag(args, "--output-format")
 	if format == "" {
