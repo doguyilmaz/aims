@@ -37,7 +37,7 @@ It downloads the release for your system, checks it against the release's SHA-25
 npm install -g @doguyilmaz/aims
 ```
 
-npm installs only the binary for your platform (through optional dependencies), plus a small launcher. Do not use `--omit=optional` or `--no-optional`.
+The package holds the binaries for every supported platform (about 25 MB) and a small launcher that runs the one for your machine. It has no install scripts, so it also works with `--ignore-scripts`.
   {{< /tab >}}
   {{< tab name="Windows" >}}
 PowerShell:
