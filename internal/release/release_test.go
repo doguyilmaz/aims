@@ -29,13 +29,13 @@ func TestCompare(t *testing.T) {
 
 func TestDetect(t *testing.T) {
 	cases := map[string]Method{
-		"/opt/homebrew/Caskroom/aims/1.0.0/aims":                Homebrew,
-		"/home/linuxbrew/.linuxbrew/bin/aims":                   Homebrew,
-		"/usr/lib/node_modules/@doguyilmaz/aims-linux-x64/aims": Npm,
-		"/home/me/go/bin/aims":                                  GoInstall,
-		"/home/me/.local/bin/aims":                              Manual,
-		"/opt/homebrew-like/aims":                               Manual,
-		`C:/Users/me/scoop/apps/aims/current/aims.exe`:          Scoop,
+		"/opt/homebrew/Caskroom/aims/1.0.0/aims":                    Homebrew,
+		"/home/linuxbrew/.linuxbrew/bin/aims":                       Homebrew,
+		"/usr/lib/node_modules/@doguyilmaz/aims/bin/linux-x64/aims": Npm,
+		"/home/me/go/bin/aims":                                      GoInstall,
+		"/home/me/.local/bin/aims":                                  Manual,
+		"/opt/homebrew-like/aims":                                   Manual,
+		`C:/Users/me/scoop/apps/aims/current/aims.exe`:              Scoop,
 	}
 	for exe, want := range cases {
 		if got := Detect(exe, "/home/me/go/bin"); got != want {
