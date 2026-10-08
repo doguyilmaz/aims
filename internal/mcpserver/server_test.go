@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/doguyilmaz/aims/internal/ops"
+	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tools"
 )
@@ -176,7 +177,7 @@ func TestRunIsReadOnlyUnlessAsked(t *testing.T) {
 
 func TestRunRefusesToNest(t *testing.T) {
 	setup(t)
-	t.Setenv(nestedVar, "1")
+	t.Setenv(profiles.NestedVar, "1")
 	cs := connect(t)
 	out, isErr := call(t, cs, "aims_run", map[string]any{"tool": "claude", "prompt": "again"})
 	if !isErr || !strings.Contains(out, "cannot start another") {

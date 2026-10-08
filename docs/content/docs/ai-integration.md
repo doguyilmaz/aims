@@ -17,13 +17,15 @@ aims clean                # take it all back out
 
 `aims mcp` is an [MCP](https://modelcontextprotocol.io) server over stdio. `aims setup` registers it as a user-level server named `aims`: with `claude mcp add` in every Claude Code login (each login keeps its own list), and in the shared `config.toml` for Codex.
 
+Codex starts MCP servers with only a few variables (`HOME`, `PATH` and the like) and stops waiting for a tool after 60 seconds. So the Codex entry also lists the variables aims reads (`env_vars`: the session's account, pins, `AIMS_HOME` and so on) and waits up to an hour (`tool_timeout_sec`). Running `codex mcp add aims` yourself drops both; `aims doctor` notices, and `aims setup` puts them back. Codex may also keep MCP tools out of the model's first view and let it find them when needed; the skill tells it to look for `mcp__aims__*`.
+
 | Tool | What it does |
 | --- | --- |
 | `aims_status` | Every account with its login, plan usage and marks, and which account this session runs as. `live: true` asks the providers first. |
 | `aims_switch` | Make a profile active for new sessions of one tool, or of every tool that has it. |
 | `aims_failover` | This account hit its limit or lost its login: mark it, so new sessions use the next one until it works again. Answers with the command that continues the conversation there. |
 | `aims_clear` | Remove marks from one profile or all of a tool's profiles. |
-| `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. Read-only unless the call sets `write`. |
+| `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. Read-only unless the call sets `write`. Gives up after 10 minutes, or `timeoutSeconds` (at most an hour). |
 | `aims_login_help` | The command a person must run to log a profile in. The model cannot complete a browser login, and does not try. |
 
 A session cannot change its own login. The server's instructions say so, so the model tells you to restart (`aims claude --continue`) instead of pretending it switched. Each session started through aims carries `AIMS_SESSION_PROFILE` (for example `claude:work`), which `aims_status` reports and `aims_failover` uses as the account to mark.

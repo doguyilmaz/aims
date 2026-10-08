@@ -250,7 +250,7 @@ type runIn struct {
 	Cwd            string `json:"cwd,omitempty" jsonschema:"working directory; default: where the MCP server runs"`
 	Model          string `json:"model,omitempty"`
 	Continue       bool   `json:"continue,omitempty" jsonschema:"continue the most recent conversation in cwd"`
-	TimeoutSeconds int    `json:"timeoutSeconds,omitempty" jsonschema:"default 600"`
+	TimeoutSeconds int    `json:"timeoutSeconds,omitempty" jsonschema:"default 600, at most 3600"`
 }
 
 // limited keeps the last n bytes written to it.
@@ -280,13 +280,14 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 	if strings.TrimSpace(in.Prompt) == "" {
 		return fail(errors.New("prompt is empty"))
 	}
-	if os.Getenv(nestedVar) != "" {
+	if os.Getenv(profiles.NestedVar) != "" {
 		return fail(errors.New("this session was itself started by aims_run; it cannot start another"))
 	}
 	timeout := time.Duration(in.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
 	}
+	timeout = min(timeout, ops.MaxRun)
 	out, errOut := &limited{n: 64 << 10}, &limited{n: 16 << 10}
 	res, err := launch.Run(ctx, launch.Options{
 		Tool:     a,
@@ -300,7 +301,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		Timeout:  timeout,
 		// The child is not nested in, or attached to the IDE of, this session.
 		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"},
-		ExtraEnv: []string{nestedVar + "=1"},
+		ExtraEnv: []string{profiles.NestedVar + "=1"},
 	})
 	if err != nil {
 		return fail(err)
@@ -354,10 +355,6 @@ func loginHelpTool(_ context.Context, _ *mcp.CallToolRequest, in loginIn) (*mcp.
 	}
 	return text(fmt.Sprintf("Ask the user to run this in a terminal (it opens a browser):\n\n  aims login %s %s\n\n%s", a.ID(), in.Profile, a.Commands().LoginTip)), nil, nil
 }
-
-// nestedVar marks a tool started by aims_run, so the aims MCP server it
-// loads in turn refuses to start yet another run.
-const nestedVar = "AIMS_RUN_NESTED"
 
 func ptr[T any](v T) *T { return &v }
 

@@ -27,8 +27,10 @@ logout, and a conversation started on one account can continue on another.
 ## Tools
 
 Prefer the MCP tools when they are available: `aims_status`, `aims_switch`,
-`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Otherwise use the
-CLI:
+`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Codex may not list
+them up front: look for `mcp__aims__aims_status` and the rest among its deferred
+tools (in `exec`, `ALL_TOOLS`; call `await tools.mcp__aims__aims_status({})`).
+Otherwise use the CLI:
 
 | Task | Command |
 | --- | --- |

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/doguyilmaz/aims"
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
@@ -17,6 +18,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/shell"
+	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 	"github.com/doguyilmaz/aims/internal/ui"
 )
@@ -154,13 +156,28 @@ func newDoctorCmd(version string) *cobra.Command {
 			}
 			for _, a := range tools.All() {
 				hub := cfg.Tools[a.ID()].Hub
-				if hub == "" || a.Layout().SkillsDir == "" {
+				if hub == "" {
 					continue
 				}
-				if fsx.Stat(filepath.Join(hub, a.Layout().SkillsDir, "aims", "SKILL.md")) != nil {
-					ok("%s skill", a.Title())
-				} else {
-					fmt.Println("  " + s.Dim.Render(a.Title()+" skill not installed"))
+				if dir := a.Layout().SkillsDir; dir != "" {
+					b, err := os.ReadFile(filepath.Join(hub, dir, "aims", "SKILL.md"))
+					switch {
+					case err != nil:
+						fmt.Println("  " + s.Dim.Render(a.Title()+" skill not installed"))
+					case string(b) != aims.Skill:
+						bad("%s skill is from another aims version", a.Title())
+						fix1("aims setup --no-mcp --tools " + string(a.ID()))
+					default:
+						ok("%s skill", a.Title())
+					}
+				}
+				// Entries from an older aims can lack settings the tool needs
+				// to run the server well.
+				if au, isAuditor := a.(tool.MCPAuditor); isAuditor {
+					if missing := au.MCPMissing(profiles.HubHome(cfg, a), ops.MCPServer()); len(missing) > 0 {
+						bad("%s MCP server is missing %s", a.Title(), strings.Join(missing, " and "))
+						fix1("aims setup --no-skill --tools " + string(a.ID()))
+					}
 				}
 			}
 

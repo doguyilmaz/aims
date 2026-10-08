@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/doguyilmaz/aims"
 	"github.com/doguyilmaz/aims/internal/config"
@@ -19,6 +20,22 @@ import (
 
 // MCPName is the name aims registers its MCP server under.
 const MCPName = "aims"
+
+// MaxRun is the longest an aims_run call may take.
+const MaxRun = time.Hour
+
+// MCPServer is the aims MCP server as the tools register it.
+func MCPServer() tool.MCPServer {
+	// What the server reads: the session's account, the nested-run marker,
+	// pins, overrides and homes.
+	env := []string{profiles.SessionVar, profiles.NestedVar, config.HomeVar}
+	for _, a := range tools.All() {
+		l := a.Layout()
+		env = append(env, config.PinVar(a.ID()), l.BinEnv, l.HomeEnv)
+	}
+	// A minute more than the longest aims_run, so the run reports its own timeout.
+	return tool.MCPServer{Name: MCPName, Command: append(Command(), "mcp"), Env: env, Timeout: MaxRun + time.Minute}
+}
 
 // Command is how Claude Code and Codex start aims: plain "aims" when it is on
 // PATH, otherwise this binary's full path.
@@ -93,6 +110,7 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		return nil, err
 	}
 	command := Command()
+	server := MCPServer()
 	var steps []Step
 	for _, id := range idsOrAll(ids) {
 		a := tools.Get(id)
@@ -106,7 +124,7 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		if in.MCP && installed {
 			for _, h := range mcpHomes(cfg, a) {
 				_, _ = a.UnregisterMCP(ctx, h, MCPName)
-				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: a.RegisterMCP(ctx, h, MCPName, append(command, "mcp"))})
+				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: a.RegisterMCP(ctx, h, server)})
 			}
 		}
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {

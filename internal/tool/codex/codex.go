@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -167,9 +171,112 @@ var (
 	missingRe = regexp.MustCompile(`(?i)no mcp server named|not found`)
 )
 
-func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, name string, command []string) error {
-	_, err := runMCP(h, append([]string{"mcp", "add", name, "--"}, command...), alreadyRe)
-	return err
+// RegisterMCP runs `codex mcp add`, then adds what it cannot set to the entry
+// it wrote: codex starts MCP servers with only HOME, PATH and a few other
+// variables, and gives up on a tool call after 60 seconds.
+func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, s tool.MCPServer) error {
+	if _, err := runMCP(h, append([]string{"mcp", "add", s.Name, "--"}, s.Command...), alreadyRe); err != nil {
+		return err
+	}
+	path := filepath.Join(h.Dir, "config.toml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	out, ok := completeMCP(string(b), s)
+	if !ok {
+		return fmt.Errorf("codex mcp add left no [mcp_servers.%s] in %s", s.Name, fsx.Tildify(path))
+	}
+	if out == string(b) {
+		return nil
+	}
+	return fsx.WriteFile(path, []byte(out), 0o600)
+}
+
+// MCPMissing names the keys an entry from an older aims lacks, or has with
+// another value.
+func (*Adapter) MCPMissing(h tool.Home, s tool.MCPServer) []string {
+	b, err := os.ReadFile(filepath.Join(h.Dir, "config.toml"))
+	if err != nil {
+		return nil
+	}
+	lines := strings.SplitAfter(string(b), "\n")
+	start, end := mcpTable(lines, s.Name)
+	if start < 0 {
+		return nil
+	}
+	var missing []string
+	for _, want := range mcpKeys(s) {
+		if !slices.ContainsFunc(lines[start+1:end], func(l string) bool { return strings.TrimSpace(l) == strings.TrimSpace(want) }) {
+			k, _, _ := strings.Cut(want, " =")
+			missing = append(missing, k)
+		}
+	}
+	return missing
+}
+
+// mcpTable finds the [mcp_servers.<name>] table: its header line and the
+// line after its last key. start is -1 when it is missing.
+func mcpTable(lines []string, name string) (start, end int) {
+	header := "[mcp_servers." + name + "]"
+	start = slices.IndexFunc(lines, func(l string) bool {
+		rest, found := strings.CutPrefix(strings.TrimSpace(l), header)
+		return found && (rest == "" || strings.HasPrefix(strings.TrimSpace(rest), "#"))
+	})
+	if start < 0 {
+		return -1, -1
+	}
+	end = start + 1
+	for end < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[end]), "[") {
+		end++
+	}
+	return start, end
+}
+
+// mcpKeys are the lines completeMCP puts in the entry.
+func mcpKeys(s tool.MCPServer) []string {
+	var out []string
+	if len(s.Env) > 0 {
+		q := make([]string, len(s.Env))
+		for i, v := range s.Env {
+			q[i] = strconv.Quote(v)
+		}
+		out = append(out, "env_vars = ["+strings.Join(q, ", ")+"]\n")
+	}
+	if s.Timeout > 0 {
+		out = append(out, fmt.Sprintf("tool_timeout_sec = %d\n", int(s.Timeout.Seconds())))
+	}
+	return out
+}
+
+// completeMCP sets env_vars and tool_timeout_sec in the [mcp_servers.<name>]
+// table of a config.toml, replacing what was there. ok is false when the
+// table is missing.
+func completeMCP(toml string, s tool.MCPServer) (out string, ok bool) {
+	lines := strings.SplitAfter(toml, "\n")
+	start, end := mcpTable(lines, s.Name)
+	if start < 0 {
+		return toml, false
+	}
+	var body []string
+	for i := start + 1; i < end; i++ {
+		k, v, _ := strings.Cut(lines[i], "=")
+		if k = strings.TrimSpace(k); k != "env_vars" && k != "tool_timeout_sec" {
+			body = append(body, lines[i])
+			continue
+		}
+		// An array may go on over several lines, up to its "]".
+		for open := strings.Contains(v, "[") && !strings.Contains(v, "]"); open && i+1 < end; {
+			i++
+			open = !strings.Contains(lines[i], "]")
+		}
+	}
+	head := lines[start]
+	if !strings.HasSuffix(head, "\n") {
+		head += "\n"
+	}
+	out = strings.Join(slices.Concat(lines[:start], []string{head}, mcpKeys(s), body, lines[end:]), "")
+	return out, true
 }
 
 func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) (bool, error) {

@@ -94,9 +94,12 @@ type StatusLine struct {
 	Chain string `json:"chain,omitempty"`
 }
 
+// HomeVar moves aims' own directory.
+const HomeVar = "AIMS_HOME"
+
 // Home is aims' own directory, ~/.aims or $AIMS_HOME.
 func Home() string {
-	if v := os.Getenv("AIMS_HOME"); v != "" {
+	if v := os.Getenv(HomeVar); v != "" {
 		return fsx.Abs(v)
 	}
 	return filepath.Join(fsx.Home(), ".aims")
