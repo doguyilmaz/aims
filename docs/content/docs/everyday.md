@@ -20,7 +20,7 @@ Which account a session gets, in order:
 1. `@profile` on the command line. This also turns automatic failover off for that run.
 2. The terminal's pin, if you set one with `aims env` (below).
 3. The active account (`aims use`).
-4. If that account is limited or logged out, the next usable one in [failover order](../failover#order). aims says so when it skips one:
+4. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again. aims says so when it skips one:
 
 ```text
 › claude: skipping "personal" (limit for 2h10m), using "work"
@@ -33,7 +33,7 @@ aims use work               # every tool that has a "work" profile
 aims use codex personal     # one tool
 ```
 
-This changes the account for **new** sessions. A session that is already running keeps its login until it ends; to move it, see [continuing on another account](#continuing-on-another-account).
+This changes the account for **new** sessions and moves it to the front of the [failover order](../failover#order). A session that is already running keeps its login until it ends; to move it, see [continuing on another account](#continuing-on-another-account).
 
 ## Continuing on another account
 

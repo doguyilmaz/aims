@@ -94,9 +94,12 @@ type StatusLine struct {
 	Chain string `json:"chain,omitempty"`
 }
 
+// HomeVar points aims at another directory than ~/.aims.
+const HomeVar = "AIMS_HOME"
+
 // Home is aims' own directory, ~/.aims or $AIMS_HOME.
 func Home() string {
-	if v := os.Getenv("AIMS_HOME"); v != "" {
+	if v := os.Getenv(HomeVar); v != "" {
 		return fsx.Abs(v)
 	}
 	return filepath.Join(fsx.Home(), ".aims")
@@ -168,6 +171,14 @@ func (c *Config) normalize() {
 		if t.Profiles[t.Active] == nil {
 			t.Active = ""
 		}
+		// The active profile leads the order: new sessions use it, and the
+		// others stand in for it, in order, while it is limited or logged out.
+		if t.Active == "" && len(t.Order) > 0 {
+			t.Active = t.Order[0]
+		}
+		if i := slices.Index(t.Order, t.Active); i > 0 {
+			t.Order = append([]string{t.Active}, slices.Delete(slices.Clone(t.Order), i, i+1)...)
+		}
 	}
 }
 
@@ -193,6 +204,7 @@ func Update(fn func(*Config) error) (*Config, error) {
 		if err := fn(c); err != nil {
 			return err
 		}
+		c.normalize()
 		out = c
 		return fsx.WriteJSON(configPath(), c, 0o600)
 	})

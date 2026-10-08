@@ -43,7 +43,7 @@ type Adapter interface {
 	// MCPScope says where the tool keeps user-level MCP servers.
 	MCPScope() MCPScope
 	// RegisterMCP adds a user-level MCP server; one already there is fine.
-	RegisterMCP(ctx context.Context, h Home, name string, command []string) error
+	RegisterMCP(ctx context.Context, h Home, s MCPServer) error
 	// UnregisterMCP removes it and reports whether it was there.
 	UnregisterMCP(ctx context.Context, h Home, name string) (removed bool, err error)
 }
@@ -207,6 +207,24 @@ type Probe struct {
 
 // MCPScope is where a tool keeps user-level MCP servers.
 type MCPScope int
+
+// MCPServer is a stdio MCP server to register.
+type MCPServer struct {
+	Name    string
+	Command []string
+	// Env names the variables the server reads. A tool that starts MCP
+	// servers with only a few variables (HOME, PATH...) is told to pass
+	// these on as well.
+	Env []string
+	// Timeout is how long one tool call may take (0: the tool's default).
+	Timeout time.Duration
+}
+
+// MCPAuditor reports what an MCP entry registered by an older aims lacks;
+// nil when it is complete or not there.
+type MCPAuditor interface {
+	MCPMissing(h Home, s MCPServer) []string
+}
 
 const (
 	// MCPPerLogin: each login has its own list (Claude Code's .claude.json).

@@ -35,6 +35,9 @@ type ProfileStatus struct {
 	Detail   string    `json:"detail,omitempty"`
 	MarkedAt time.Time `json:"markedAt,omitzero"`
 	LastUsed time.Time `json:"lastUsed,omitzero"`
+	// StandsIn names the preferred profile when it is unusable and new
+	// sessions get this one instead.
+	StandsIn string `json:"standsIn,omitempty"`
 }
 
 // ToolStatus is one tool in `aims status`.
@@ -76,7 +79,12 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 	t := cfg.Tools[id]
 	ts := ToolStatus{ID: id, Title: a.Title(), Installed: profiles.Bin(a) != "", Hub: t.Hub, Active: t.Active, Pinned: config.Pinned(id)}
 	now := config.Now()
-	for _, ev := range profiles.EvaluateAll(ctx, cfg, st, a) {
+	evs := profiles.EvaluateAll(ctx, cfg, st, a)
+	standIn, preferred := "", ""
+	if cfg.Failover.Auto {
+		standIn, preferred = nextSession(cfg, id, evs)
+	}
+	for _, ev := range evs {
 		p := t.Profiles[ev.Name]
 		ps := ev.State
 		row := ProfileStatus{
@@ -103,9 +111,29 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 		if row.Until.After(now) || ps.NeedsLogin {
 			row.MarkedBy, row.Detail, row.MarkedAt = ps.MarkedBy, ps.Detail, ps.MarkedAt
 		}
+		if ev.Name == standIn && standIn != preferred {
+			row.StandsIn = preferred
+		}
 		ts.Profiles = append(ts.Profiles, row)
 	}
 	return ts
+}
+
+// nextSession is the profile a new session gets, the way the launcher picks
+// it: the preferred one, else the first usable one in order. It is "" when
+// none is usable.
+func nextSession(cfg *config.Config, id tool.ID, evs []profiles.Evaluation) (next, preferred string) {
+	preferred, _ = cfg.Preferred(id, "")
+	usable := map[string]bool{}
+	for _, ev := range evs {
+		usable[ev.Name] = ev.Usable
+	}
+	for _, n := range append([]string{preferred}, cfg.Tools[id].Order...) {
+		if usable[n] {
+			return n, preferred
+		}
+	}
+	return "", preferred
 }
 
 // LoginResult is who a profile turned out to be logged in as.

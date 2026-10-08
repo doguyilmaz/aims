@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
@@ -141,5 +142,69 @@ func TestPlainOutputUsesTheLastErrorOnly(t *testing.T) {
 	an.Line(true, "ERROR: stream ended unexpectedly")
 	if f := tool.Classify(an.ErrorText()); f != tool.FailNone {
 		t.Fatalf("classified as %q from %q", f, an.ErrorText())
+	}
+}
+
+func TestCompleteMCP(t *testing.T) {
+	s := tool.MCPServer{Name: "aims", Env: []string{"AIMS_SESSION_PROFILE", "AIMS_HOME"}, Timeout: time.Hour}
+	in := `model = "o3"
+
+[mcp_servers.aims] # added by aims
+command = "aims"
+env_vars = [
+  "OLD",
+]
+args = ["mcp"]
+tool_timeout_sec = 60
+
+[mcp_servers.aims.env]
+X = "1"
+
+[mcp_servers.other]
+command = "o"
+`
+	want := `model = "o3"
+
+[mcp_servers.aims] # added by aims
+env_vars = ["AIMS_SESSION_PROFILE", "AIMS_HOME"]
+tool_timeout_sec = 3600
+command = "aims"
+args = ["mcp"]
+
+[mcp_servers.aims.env]
+X = "1"
+
+[mcp_servers.other]
+command = "o"
+`
+	got, ok := completeMCP(in, s)
+	if !ok || got != want {
+		t.Fatalf("ok=%v\n%s", ok, got)
+	}
+	if again, _ := completeMCP(got, s); again != got {
+		t.Fatalf("not stable:\n%s", again)
+	}
+	if _, ok := completeMCP("[mcp_servers.aimsx]\n", s); ok {
+		t.Fatal("matched another server")
+	}
+
+	// The table may end the file without a newline.
+	if got, _ := completeMCP("[mcp_servers.aims]", s); got != "[mcp_servers.aims]\n"+strings.Join(mcpKeys(s), "") {
+		t.Fatalf("at the end:\n%s", got)
+	}
+
+	dir := t.TempDir()
+	h := tool.Home{Dir: dir}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[mcp_servers.aims]\ncommand = \"aims\"\ntool_timeout_sec = 3600\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := New().MCPMissing(h, s); strings.Join(got, ",") != "env_vars" {
+		t.Fatalf("missing %q", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(want), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := New().MCPMissing(h, s); got != nil {
+		t.Fatalf("missing %q", got)
 	}
 }

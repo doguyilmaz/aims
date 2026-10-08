@@ -52,7 +52,7 @@ A running session cannot change its login. When Claude Code or Codex reports a l
 aims failover claude --resume
 ```
 
-marks the account you used last, makes the next one active, and continues the same conversation there. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
+marks the account you used last and continues the same conversation on the next one. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts. `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
 
 With the [status line](../ai-integration#status-line) on, Claude Code shows the plan usage of the running account, and suggests `aims failover claude` with the next account's name once a window passes the threshold.
 
@@ -68,11 +68,15 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 
 ## Order
 
-Failover tries accounts in the order they were added. Change it with:
+`aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again. To use personal and fall back on work:
 
 ```bash
-aims order claude work personal
+aims order personal work            # every tool that has both
+aims order claude personal work     # Claude Code only
+aims order                          # asks, shows the order, saves it once you confirm
 ```
+
+The first account named becomes the active one. `aims use` moves an account to the front the same way.
 
 ## Settings
 
@@ -99,4 +103,5 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
 ```bash
 aims clear claude work     # one account
 aims clear claude          # every Claude Code account
+aims clear --all           # every account
 ```

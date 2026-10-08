@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/doguyilmaz/aims/internal/ops"
+	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tools"
 )
@@ -120,7 +121,7 @@ func TestFailoverUsesSessionProfile(t *testing.T) {
 	t.Setenv("AIMS_SESSION_PROFILE", "claude:personal")
 	cs := connect(t)
 	out, isErr := call(t, cs, "aims_failover", map[string]any{"tool": "claude", "minutes": 45})
-	if isErr || !strings.Contains(out, `"personal" is cooling down`) || !strings.Contains(out, `"work" is now active`) || !strings.Contains(out, "aims claude --continue") {
+	if isErr || !strings.Contains(out, `"personal" is cooling down`) || !strings.Contains(out, `new sessions use "work" meanwhile`) || !strings.Contains(out, "aims claude --continue") {
 		t.Fatalf("failover: %s", out)
 	}
 	out, _ = call(t, cs, "aims_clear", map[string]any{"tool": "claude"})
@@ -176,7 +177,7 @@ func TestRunIsReadOnlyUnlessAsked(t *testing.T) {
 
 func TestRunRefusesToNest(t *testing.T) {
 	setup(t)
-	t.Setenv(nestedVar, "1")
+	t.Setenv(profiles.NestedVar, "1")
 	cs := connect(t)
 	out, isErr := call(t, cs, "aims_run", map[string]any{"tool": "claude", "prompt": "again"})
 	if !isErr || !strings.Contains(out, "cannot start another") {

@@ -5,6 +5,8 @@ weight: 9
 
 `aims help <command>` shows the same with examples. `<tool>` is `claude` or `codex`; `<profile>` is an account name you chose.
 
+Arguments in `[brackets]` are optional. Leave them out and aims asks on a terminal: it lists your accounts with who they are and how they are doing, and checks before anything it cannot undo. A profile name alone means the tool that has it (`aims logout work`). In a script, a missing argument is an error that shows an example.
+
 ## Get started
 
 ### `aims init`
@@ -20,9 +22,9 @@ Sets up your accounts step by step: finds the tools and your current logins, nam
 | `--share` | `all` | `all`, `settings` or `none`. See [What accounts share](../sharing). |
 | `--integrations` | `all` | `skill`, `mcp`, `statusline`, `shell` (comma-separated), `all` or `none` |
 
-### `aims login <tool> <profile> [-- tool flags]`
+### `aims login [tool] [profile] [-- tool flags]`
 
-Runs the tool's own login for the profile, creating the profile if it is new. Flags after `--` go to the tool:
+Runs the tool's own login for the profile, creating the profile if it is new. Without a profile, aims asks which account to log in, starting on one that needs it, or sets up a new one. Flags after `--` go to the tool:
 
 ```bash
 aims login claude work -- --email me@company.com
@@ -44,7 +46,7 @@ Every account with its login, plan usage and marks. Alias: `aims ls`.
 
 ### `aims use [tool] <profile>`
 
-Makes a profile the active account for new sessions. Without a tool, every tool that has a profile with that name switches.
+Makes a profile the active account for new sessions and puts it first in the failover order. Without a tool, every tool that has a profile with that name switches.
 
 ### `aims claude [args]`, `aims codex [args]`
 
@@ -65,9 +67,9 @@ Prints the exports that pin the current terminal to a profile. Use with `eval "$
 
 ## Accounts
 
-### `aims add <tool> <profile>`
+### `aims add [tool] [profile]`
 
-Adds a profile without logging in.
+Adds a profile without logging in. Without a profile, aims asks for the tool, a name and what it shares, and offers to log it in.
 
 | Flag | |
 | --- | --- |
@@ -76,33 +78,37 @@ Adds a profile without logging in.
 | `--dir` | Use this folder instead of `~/.aims/profiles/<tool>/<profile>`. It must not overlap your home folder, `~/.aims`, the tool's folder or another profile. |
 | `--login` | Log in right away |
 
-### `aims failover <tool>`
+### `aims failover [tool]`
 
-Marks the account you used last as limited and makes the next usable one active.
+Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one.
+
+Without a tool, aims uses the only tool with a second account, or asks. On a terminal it also asks which account hit its limit (starting on the one used last) and what happened, then offers to continue your last conversation on the next account.
 
 | Flag | |
 | --- | --- |
 | `--from` | The profile to mark (default: the one used last) |
-| `--to` | The profile to switch to (default: the next usable one) |
+| `--to` | Make this profile active instead, as `aims use` would |
 | `--minutes` | How long the mark lasts when the reset time is unknown |
 | `--reason` | `limit` (default) or `login`. A login mark lasts until `aims login`. |
 | `--resume` | Continue the last conversation on the new account |
 
-### `aims clear <tool> [profile]`
+### `aims clear [tool] [profile]`
 
-Removes limit and login marks.
+Removes limit and login marks. Without arguments, aims lists the marked accounts, all picked, and clears the ones you keep picked. A script names the account, or passes `--all` to clear every mark.
 
-### `aims order <tool> <profile>...`
+### `aims order [tool] [profile]...`
 
-Sets the order failover tries profiles in.
+Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
 
-### `aims logout <tool> <profile>`
+Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts) and which account comes first, shows the order and saves it once you confirm.
 
-Runs the tool's logout for the profile.
+### `aims logout [tool] [profile]`
 
-### `aims rm <tool> <profile>`
+Runs the tool's logout for the profile. Without a profile, aims asks which logged-in account, then checks first (No is the default).
 
-Forgets a profile. Alias: `aims remove`.
+### `aims rm [tool] [profile]`
+
+Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which account and what should happen to it: keep it (the default), forget it, or log it out and delete its folder.
 
 | Flag | |
 | --- | --- |

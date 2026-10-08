@@ -27,14 +27,16 @@ logout, and a conversation started on one account can continue on another.
 ## Tools
 
 Prefer the MCP tools when they are available: `aims_status`, `aims_switch`,
-`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Otherwise use the
-CLI:
+`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Codex may not list
+them up front: look for `mcp__aims__aims_status` and the rest among its deferred
+tools (in `exec`, `ALL_TOOLS`; call `await tools.mcp__aims__aims_status({})`).
+Otherwise use the CLI:
 
 | Task | Command |
 | --- | --- |
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
 | Switch the account for new sessions | `aims use work` (every tool) or `aims use claude work` |
-| The current account hit its limit | `aims failover claude` (marks it, activates the next one) |
+| The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one until it resets) |
 | Undo a wrong mark | `aims clear claude [profile]` |
 | Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
 | Log an account in again | tell the user: `aims login claude work` |
@@ -44,8 +46,9 @@ CLI:
 ## Limits and login errors
 
 1. **Usage limit.** Call `aims_failover` (or `aims failover <tool>`), then tell
-   the user which account is active now and how to continue
-   (`aims claude --continue`). Headless runs started through aims move to the
+   the user which account new sessions use until the limit resets and how to
+   continue (`aims claude --continue`). Once it resets, new sessions return to
+   the active account on their own. Headless runs started through aims move to the
    next account on their own, but only when the failed attempt did nothing;
    otherwise the account is marked and the next run uses another one. Check
    what a failed run already changed before running it again.

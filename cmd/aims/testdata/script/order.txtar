@@ -1,0 +1,39 @@
+# Setup: Claude Code and Codex, each with personal and work.
+exec claude auth login --email me@gmail.com
+exec codex login
+exec aims init --yes --integrations none
+
+# Without a tool, every tool that has the profiles changes.
+exec aims order work personal
+stderr 'New Claude Code sessions use work; while it is limited or logged out: personal'
+stderr 'New Codex sessions use work; while it is limited or logged out: personal'
+exec aims status
+stdout '● work'
+! stdout '● personal'
+
+# A tool narrows it down.
+exec aims order codex personal
+stderr 'New Codex sessions use personal; while it is limited or logged out: work'
+! stderr 'Claude Code'
+
+# Only tools that have every named profile change.
+exec aims add codex client
+exec aims order client personal
+stderr 'New Codex sessions use client; while it is limited or logged out: personal, then work'
+! stderr 'Claude Code'
+
+# Names that match nothing say so, and change nothing.
+cp $HOME/.aims/config.json config.before
+! exec aims order gemini personal
+stderr '"gemini" is neither a tool \(claude or codex\) nor a profile'
+! exec aims order personal nobody
+stderr 'no profile named "nobody"'
+! exec aims order claude nobody
+stderr 'no claude profile "nobody"'
+
+# Without profiles, aims asks on a terminal; a script gets an example instead.
+! exec aims order
+stderr 'which order\? e.g. aims order personal work'
+! exec aims order codex
+stderr 'which order'
+cmp $HOME/.aims/config.json config.before

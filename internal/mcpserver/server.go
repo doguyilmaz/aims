@@ -51,7 +51,8 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_failover",
-		Description: "The current account hit its usage limit or its login died: mark it (until its reset time, or for `minutes`) and make the next usable account active. " +
+		Description: "The current account hit its usage limit or its login died: mark it (until its reset time, or for `minutes`). " +
+			"New sessions use the next usable account until then and return to the active one on their own; `to` makes another account active instead. " +
 			"Then tell the user to continue the conversation with `aims claude --continue` or `aims codex resume --last`.",
 	}, failoverTool)
 
@@ -185,7 +186,7 @@ func switchTool(_ context.Context, _ *mcp.CallToolRequest, in switchIn) (*mcp.Ca
 type failoverIn struct {
 	Tool    string `json:"tool" jsonschema:"claude or codex"`
 	From    string `json:"from,omitempty" jsonschema:"profile to mark; default: the account of this session, else the one used last"`
-	To      string `json:"to,omitempty" jsonschema:"profile to switch to; default: the next usable one"`
+	To      string `json:"to,omitempty" jsonschema:"profile to make active instead; default: the next usable one, until the mark lifts"`
 	Minutes int    `json:"minutes,omitempty" jsonschema:"cooldown length when the reset time is unknown"`
 	Reason  string `json:"reason,omitempty" jsonschema:"limit (default) or login"`
 }
@@ -210,8 +211,12 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 	if res.Login {
 		state = fmt.Sprintf("needs a new login (the user runs: aims login %s %s)", a.ID(), res.From)
 	}
-	msg := fmt.Sprintf("%s: %q %s; %q is now active. To continue this conversation there, exit this session and run: %s",
-		a.ID(), res.From, state, res.To, resume)
+	next := fmt.Sprintf("new sessions use %q meanwhile", res.To)
+	if res.Switched {
+		next = fmt.Sprintf("%q is now active", res.To)
+	}
+	msg := fmt.Sprintf("%s: %q %s; %s. To continue this conversation there, exit this session and run: %s",
+		a.ID(), res.From, state, next, resume)
 	if res.Pinned != "" && res.Pinned != res.To {
 		msg += fmt.Sprintf("\nThis terminal is pinned to %q (%s); aims skips it while it cools down.", res.Pinned, config.PinVar(a.ID()))
 	}
@@ -245,7 +250,7 @@ type runIn struct {
 	Cwd            string `json:"cwd,omitempty" jsonschema:"working directory; default: where the MCP server runs"`
 	Model          string `json:"model,omitempty"`
 	Continue       bool   `json:"continue,omitempty" jsonschema:"continue the most recent conversation in cwd"`
-	TimeoutSeconds int    `json:"timeoutSeconds,omitempty" jsonschema:"default 600"`
+	TimeoutSeconds int    `json:"timeoutSeconds,omitempty" jsonschema:"default 600, at most 3600"`
 }
 
 // limited keeps the last n bytes written to it.
@@ -275,13 +280,14 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 	if strings.TrimSpace(in.Prompt) == "" {
 		return fail(errors.New("prompt is empty"))
 	}
-	if os.Getenv(nestedVar) != "" {
+	if os.Getenv(profiles.NestedVar) != "" {
 		return fail(errors.New("this session was itself started by aims_run; it cannot start another"))
 	}
 	timeout := time.Duration(in.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
 	}
+	timeout = min(timeout, ops.MaxRun)
 	out, errOut := &limited{n: 64 << 10}, &limited{n: 16 << 10}
 	res, err := launch.Run(ctx, launch.Options{
 		Tool:     a,
@@ -295,7 +301,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		Timeout:  timeout,
 		// The child is not nested in, or attached to the IDE of, this session.
 		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"},
-		ExtraEnv: []string{nestedVar + "=1"},
+		ExtraEnv: []string{profiles.NestedVar + "=1"},
 	})
 	if err != nil {
 		return fail(err)
@@ -349,10 +355,6 @@ func loginHelpTool(_ context.Context, _ *mcp.CallToolRequest, in loginIn) (*mcp.
 	}
 	return text(fmt.Sprintf("Ask the user to run this in a terminal (it opens a browser):\n\n  aims login %s %s\n\n%s", a.ID(), in.Profile, a.Commands().LoginTip)), nil, nil
 }
-
-// nestedVar marks a tool started by aims_run, so the aims MCP server it
-// loads in turn refuses to start yet another run.
-const nestedVar = "AIMS_RUN_NESTED"
 
 func ptr[T any](v T) *T { return &v }
 

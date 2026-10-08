@@ -23,6 +23,10 @@ import (
 // profile it runs as ("claude:work").
 const SessionVar = "AIMS_SESSION_PROFILE"
 
+// NestedVar marks a tool started by aims_run, so the aims MCP server it
+// loads in turn refuses to start yet another run.
+const NestedVar = "AIMS_RUN_NESTED"
+
 // Bin resolves the tool's binary, honouring its override variable.
 func Bin(a tool.Adapter) string {
 	l := a.Layout()

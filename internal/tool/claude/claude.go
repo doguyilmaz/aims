@@ -234,8 +234,10 @@ func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPPerLogin }
 var alreadyRe = regexp.MustCompile(`(?i)already exists`)
 var missingRe = regexp.MustCompile(`(?i)no (mcp )?server named|not found`)
 
-func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, name string, command []string) error {
-	args := append([]string{"mcp", "add", "--scope", "user", name, "--"}, command...)
+// RegisterMCP ignores s.Env and s.Timeout: Claude Code passes its whole
+// environment on and has no short limit on tool calls.
+func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, s tool.MCPServer) error {
+	args := append([]string{"mcp", "add", "--scope", "user", s.Name, "--"}, s.Command...)
 	_, err := runMCP(h, args, alreadyRe)
 	return err
 }

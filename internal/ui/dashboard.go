@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ type Launch struct {
 }
 
 type keymap struct {
-	Up, Down, Use, Start, Login, Failover, Clear, Refresh, Add, Help, Quit key.Binding
+	Up, Down, MoveUp, MoveDown, Use, Start, Login, Failover, Clear, Refresh, Add, Help, Quit key.Binding
 }
 
 func (k keymap) ShortHelp() []key.Binding {
@@ -37,12 +38,14 @@ func (k keymap) ShortHelp() []key.Binding {
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down}, {k.Use, k.Start, k.Add}, {k.Login, k.Failover, k.Clear}, {k.Refresh, k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Use, k.Start, k.Add}, {k.Login, k.Failover, k.Clear}, {k.Refresh, k.Help, k.Quit}}
 }
 
 var keys = keymap{
 	Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 	Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+	MoveUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up (top = active)")),
+	MoveDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
 	Use:      key.NewBinding(key.WithKeys("enter", "u"), key.WithHelp("enter", "make active")),
 	Start:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start")),
 	Login:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "log in")),
@@ -213,7 +216,10 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+			if res.Switched {
+				return flashMsg{fmt.Sprintf("%s rests (%s); %s is now active", res.From, Until(res.Until), res.To), false}
+			}
+			return flashMsg{fmt.Sprintf("%s rests (%s); new sessions use %s until then", res.From, Until(res.Until), res.To), false}
 		}
 	}
 	sel, ok := m.selected()
@@ -249,7 +255,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Failover):
 		// Marking an account takes it out of use for hours: ask first.
 		m.confirm = &sel
-		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited and make the next account active? y/n", sel.toolID, sel.name), false
+		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited, so new sessions use the next account until it resets? y/n", sel.toolID, sel.name), false
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {
 			if _, err := ops.ClearMarks(tools.Get(sel.toolID), sel.name); err != nil {
@@ -257,10 +263,37 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return flashMsg{"Cleared the marks on " + sel.name, false}
 		}
+	case key.Matches(msg, keys.MoveUp):
+		return m, m.move(sel, -1)
+	case key.Matches(msg, keys.MoveDown):
+		return m, m.move(sel, 1)
 	case key.Matches(msg, keys.Refresh):
 		return m, m.checkAll()
 	}
 	return m, nil
+}
+
+// move shifts the selected account by one place in its tool's order. The top
+// one is the active account; the others stand in for it in order.
+func (m *dashboard) move(sel selection, by int) tea.Cmd {
+	names := make([]string, len(sel.t.Profiles))
+	for i, p := range sel.t.Profiles {
+		names[i] = p.Name
+	}
+	i := slices.Index(names, sel.name)
+	j := i + by
+	if i < 0 || j < 0 || j >= len(names) {
+		return nil
+	}
+	names[i], names[j] = names[j], names[i]
+	a := tools.Get(sel.toolID)
+	return func() tea.Msg {
+		order, err := ops.SetOrder(a, names)
+		if err != nil {
+			return flashMsg{err.Error(), true}
+		}
+		return flashMsg{OrderSummary(a.Title(), order, lipgloss.NewStyle()), false}
+	}
 }
 
 // exec hands the terminal to another aims command and comes back after it.
@@ -389,6 +422,9 @@ func (m *dashboard) card(sel selection, width int) string {
 	}
 	if p.Pinned {
 		tags = append(tags, "pinned in this terminal")
+	}
+	if p.StandsIn != "" {
+		tags = append(tags, "standing in for "+p.StandsIn)
 	}
 	head := s.Bold.Render(string(sel.toolID)+" / "+p.Name) + "  " + s.Dim.Render(strings.Join(tags, " · "))
 	label := func(l string) string { return s.Dim.Render(Pad(l, 10)) }

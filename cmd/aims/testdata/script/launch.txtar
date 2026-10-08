@@ -15,11 +15,20 @@ stdout 'claude interactive as work args=\["hello"\] session=claude:work'
 exec aims run claude@work
 stdout 'claude interactive as work'
 
-# `use` changes what new sessions get.
+# `use` changes what new sessions get, and puts the account first.
 exec aims use work
 stderr 'work'
 exec aims claude
 stdout 'claude interactive as work'
+exec aims status claude
+stdout '(?s)● work.*\n +personal'
+
+# `order` does the same for its first account; the next ones stand in for it.
+exec aims order claude personal work
+stderr 'New Claude Code sessions use personal; while it is limited or logged out: work'
+exec aims claude
+stdout 'claude interactive as default'
+exec aims use work
 
 # A pinned terminal wins over the active profile.
 env AIMS_CLAUDE_PROFILE=personal

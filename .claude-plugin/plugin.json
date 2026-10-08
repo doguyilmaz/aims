@@ -1,6 +1,5 @@
 {
   "name": "aims",
-  "version": "0.1.0",
   "description": "Lets Claude Code see, switch and use your other accounts through the aims CLI (MCP server and skill). Needs aims on your PATH.",
   "author": {
     "name": "Dogu Yilmaz"
