@@ -51,6 +51,20 @@ func TestHelpListsEveryCommand(t *testing.T) {
 	}
 }
 
+func TestOrderLines(t *testing.T) {
+	got := strings.Join(orderLines([]string{"personal", "work", "client"}), "\n")
+	want := "1. personal  new sessions use it\n" +
+		"2. work      while personal is limited or logged out\n" +
+		"3. client    while the ones above are limited or logged out\n" +
+		"When personal works again, new sessions go back to it."
+	if got != want {
+		t.Errorf("orderLines:\n%s\nwant:\n%s", got, want)
+	}
+	if got := orderLines([]string{"solo"}); len(got) != 1 {
+		t.Errorf("one account: %q", got)
+	}
+}
+
 // The setup started from bare `aims` or a command uses these as they are.
 func TestDefaultInitIsValid(t *testing.T) {
 	o := defaultInit("v1")

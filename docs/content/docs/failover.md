@@ -71,7 +71,9 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 `aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again. To use personal and fall back on work:
 
 ```bash
-aims order claude personal work
+aims order personal work            # every tool that has both
+aims order claude personal work     # Claude Code only
+aims order                          # asks, shows the order, saves it once you confirm
 ```
 
 The first account named becomes the active one. `aims use` moves an account to the front the same way.

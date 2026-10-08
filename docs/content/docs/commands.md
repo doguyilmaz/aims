@@ -92,9 +92,11 @@ Marks the account you used last as limited. New sessions use the next usable acc
 
 Removes limit and login marks.
 
-### `aims order <tool> <profile>...`
+### `aims order [tool] [profile]...`
 
 Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
+
+Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts) and which account comes first, shows the order and saves it once you confirm.
 
 ### `aims logout <tool> <profile>`
 

@@ -277,41 +277,6 @@ func newClearCmd() *cobra.Command {
 	}
 }
 
-func newOrderCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "order <tool> <profile>...",
-		Short: "Set which account comes first and which stand in for it",
-		Long: "The first profile becomes the active one: new sessions use it. While it is\n" +
-			"limited or logged out they use the next usable one in this order, and come\n" +
-			"back to the first once it works again.",
-		Example: `aims order claude personal work`,
-		Args:    cobra.MinimumNArgs(2),
-		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-			if len(args) == 0 {
-				return completeTools(nil, args, "")
-			}
-			return profileNames(args[0]), cobra.ShellCompDirectiveNoFileComp
-		},
-		RunE: func(_ *cobra.Command, args []string) error {
-			a, err := parseTool(args[0])
-			if err != nil {
-				return err
-			}
-			order, err := ops.SetOrder(a, args[1:])
-			if err != nil {
-				return err
-			}
-			msg := fmt.Sprintf("New %s sessions use %s", a.Title(), ui.Err.Bold.Render(order[0]))
-			if len(order) > 1 {
-				msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
-			}
-			ui.Done("%s", msg)
-			warnPinned(a, order[0])
-			return nil
-		},
-	}
-}
-
 func newRemoveCmd() *cobra.Command {
 	var purge, force, yes bool
 	cmd := &cobra.Command{
