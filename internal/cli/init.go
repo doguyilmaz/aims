@@ -532,62 +532,11 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 		return nil
 	}
 
-	target := inst[0]
-	if len(inst) > 1 {
-		pick := "_both"
-		opts := []ui.Option{{Label: "Both", Value: "_both"}}
-		for _, f := range inst {
-			opts = append(opts, ui.Option{Label: f.a.Title(), Value: string(f.a.ID())})
-		}
-		if err := r.Select("For which tool?", "", opts, &pick); err != nil {
-			return cancelled(r, err)
-		}
-		if pick != "_both" {
-			for _, f := range inst {
-				if string(f.a.ID()) == pick {
-					inst = []found{f}
-				}
-			}
-		}
-		target = inst[0]
+	adapters := make([]tool.Adapter, len(inst))
+	for i, f := range inst {
+		adapters[i] = f.a
 	}
-	var taken []string
-	for _, f := range inst {
-		taken = append(taken, cfg.Tools[f.a.ID()].Order...)
-	}
-	name := ""
-	if err := r.Input("Name the new account", "", "e.g. client-a", &name, nameRule(taken...)); err != nil {
-		return cancelled(r, err)
-	}
-	share := config.ShareAll
-	shareOpts := []ui.Option{
-		{Label: "Everything", Value: config.ShareAll, Hint: "history, settings, skills and MCP servers"},
-		{Label: "Settings only", Value: config.ShareSettings, Hint: "keeps its own conversations"},
-		{Label: "Nothing", Value: config.ShareNone, Hint: "fully separate"},
-	}
-	if err := r.Select("What should "+name+" share with the others?", "", shareOpts, &share); err != nil {
-		return cancelled(r, err)
-	}
-	_ = target
-	for _, f := range inst {
-		a := f.a
-		if err := r.Task(fmt.Sprintf("%s/%s", a.ID(), name), func() (string, error) {
-			res, err := ops.AddProfile(a, name, ops.AddOptions{Share: share})
-			return fsx.Tildify(res.Dir), err
-		}); err != nil {
-			return err
-		}
-	}
-	// Tools that keep MCP servers per login need aims registered in the new one too.
-	applyIntegrations(ctx, r, ops.Integrations{MCP: true})
-	r.Gap()
-	for _, f := range inst {
-		if err := loginStep(ctx, r, f.a, name); err != nil {
-			return cancelled(r, err)
-		}
-	}
-	r.Outro(ui.Out.OK.Render("Added ") + name + ui.Out.Dim.Render(". Switch to it with ") + ui.Kbd(ui.Out, "aims use "+name))
-	return nil
+	return addAccount(ctx, r, adapters, "")
 }
 
 // initQuiet is `aims init --yes`. Tools that already have profiles are left

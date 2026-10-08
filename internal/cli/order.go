@@ -144,9 +144,7 @@ func orderLines(order []string) []string {
 // askOrder asks which tool and which account comes first (and next), shows
 // the order and saves it once the user confirms.
 func askOrder(ctx context.Context, only tool.Adapter) error {
-	var report []ops.ToolStatus
-	var err error
-	ui.Spin("checking your accounts", func() { report, err = ops.Status(ctx, nil) })
+	report, err := loadAccounts(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,7 +207,9 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 		for _, n := range remaining {
 			hint := ""
 			if len(picked) == 1 {
-				hint = accountHint(picked[0], n)
+				if i := slices.IndexFunc(picked[0].Profiles, func(p ops.ProfileStatus) bool { return p.Name == n }); i >= 0 {
+					hint = accountHint(picked[0].Profiles[i])
+				}
 			}
 			opts = append(opts, ui.Option{Label: n, Value: n, Hint: hint})
 		}
@@ -265,22 +265,4 @@ func sameAccounts(ts []ops.ToolStatus) bool {
 		}
 	}
 	return true
-}
-
-// accountHint is who a profile is and why it cannot be used, if it cannot.
-func accountHint(t ops.ToolStatus, name string) string {
-	for _, p := range t.Profiles {
-		if p.Name != name {
-			continue
-		}
-		var parts []string
-		if p.Email != "" {
-			parts = append(parts, p.Email)
-		}
-		if !p.Usable {
-			parts = append(parts, strings.Join(p.Reasons, ", "))
-		}
-		return strings.Join(parts, " · ")
-	}
-	return ""
 }

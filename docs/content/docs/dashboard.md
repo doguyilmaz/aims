@@ -36,6 +36,7 @@ weight: 8
 | --- | --- |
 | `↑` `↓` or `k` `j` | Move between accounts |
 | `enter` or `u` | Make the selected account active for new sessions (it moves to the top) |
+| `shift+↑` `shift+↓` or `K` `J` | Move the selected account up or down the [failover order](../failover#order); the top one is active |
 | `s` | Close the dashboard and start the tool as the selected account |
 | `l` | Log the selected account in (the browser opens; the dashboard comes back after) |
 | `f` | Mark the selected account as limited, so new sessions use the next one until it resets (asks first) |

@@ -1,0 +1,56 @@
+# Commands take [tool] [profile]; what is missing is asked on a terminal and
+# named in an example otherwise.
+
+# Setup: only Claude Code has accounts, personal and work.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+
+# A script gets an example for what is missing.
+! exec aims login
+stderr 'which account\? e.g. aims login claude work'
+! exec aims logout
+stderr 'which account\? e.g. aims logout claude work'
+! exec aims rm
+stderr 'which account\? e.g. aims rm claude work'
+! exec aims add
+stderr 'which account\? e.g. aims add claude work'
+! exec aims add claude
+stderr 'which account'
+
+# A name alone means the tool that has it.
+exec aims login work
+stderr 'claude/work is logged in as work@example.com'
+! exec aims login nobody
+stderr 'no profile named "nobody"; create it with: aims login <tool> nobody'
+! exec aims logout nobody
+stderr 'no profile named "nobody"'
+
+# failover picks the only tool with a second account by itself.
+exec aims failover --from personal --minutes 30
+stderr 'personal rests \(30m, until \d\d:\d\d\); new Claude Code sessions use work until then'
+
+# clear without arguments clears every mark in a script; a name clears that account.
+exec aims failover --from work --to personal --minutes 30
+exec aims clear work
+stderr 'cleared claude: work'
+exec aims status claude
+stdout 'personal .*limited'
+stdout 'work .*ready'
+exec aims clear
+stderr 'cleared claude: personal, work'
+exec aims status claude
+! stdout 'limited'
+
+# With Codex accounts too, a name both tools have must come with the tool.
+exec codex login
+exec aims init --yes --tools codex --integrations none
+! exec aims logout work
+stderr 'both claude and codex have a profile "work"; name the tool, e.g. aims logout claude work'
+! exec aims login work
+stderr 'both claude and codex have a profile "work"'
+! exec aims failover
+stderr 'which tool\? e.g. aims failover claude'
+
+# Too many words is an error, not a guess.
+! exec aims logout claude work extra
+stderr 'accepts at most 2 arg'
