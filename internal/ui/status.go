@@ -14,6 +14,17 @@ import (
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
+// OrderSummary says what an order means: "New Claude Code sessions use
+// personal; while it is limited or logged out: work". first styles the
+// first name.
+func OrderSummary(titles string, order []string, first lipgloss.Style) string {
+	msg := fmt.Sprintf("New %s sessions use %s", titles, first.Render(order[0]))
+	if len(order) > 1 {
+		msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
+	}
+	return msg
+}
+
 // State is the one-word state of a profile and its style.
 func State(s *Styles, p ops.ProfileStatus) string {
 	switch {

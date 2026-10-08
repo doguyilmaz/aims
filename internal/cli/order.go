@@ -68,7 +68,7 @@ aims order claude personal work`,
 				if err != nil {
 					return err
 				}
-				ui.Done("%s", orderSummary(ui.Err, a.Title(), order))
+				ui.Done("%s", ui.OrderSummary(a.Title(), order, ui.Err.Bold))
 				warnPinned(a, order[0])
 			}
 			return nil
@@ -106,16 +106,6 @@ func orderTargets(only tool.Adapter, names []string) ([]tool.Adapter, error) {
 		}
 	}
 	return nil, fmt.Errorf("no tool has all of %s; name the tool, e.g. aims order %s %s", strings.Join(names, ", "), tools.Names()[0], strings.Join(names, " "))
-}
-
-// orderSummary says what an order means: "New Claude Code sessions use
-// personal; while it is limited or logged out: work".
-func orderSummary(s *ui.Styles, titles string, order []string) string {
-	msg := fmt.Sprintf("New %s sessions use %s", titles, s.Bold.Render(order[0]))
-	if len(order) > 1 {
-		msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
-	}
-	return msg
 }
 
 // orderLines spells an order out, one account per line, for the confirmation.
@@ -236,7 +226,7 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 			return err
 		}
 	}
-	r.Outro(ui.Out.OK.Render("Saved. ") + orderSummary(ui.Out, title, order))
+	r.Outro(ui.Out.OK.Render("Saved. ") + ui.OrderSummary(title, order, ui.Out.Bold))
 	for _, t := range picked {
 		warnPinned(tools.Get(t.ID), order[0])
 	}

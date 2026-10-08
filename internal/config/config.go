@@ -94,7 +94,7 @@ type StatusLine struct {
 	Chain string `json:"chain,omitempty"`
 }
 
-// HomeVar moves aims' own directory.
+// HomeVar points aims at another directory than ~/.aims.
 const HomeVar = "AIMS_HOME"
 
 // Home is aims' own directory, ~/.aims or $AIMS_HOME.

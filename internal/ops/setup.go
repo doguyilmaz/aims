@@ -26,8 +26,6 @@ const MaxRun = time.Hour
 
 // MCPServer is the aims MCP server as the tools register it.
 func MCPServer() tool.MCPServer {
-	// What the server reads: the session's account, the nested-run marker,
-	// pins, overrides and homes.
 	env := []string{profiles.SessionVar, profiles.NestedVar, config.HomeVar}
 	for _, a := range tools.All() {
 		l := a.Layout()

@@ -171,8 +171,6 @@ func newDoctorCmd(version string) *cobra.Command {
 						ok("%s skill", a.Title())
 					}
 				}
-				// Entries from an older aims can lack settings the tool needs
-				// to run the server well.
 				if au, isAuditor := a.(tool.MCPAuditor); isAuditor {
 					if missing := au.MCPMissing(profiles.HubHome(cfg, a), ops.MCPServer()); len(missing) > 0 {
 						bad("%s MCP server is missing %s", a.Title(), strings.Join(missing, " and "))

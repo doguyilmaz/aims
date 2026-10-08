@@ -292,11 +292,7 @@ func (m *dashboard) move(sel selection, by int) tea.Cmd {
 		if err != nil {
 			return flashMsg{err.Error(), true}
 		}
-		msg := fmt.Sprintf("New %s sessions use %s", a.Title(), order[0])
-		if len(order) > 1 {
-			msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
-		}
-		return flashMsg{msg, false}
+		return flashMsg{OrderSummary(a.Title(), order, lipgloss.NewStyle()), false}
 	}
 }
 
