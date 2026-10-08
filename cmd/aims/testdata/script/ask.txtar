@@ -29,14 +29,20 @@ stderr 'no profile named "nobody"'
 exec aims failover --from personal --minutes 30
 stderr 'personal rests \(30m, until \d\d:\d\d\); new Claude Code sessions use work until then'
 
-# clear without arguments clears every mark in a script; a name clears that account.
+# A name clears that account. A script clears every mark only with --all.
 exec aims failover --from work --to personal --minutes 30
 exec aims clear work
 stderr 'cleared claude: work'
 exec aims status claude
 stdout 'personal .*limited'
 stdout 'work .*ready'
-exec aims clear
+! exec aims clear
+stderr 'which account\? e.g. aims clear claude work, or aims clear --all'
+exec aims status claude
+stdout 'personal .*limited'
+! exec aims clear personal --all
+stderr '--all clears every account'
+exec aims clear --all
 stderr 'cleared claude: personal, work'
 exec aims status claude
 ! stdout 'limited'

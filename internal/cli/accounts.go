@@ -495,20 +495,25 @@ func failoverHints(a tool.Adapter, res ops.FailoverResult) []string {
 }
 
 func newClearCmd() *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:   "clear [tool] [profile]",
 		Short: "Forget cooldown and login marks",
 		Long: "Without arguments, aims lists the marked accounts and clears the ones you\n" +
-			"pick; in a script it clears every mark.",
+			"pick. A script names the account, or passes --all to clear every mark.",
 		Example: `aims clear
-aims clear claude
-aims clear claude work`,
+aims clear claude work
+aims clear claude         # every Claude Code account
+aims clear --all          # every account`,
 		Args:              cobra.MaximumNArgs(2),
 		ValidArgsFunction: completeToolProfile,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			only, name, err := parseTarget(args)
 			if err != nil {
 				return err
+			}
+			if all && name != "" {
+				return fmt.Errorf("--all clears every account; drop %q, or drop --all", name)
 			}
 			targets := []tool.Adapter{only}
 			switch {
@@ -521,8 +526,12 @@ aims clear claude work`,
 				if targets = toolsWith(cfg, name); len(targets) == 0 {
 					return fmt.Errorf("no profile named %q (see: aims status)", name)
 				}
-			case ui.Interactive():
+			case !all && ui.Interactive():
 				return askClear(cmd.Context())
+			case !all:
+				// Clearing every mark can send new sessions back to limited
+				// accounts: a script has to ask for it.
+				return errors.New("which account? e.g. aims clear claude work, or aims clear --all")
 			default:
 				cfg, err := config.Load()
 				if err != nil {
@@ -545,6 +554,8 @@ aims clear claude work`,
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "clear the marks of every account")
+	return cmd
 }
 
 // askClear lists the marked accounts, all picked, and clears the ones kept picked.

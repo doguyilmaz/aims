@@ -94,7 +94,7 @@ Without a tool, aims uses the only tool with a second account, or asks. On a ter
 
 ### `aims clear [tool] [profile]`
 
-Removes limit and login marks. Without arguments, aims lists the marked accounts, all picked, and clears the ones you keep picked; in a script it clears every mark.
+Removes limit and login marks. Without arguments, aims lists the marked accounts, all picked, and clears the ones you keep picked. A script names the account, or passes `--all` to clear every mark.
 
 ### `aims order [tool] [profile]...`
 

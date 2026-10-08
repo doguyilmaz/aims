@@ -103,4 +103,5 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
 ```bash
 aims clear claude work     # one account
 aims clear claude          # every Claude Code account
+aims clear --all           # every account
 ```
