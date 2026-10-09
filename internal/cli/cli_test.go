@@ -34,6 +34,21 @@ func TestReleaseTag(t *testing.T) {
 	}
 }
 
+func TestLocalVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"v0.1.4-0.20261009081856-e93a9a0fe529":       "v0.1.3+e93a9a0",
+		"v0.1.4-0.20261009081856-e93a9a0fe529+dirty": "v0.1.3+e93a9a0.dirty",
+		"v0.2.0-rc.1.0.20261009081856-e93a9a0fe529":  "v0.2.0-rc.1+e93a9a0",
+		"v0.0.0-20261009081856-e93a9a0fe529":         "dev+e93a9a0",
+		"v0.1.3":                                     "v0.1.3",
+		"v0.1.3+dirty":                               "v0.1.3+dirty",
+	} {
+		if got := localVersion(in); got != want {
+			t.Errorf("localVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestHelpListsEveryCommand(t *testing.T) {
 	root := newRoot("v1.0.0")
 	var b strings.Builder

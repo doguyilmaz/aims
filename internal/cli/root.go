@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,16 +58,41 @@ func Execute(version string) int {
 }
 
 // resolveVersion fills in what Go recorded when no version was set at build
-// time: the tag for `go install ...@v1.2.3`, a pseudo-version (+dirty with
-// uncommitted changes) for a build from a checkout.
+// time: the tag for `go install ...@v1.2.3`, the last tag and commit for a
+// build from a checkout.
 func resolveVersion(v string) string {
 	if v != "" && v != "dev" {
 		return v
 	}
 	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
-		return bi.Main.Version
+		return localVersion(bi.Main.Version)
 	}
 	return "dev"
+}
+
+// pseudoVersion matches Go's pseudo-versions: vX.0.0-TIME-REV without a tag,
+// vX.Y.Z-PRE.0.TIME-REV after a pre-release, vX.Y.(Z+1)-0.TIME-REV after a release.
+var pseudoVersion = regexp.MustCompile(`^(v\d+\.\d+\.)(\d+)-(.*?)\d{14}-([0-9a-f]{12})(\+dirty)?$`)
+
+// localVersion names a pseudo-version by the tag it was built on and its
+// commit: v0.1.4-0.20261009081856-e93a9a0fe529 is v0.1.3+e93a9a0.
+func localVersion(v string) string {
+	m := pseudoVersion.FindStringSubmatch(v)
+	if m == nil {
+		return v
+	}
+	base := "dev"
+	switch patch, _ := strconv.Atoi(m[2]); {
+	case m[3] == "0." && patch > 0:
+		base = m[1] + strconv.Itoa(patch-1)
+	case strings.HasSuffix(m[3], ".0."):
+		base = m[1] + m[2] + "-" + strings.TrimSuffix(m[3], ".0.")
+	}
+	out := base + "+" + m[4][:7]
+	if m[5] != "" {
+		out += ".dirty"
+	}
+	return out
 }
 
 var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-(rc|beta|alpha)\.?\d*)?$`)
