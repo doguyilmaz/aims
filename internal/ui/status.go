@@ -225,7 +225,7 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 			}
 			b.WriteString(strings.TrimRight(line, " ") + "\n")
 			if next := Next(t.ID, p); next != "" {
-				b.WriteString("      " + strings.Repeat(" ", l.name) + s.Dim.Render("→ ") + Kbd(s, next) + "\n")
+				b.WriteString(strings.Repeat(" ", 7+l.name) + s.Dim.Render("→ ") + Kbd(s, next) + "\n")
 			}
 		}
 	}
