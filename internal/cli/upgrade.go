@@ -31,7 +31,7 @@ func newUpgradeCmd(version string) *cobra.Command {
 			switch {
 			case err != nil:
 				ui.Warn("could not check for a new release: %v", err)
-			case release.Compare(version, latest) >= 0 && version != "dev":
+			case releaseTag.MatchString(version) && release.Compare(version, latest) >= 0:
 				ui.Done("aims %s is the latest release", version)
 				return nil
 			default:
@@ -92,7 +92,7 @@ func goBin() string {
 type updateNotice struct{ done chan string }
 
 func startUpdateCheck(ctx context.Context, version string, args []string) *updateNotice {
-	if version == "dev" || os.Getenv("AIMS_NO_UPDATE_CHECK") != "" || !ui.IsTerminal(os.Stderr) {
+	if !releaseTag.MatchString(version) || os.Getenv("AIMS_NO_UPDATE_CHECK") != "" || !ui.IsTerminal(os.Stderr) {
 		return nil
 	}
 	if len(args) > 0 {

@@ -56,14 +56,14 @@ func Execute(version string) int {
 	return code
 }
 
-// resolveVersion fills in the module version for `go install` builds.
+// resolveVersion fills in what Go recorded when no version was set at build
+// time: the tag for `go install ...@v1.2.3`, a pseudo-version (+dirty with
+// uncommitted changes) for a build from a checkout.
 func resolveVersion(v string) string {
 	if v != "" && v != "dev" {
 		return v
 	}
-	// `go install ...@v1.2.3` records the tag; a local build records a
-	// pseudo-version, which is no more useful than "dev".
-	if bi, ok := debug.ReadBuildInfo(); ok && releaseTag.MatchString(bi.Main.Version) {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 		return bi.Main.Version
 	}
 	return "dev"
