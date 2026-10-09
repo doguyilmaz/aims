@@ -88,4 +88,4 @@ case ":$PATH:" in
 	say "$bin_dir is not on your PATH. Add it with: $hint"
 	;;
 esac
-say "Next: aims init"
+[ -f "${AIMS_HOME:-$HOME/.aims}/config.json" ] || say "Next: aims init"

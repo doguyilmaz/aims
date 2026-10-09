@@ -51,4 +51,5 @@ if (($userPath -split ';') -notcontains $binDir) {
     Write-Host "Added $binDir to your PATH (open a new terminal)."
 }
 Write-Host "Installed $(& (Join-Path $binDir 'aims.exe') --version)"
-Write-Host 'Next: aims init'
+$aimsHome = if ($env:AIMS_HOME) { $env:AIMS_HOME } else { Join-Path $HOME '.aims' }
+if (-not (Test-Path (Join-Path $aimsHome 'config.json'))) { Write-Host 'Next: aims init' }
