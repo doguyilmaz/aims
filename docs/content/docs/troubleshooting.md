@@ -11,7 +11,7 @@ aims doctor
 
 ```text
 aims
-  ✓ aims v0.1.0 ~/.local/bin/aims
+  ✓ aims v0.1.3 ~/.local/bin/aims
   ✓ config ~/.aims/config.json
 
 Claude Code

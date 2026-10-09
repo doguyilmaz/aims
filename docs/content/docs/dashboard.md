@@ -6,28 +6,29 @@ weight: 8
 `aims` with no arguments opens a full-screen view of every account. It runs in your terminal; nothing is served or opened in a browser.
 
 ```text
- aims  accounts for Claude Code and Codex                         v0.1.0
+ aims  accounts for Claude Code and Codex                                                  v0.1.3
 
- Claude Code                                                    ~/.claude
- ▸ ● personal   me@gmail.com · pro      ready          5h ━━━━━━━━   38%
-     work       me@company.com · max    limited 2h10m  5h ━━━━━━━━  100%
+ Claude Code                                                                            ~/.claude
+ ▸ ● personal   me@gmail.com     pro    ready           5h [##....]  38%   7d [#.....]  12%
+     work       me@company.com   max    limited 2h10m   5h [######] 100%   7d [####..]  64%   5h resets 2h10m
 
- Codex                                                           ~/.codex
-   ● personal   me@gmail.com · plus     ready          5h ━━━━━━━━    9%
-     work       me@company.com · team   ready
+ Codex                                                                                   ~/.codex
+   ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
+     work       me@company.com   team   ready           5h [......]    –   7d [......]    –
 
- ╭──────────────────────────────────────────────────────────────────────╮
- │ claude / personal  active · default login                            │
- │                                                                      │
- │ folder    ~/.claude                                                  │
- │ account   me@gmail.com · pro                                         │
- │ state     ready                                                      │
- │ 5h        ━━━━━━━━━━━━━━━━━━━━━━━━   38%  resets in 3h12m            │
- │ measured  4m ago                                                     │
- │ last used 4m ago                                                     │
- ╰──────────────────────────────────────────────────────────────────────╯
+ ╭──────────────────────────────────────────────────────────────────────────────╮
+ │ claude / personal  active · default login                                    │
+ │                                                                              │
+ │ folder    ~/.claude                                                          │
+ │ account   me@gmail.com · pro                                                 │
+ │ state     ready                                                              │
+ │ 5h        [#########...............]  38%  resets in 3h12m                   │
+ │ 7d        [###.....................]  12%  resets in 4d                      │
+ │ measured  4m ago                                                             │
+ │ last used 4m ago                                                             │
+ ╰──────────────────────────────────────────────────────────────────────────────╯
 
- enter make active • s start • l log in • f fail over • ? more • q quit
+ enter make active • s start • l log in • f fail over • r check live • ? more • q quit
 ```
 
 ## Keys

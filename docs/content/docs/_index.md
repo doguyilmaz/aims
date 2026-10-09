@@ -18,12 +18,12 @@ aims does the bookkeeping. It gives every account its own folder, links the shar
 ```text
 $ aims status
 Claude Code  ~/.claude
-  ● personal   me@gmail.com · pro      ready           5h [###.....]  38%
-    work       me@company.com · max    limited 2h10m   5h [########] 100%
+  ● personal   me@gmail.com     pro    ready           5h [##....]  38%   7d [#.....]  12%
+    work       me@company.com   max    limited 2h10m   5h [######] 100%   7d [####..]  64%   5h resets 2h10m
 
 Codex  ~/.codex
-  ● personal   me@gmail.com · plus     ready           5h [#.......]   9%
-    work       me@company.com · team   ready
+  ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
+    work       me@company.com   team   ready           5h [......]    –   7d [......]    –
 ```
 
 ```bash
