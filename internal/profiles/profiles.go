@@ -165,6 +165,12 @@ type Evaluation struct {
 	State      *config.ProfileState
 }
 
+// Busy reports whether a short rate limit is all that keeps the profile from
+// being used.
+func (e Evaluation) Busy() bool {
+	return len(e.Reasons) == 1 && e.State != nil && e.State.Reason == "busy" && e.State.Until.After(config.Now())
+}
+
 // Evaluate checks login, cooldown and usage for one profile.
 func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.Adapter, name string) Evaluation {
 	ps := st.Get(a.ID(), name)

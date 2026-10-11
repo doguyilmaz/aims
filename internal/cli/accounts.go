@@ -313,8 +313,9 @@ func newFailoverCmd() *cobra.Command {
 		Short: "Mark the current account as limited and switch to the next",
 		Long: "Marks the account you used last as limited (until its reset time when aims\n" +
 			"knows it). New sessions use the next usable account until then and come\n" +
-			"back to the active one on their own. Conversations are shared, so --resume\n" +
-			"continues the one you just left on the next account.\n\n" +
+			"back to the active one on their own; with aims order --after-reset stay,\n" +
+			"the next account becomes the active one instead. Conversations are shared,\n" +
+			"so --resume continues the one you just left on the next account.\n\n" +
 			"Without a tool, aims asks which account hit its limit and what happened,\n" +
 			"and offers to continue the conversation.",
 		Example: `aims failover
@@ -390,7 +391,7 @@ aims failover codex --to work --minutes 90`,
 		},
 	}
 	cmd.Flags().StringVar(&from, "from", "", "profile to mark (default: the one used last)")
-	cmd.Flags().StringVar(&to, "to", "", "make this profile active instead (default: the next usable one, until the mark lifts)")
+	cmd.Flags().StringVar(&to, "to", "", "make this profile active instead (default: the next usable one stands in while the mark lasts)")
 	cmd.Flags().IntVar(&minutes, "minutes", 0, "rest period when the reset time is unknown")
 	cmd.Flags().StringVar(&reason, "reason", "", "limit (default) or login")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue the last conversation on the new account")
@@ -488,8 +489,12 @@ func failoverHints(a tool.Adapter, res ops.FailoverResult) []string {
 	if res.FromLastUsed {
 		out = append(out, fmt.Sprintf("%s was marked because it was used last; another one? aims clear %s %s && aims failover %s --from <name>", res.From, a.ID(), res.From, a.ID()))
 	}
-	if res.Pinned != "" && res.Pinned != res.To {
+	switch {
+	case res.Pinned == "" || res.Pinned == res.To:
+	case res.Pinned == res.From:
 		out = append(out, fmt.Sprintf("this terminal is pinned to %s; aims skips it while it rests", res.Pinned))
+	default:
+		out = append(out, fmt.Sprintf("this terminal is pinned to %s and keeps using it", res.Pinned))
 	}
 	return out
 }

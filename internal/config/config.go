@@ -83,6 +83,9 @@ type Failover struct {
 	// weekly limit and login problems do: sessions wait for the five-hour
 	// reset on the same account.
 	FiveHour bool `json:"fiveHour"`
+	// Stay keeps the account that took over: failing over makes it the
+	// active one, so sessions stay on it after the other works again.
+	Stay bool `json:"stay"`
 }
 
 // Counts reports whether a limit of the window labelled label ("5h", "7d",

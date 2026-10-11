@@ -282,7 +282,7 @@ func PlainStatus(report []ops.ToolStatus) string {
 				}
 			}
 			if p.StandsIn != "" {
-				fmt.Fprintf(&b, "; new sessions use it until %s works again", p.StandsIn)
+				fmt.Fprintf(&b, "; new sessions use it while %s cannot be used", p.StandsIn)
 			}
 			b.WriteString("\n")
 		}

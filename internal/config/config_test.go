@@ -23,7 +23,7 @@ func TestLoadDefaultsAndNormalize(t *testing.T) {
 	}
 	// A config from before fiveHour existed keeps failing over at the
 	// five-hour limit.
-	if c.Failover.Threshold != 95 || c.Failover.CooldownMinutes != 300 || !c.Failover.FiveHour {
+	if c.Failover.Threshold != 95 || c.Failover.CooldownMinutes != 300 || !c.Failover.FiveHour || c.Failover.Stay {
 		t.Errorf("defaults: %+v", c.Failover)
 	}
 	if !c.Failover.Counts("5h") || !c.Failover.Counts("7d") || !c.Failover.Counts("") {

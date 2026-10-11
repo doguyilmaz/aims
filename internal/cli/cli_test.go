@@ -76,6 +76,10 @@ func TestOrderLines(t *testing.T) {
 	if got != want {
 		t.Errorf("orderLines:\n%s\nwant:\n%s", got, want)
 	}
+	got = strings.Join(orderLines(order, config.Failover{FiveHour: true, Stay: true}), "\n")
+	if !strings.HasSuffix(got, "\nThe account that takes over stays active after personal works again.") {
+		t.Errorf("stay:\n%s", got)
+	}
 	got = strings.Join(orderLines(order, config.Failover{}), "\n")
 	if !strings.Contains(got, "2. work      while personal is at its weekly limit or logged out\n") ||
 		!strings.Contains(got, "\nAt its 5-hour limit personal waits for the reset; only its weekly limit or a login problem switches.\n") {
@@ -87,17 +91,21 @@ func TestOrderLines(t *testing.T) {
 }
 
 func TestLimitFlags(t *testing.T) {
-	if fh, err := limitFlags(""); err != nil || fh != nil {
-		t.Fatalf("none given: %v %v", fh, err)
+	fh, stay, err := limitFlags("", "")
+	if err != nil || fh != nil || stay != nil {
+		t.Fatalf("none given: %v %v %v", fh, stay, err)
 	}
-	if fh, err := limitFlags("wait"); err != nil || fh == nil || *fh {
-		t.Fatalf("wait: %v %v", fh, err)
+	fh, stay, err = limitFlags("wait", "stay")
+	if err != nil || fh == nil || *fh || stay == nil || !*stay {
+		t.Fatalf("wait, stay: %v %v %v", fh, stay, err)
 	}
-	if fh, _ := limitFlags("switch"); fh == nil || !*fh {
+	if fh, _, _ := limitFlags("switch", ""); fh == nil || !*fh {
 		t.Fatalf("switch: %v", fh)
 	}
-	if _, err := limitFlags("never"); err == nil {
-		t.Error("never accepted")
+	for _, bad := range [][2]string{{"never", ""}, {"", "later"}} {
+		if _, _, err := limitFlags(bad[0], bad[1]); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }
 

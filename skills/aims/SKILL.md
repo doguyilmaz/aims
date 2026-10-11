@@ -36,7 +36,7 @@ Otherwise use the CLI:
 | --- | --- |
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
 | Switch the account for new sessions | `aims use work` (every tool) or `aims use claude work` |
-| The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one until it resets) |
+| The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one) |
 | Undo a wrong mark | `aims clear claude [profile]` |
 | Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
 | Log an account in again | tell the user: `aims login claude work` |
@@ -46,12 +46,13 @@ Otherwise use the CLI:
 ## Limits and login errors
 
 1. **Usage limit.** Call `aims_failover` (or `aims failover <tool>`), then tell
-   the user which account new sessions use until the limit resets and how to
-   continue (`aims claude --continue`). Once it resets, new sessions return to
-   the active account on their own. Headless runs started through aims move to the
-   next account on their own, but only when the failed attempt did nothing;
-   otherwise the account is marked and the next run uses another one. Check
-   what a failed run already changed before running it again.
+   the user which account new sessions use now, as its answer says, and how to
+   continue (`aims claude --continue`). Once the limit resets, new sessions
+   return to the active account on their own, unless aims is set to stay on the
+   one that took over (`failover.stay`). Headless runs started through aims move
+   to the next account on their own, but only when the failed attempt did
+   nothing; otherwise the account is marked and the next run uses another one.
+   Check what a failed run already changed before running it again.
    If aims is set to wait out the 5-hour limit (`failover.fiveHour` off), a
    5-hour limit keeps new sessions on the same account until the reset: tell
    the user, and call `aims_failover` only if they want to switch anyway.

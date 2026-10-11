@@ -52,7 +52,8 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_failover",
 		Description: "The current account hit its usage limit or its login died: mark it (until its reset time, or for `minutes`). " +
-			"New sessions use the next usable account until then and return to the active one on their own; `to` makes another account active instead. " +
+			"New sessions use the next usable account until then and return to the active one on their own, unless aims is set to stay on the one that took over " +
+			"(the answer says which); `to` makes another account active instead. " +
 			"Then tell the user to continue the conversation with `aims claude --continue` or `aims codex resume --last`.",
 	}, failoverTool)
 
@@ -186,7 +187,7 @@ func switchTool(_ context.Context, _ *mcp.CallToolRequest, in switchIn) (*mcp.Ca
 type failoverIn struct {
 	Tool    string `json:"tool" jsonschema:"claude or codex"`
 	From    string `json:"from,omitempty" jsonschema:"profile to mark; default: the account of this session, else the one used last"`
-	To      string `json:"to,omitempty" jsonschema:"profile to make active instead; default: the next usable one, until the mark lifts"`
+	To      string `json:"to,omitempty" jsonschema:"profile to make active instead; default: the next usable one stands in while the mark lasts"`
 	Minutes int    `json:"minutes,omitempty" jsonschema:"cooldown length when the reset time is unknown"`
 	Reason  string `json:"reason,omitempty" jsonschema:"limit (default) or login"`
 }
@@ -217,8 +218,12 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 	}
 	msg := fmt.Sprintf("%s: %q %s; %s. To continue this conversation there, exit this session and run: %s",
 		a.ID(), res.From, state, next, resume)
-	if res.Pinned != "" && res.Pinned != res.To {
+	switch {
+	case res.Pinned == "" || res.Pinned == res.To:
+	case res.Pinned == res.From:
 		msg += fmt.Sprintf("\nThis terminal is pinned to %q (%s); aims skips it while it cools down.", res.Pinned, config.PinVar(a.ID()))
+	default:
+		msg += fmt.Sprintf("\nThis terminal is pinned to %q (%s) and keeps using it.", res.Pinned, config.PinVar(a.ID()))
 	}
 	r := text(msg)
 	r.StructuredContent = res

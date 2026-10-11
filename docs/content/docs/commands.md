@@ -80,7 +80,7 @@ Adds a profile without logging in. Without a profile, aims asks for the tool, a 
 
 ### `aims failover [tool]`
 
-Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one.
+Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one. With [`stay`](../failover#the-five-hour-limit) on, the next account becomes the active one instead.
 
 Without a tool, aims uses the only tool with a second account, or asks. On a terminal it also asks which account hit its limit (starting on the one used last) and what happened, then offers to continue your last conversation on the next account.
 
@@ -105,8 +105,9 @@ Every argument is optional. Without a tool, every tool that has the named profil
 | Flag | Default | |
 | --- | --- | --- |
 | `--five-hour` | `switch` | At an account's five-hour limit: `switch` to the next one or `wait` for the reset |
+| `--after-reset` | `back` | Once the first account works again: go `back` to it or `stay` on the one that took over |
 
-It applies to every tool and works without an order too: `aims order --five-hour wait`. See [The five-hour limit](../failover#the-five-hour-limit).
+Both apply to every tool and work without an order too: `aims order --five-hour wait`. See [The five-hour limit](../failover#the-five-hour-limit).
 
 ### `aims logout [tool] [profile]`
 

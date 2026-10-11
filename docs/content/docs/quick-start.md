@@ -99,7 +99,7 @@ Usually you do nothing: the next session you start skips the limited account. A 
 aims failover claude --resume
 ```
 
-This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. `aims order` asks whether to switch at all for the five-hour limit or wait for its reset; see [The five-hour limit](../failover#the-five-hour-limit). [Limits and failover](../failover) explains what aims does on its own.
+This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. `aims order` asks whether to stay on the next account instead, and whether to switch at all for the five-hour limit or wait for its reset; see [The five-hour limit](../failover#the-five-hour-limit). [Limits and failover](../failover) explains what aims does on its own.
 
 ## Adding more accounts
 

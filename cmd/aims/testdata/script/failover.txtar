@@ -136,7 +136,7 @@ exec aims use personal
 # The flags work with a tool and no order too, and say they are not per tool.
 exec aims order claude --five-hour wait
 stderr 'Failover at the 5-hour limit: wait for the reset; once the first account works again: back to it'
-stderr 'this applies to every tool, not only Claude Code'
+stderr 'these apply to every tool, not only Claude Code'
 cp LIMITED $HOME/.claude/LIMITED
 ! exec aims claude -p --output-format stream-json -- wait-it-out
 stdout 'hit your session limit'
@@ -159,6 +159,25 @@ exec aims claude -p -- by-hand
 stdout 'answer from work: by-hand'
 stderr 'skipping "personal" \(limit for [0-9hm]+, marked by aims failover\), using "work"'
 
+# With --after-reset stay, the account that takes over becomes the active one
+# and keeps the place after the limit lifts.
+exec aims clear claude
+exec aims order claude personal work --five-hour switch --after-reset stay
+stderr 'once personal works again: stay on the one that took over'
+exec aims claude -p --output-format stream-json -- take-over
+stdout 'answer from work: take-over'
+stderr '"work" is the active account now and stays so after "personal" works again'
+stderr 'back to personal: aims use claude personal'
+exec aims status claude
+stdout '● work'
+exec aims clear claude personal
+rm $HOME/.claude/LIMITED
+exec aims claude -p -- stays
+stdout 'answer from work: stays'
+# aims failover hands the place over too.
+exec aims failover claude --from work --minutes 30
+stderr 'Claude Code now uses personal; work rests'
+exec aims order --after-reset back
 exec aims clear claude
 ! exec aims order --five-hour sometimes
 stderr '--five-hour must be switch or wait'

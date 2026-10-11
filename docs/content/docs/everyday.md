@@ -20,7 +20,7 @@ Which account a session gets, in order:
 1. `@profile` on the command line. This also turns automatic failover off for that run.
 2. The terminal's pin, if you set one with `aims env` (below).
 3. The active account (`aims use`).
-4. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again. aims says so when it skips one:
+4. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again (or for good, with [`stay`](../failover#the-five-hour-limit)). aims says so when it skips one:
 
 ```text
 › claude: skipping "personal" (limit for 2h10m), using "work"

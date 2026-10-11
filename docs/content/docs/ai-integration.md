@@ -23,7 +23,7 @@ Codex starts MCP servers with only a few variables (`HOME`, `PATH` and the like)
 | --- | --- |
 | `aims_status` | Every account with its login, plan usage and marks, and which account this session runs as. `live: true` asks the providers first. |
 | `aims_switch` | Make a profile active for new sessions of one tool, or of every tool that has it. |
-| `aims_failover` | This account hit its limit or lost its login: mark it, so new sessions use the next one until it works again. Answers with the command that continues the conversation there. |
+| `aims_failover` | This account hit its limit or lost its login: mark it, so new sessions use the next one (until it works again, or for good with [`stay`](../failover#the-five-hour-limit)). Answers with the command that continues the conversation there. |
 | `aims_clear` | Remove marks from one profile or all of a tool's profiles. |
 | `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. Read-only unless the call sets `write`. Gives up after 10 minutes, or `timeoutSeconds` (at most an hour). |
 | `aims_login_help` | The command a person must run to log a profile in. The model cannot complete a browser login, and does not try. |

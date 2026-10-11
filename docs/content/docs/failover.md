@@ -55,7 +55,7 @@ A running session cannot change its login. Claude Code and Codex read the login 
 aims failover claude --resume
 ```
 
-It marks the account you used last and continues the same conversation on the next one. With history shared (the default) the new session reads the whole conversation, so the context is all there; only work that was cut off, such as a background agent that failed on the limit, has to be asked for again. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts. `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
+It marks the account you used last and continues the same conversation on the next one. With history shared (the default) the new session reads the whole conversation, so the context is all there; only work that was cut off, such as a background agent that failed on the limit, has to be asked for again. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts, or stay on it with [`stay`](#the-five-hour-limit). `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
 
 With the [status line](../ai-integration#status-line) on, Claude Code shows the plan usage of the running account, and suggests `aims failover claude` with the next account's name once a window passes the threshold.
 
@@ -71,7 +71,7 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 
 ## Order
 
-`aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again. To use personal and fall back on work:
+`aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again (or stay on the stand-in, with [`stay`](#the-five-hour-limit)). To use personal and fall back on work:
 
 ```bash
 aims order personal work            # every tool that has both
@@ -83,20 +83,25 @@ The first account named becomes the active one. `aims use` moves an account to t
 
 ## The five-hour limit
 
-Claude Code and Codex plans have a five-hour window and a weekly one. `aims order` asks what to do when the first account uses up its five-hour window:
+Claude Code and Codex plans have a five-hour window and a weekly one. `aims order` asks what to do when the first account uses up its five-hour window, and then, if it switches, what to do once that window resets:
 
 ```text
 ◆  When personal uses up its 5-hour limit?
    1. Switch to work        new sessions go on with work
    2. Wait for the reset    only the weekly limit or a login problem switches
+
+◆  And once personal's limit resets?
+   1. Go back to personal   work only stands in until then
+   2. Stay on work          work becomes the active account
 ```
 
 | Answer | What new sessions do |
 | --- | --- |
-| Switch (the default) | use work while personal's five-hour window is used up, and personal again once it resets |
+| Switch, go back (the default) | use work while personal's five-hour window is used up, and personal again once it resets |
+| Switch, stay | use work, which becomes the active account and stays so after personal resets. When work is out in turn, they move to personal, which becomes active again. |
 | Wait | stay on personal until its five-hour window resets. Only the weekly limit or a login problem moves them to work. |
 
-In a script, `aims order --five-hour switch|wait`, with or without an order. It applies to every tool, and is `fiveHour` in the [settings](#settings).
+In a script, `aims order --five-hour switch|wait --after-reset back|stay`, with or without an order. Both apply to every tool, and both are `fiveHour` and `stay` in the [settings](#settings).
 
 While personal waits for the reset, `aims status` and the status line show it as `waiting`, and a new session says so and names the account it would otherwise use:
 
@@ -106,6 +111,8 @@ While personal waits for the reset, `aims status` and the status line show it as
 ```
 
 A headless run that fails on the five-hour limit is then not repeated on another account. `aims failover` (or `f` in the dashboard, or the AI's `aims_failover`) still marks and switches when you run it: it is you deciding.
+
+With `stay`, the account that takes over is the next one in failover order, whatever a terminal is pinned to, and a pick that only passed over an account resting from a [short rate limit](#when-an-account-counts-as-unusable) just stands in: that account is back in minutes.
 
 aims tells the five-hour limit from the weekly one by the provider's message ("session limit" and "5-hour limit" are the five-hour one) or, when the message does not say, by which window the last usage report shows used up. A limit it cannot place counts as a reason to switch.
 
@@ -119,7 +126,8 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
     "auto": true,
     "threshold": 95,
     "cooldownMinutes": 300,
-    "fiveHour": true
+    "fiveHour": true,
+    "stay": false
   }
 }
 ```
@@ -130,6 +138,7 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
 | `threshold` | `95` | Usage percentage of a window that counts as "near limit". |
 | `cooldownMinutes` | `300` | How long a limit mark lasts when the reset time is unknown. |
 | `fiveHour` | `true` | Switch when the five-hour window is used up. With `false`, only the weekly limit and login problems switch; sessions wait for the five-hour reset on the same account. |
+| `stay` | `false` | The account that takes over becomes the active one, so new sessions stay on it after the other works again. A terminal pinned with `aims env` still goes back to its pin. |
 
 ## Undoing a mark
 

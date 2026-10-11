@@ -133,7 +133,7 @@ func TestFiveHourWaits(t *testing.T) {
 	}
 
 	_ = MarkLimited(cfg, "codex", "b", Limit{Reason: "busy", For: 2 * time.Minute, Window: "5h"})
-	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "b"); ev.Usable {
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "b"); ev.Usable || !ev.Busy() {
 		t.Fatalf("busy always counts: %+v", ev)
 	}
 }
