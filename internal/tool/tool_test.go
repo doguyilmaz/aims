@@ -30,6 +30,31 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+func TestWindows(t *testing.T) {
+	for label, short := range map[string]bool{"5h": true, "300m": true, "7d": false, "24h": false, "": false, "opus": false} {
+		if got := (Window{Label: label}).Short(); got != short {
+			t.Errorf("Short(%q) = %v", label, got)
+		}
+	}
+	cases := map[string]string{
+		"You've hit your session limit · resets 1:10am (Europe/Istanbul)": "5h",
+		"5-hour limit reached ∙ resets 3pm":                               "5h",
+		"You’ve hit your weekly limit":                                    "7d",
+		"Opus weekly limit reached ∙ resets Oct 9, 11am":                  "7d",
+		"Claude AI usage limit reached|1767225600":                        "",
+		"You've hit your usage limit. Try again in 2 days 3 hours":        "",
+		// Only the first line that reports a limit counts.
+		"Approaching your weekly allowance\nYou've hit your session limit · resets 5pm": "5h",
+		"You've hit your session limit · resets 5pm\nApproaching weekly limit":          "5h",
+		"Claude AI usage limit reached|1767225600\nApproaching weekly limit":            "",
+	}
+	for in, want := range cases {
+		if got := LimitWindow(in); got != want {
+			t.Errorf("LimitWindow(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestFlags(t *testing.T) {
 	args := []string{"-p", "--output-format=json", "--model", "opus", "--", "--model", "x"}
 	if v := OptionValue(args, "--output-format", "text"); v != "json" {

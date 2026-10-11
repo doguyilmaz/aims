@@ -19,17 +19,25 @@ import (
 // newOrderCmd is `aims order`: which account comes first and which stand in
 // for it. Every argument is optional; on a terminal aims asks for the rest.
 func newOrderCmd() *cobra.Command {
-	return &cobra.Command{
+	var fiveHour, afterReset string
+	cmd := &cobra.Command{
 		Use:   "order [tool] [profile...]",
 		Short: "Set which account comes first and which stand in for it",
 		Long: "The first profile becomes the active one: new sessions use it. While it is\n" +
 			"limited or logged out they use the next usable one in this order, and come\n" +
-			"back to the first once it works again.\n\n" +
+			"back to the first once it works again (unless --after-reset stay).\n\n" +
 			"Without a tool, every tool that has these profiles changes. Without profiles,\n" +
-			"aims asks for the order, shows it and saves it once you confirm.",
+			"aims asks for the order and what to do at the 5-hour limit, shows it and\n" +
+			"saves it once you confirm.\n\n" +
+			"--five-hour wait keeps new sessions on an account at its 5-hour limit until\n" +
+			"the reset; only the weekly limit and login problems switch. --after-reset\n" +
+			"stay makes the account that takes over the active one, so sessions stay on\n" +
+			"it after the first works again. Both apply to every tool, and work without\n" +
+			"an order too.",
 		Example: `aims order
 aims order personal work            # Claude Code and Codex
-aims order claude personal work`,
+aims order claude personal work
+aims order --five-hour switch --after-reset stay`,
 		Args: cobra.ArbitraryArgs,
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			var out []string
@@ -53,6 +61,21 @@ aims order claude personal work`,
 					only, args = a, args[1:]
 				}
 			}
+			fh, stay, err := limitFlags(fiveHour, afterReset)
+			if err != nil {
+				return err
+			}
+			if len(args) == 0 && (fh != nil || stay != nil) {
+				f, err := ops.SetFailover(fh, stay)
+				if err != nil {
+					return err
+				}
+				ui.Done("%s", limitsSummary("the first account", f))
+				if only != nil {
+					ui.Hint("these apply to every tool, not only %s", only.Title())
+				}
+				return nil
+			}
 			if len(args) == 0 {
 				if !ui.Interactive() {
 					return errors.New("which order? e.g. aims order personal work, or aims order claude personal work")
@@ -71,9 +94,67 @@ aims order claude personal work`,
 				ui.Done("%s", ui.OrderSummary(a.Title(), order, ui.Err.Bold))
 				warnPinned(a, order[0])
 			}
+			if fh != nil || stay != nil {
+				f, err := ops.SetFailover(fh, stay)
+				if err != nil {
+					return err
+				}
+				ui.Done("%s", limitsSummary(args[0], f))
+			}
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&fiveHour, "five-hour", "", "at an account's 5-hour limit: switch (default) or wait for the reset")
+	cmd.Flags().StringVar(&afterReset, "after-reset", "", "once the first account works again: back to it (default) or stay on the one that took over")
+	_ = cmd.RegisterFlagCompletionFunc("five-hour", cobra.FixedCompletions([]string{"switch", "wait"}, cobra.ShellCompDirectiveNoFileComp))
+	_ = cmd.RegisterFlagCompletionFunc("after-reset", cobra.FixedCompletions([]string{"back", "stay"}, cobra.ShellCompDirectiveNoFileComp))
+	return cmd
+}
+
+// limitFlags reads --five-hour and --after-reset; nil means not given.
+func limitFlags(fiveHour, afterReset string) (fh, stay *bool, err error) {
+	switch fiveHour {
+	case "":
+	case "switch", "wait":
+		fh = new(fiveHour == "switch")
+	default:
+		return nil, nil, fmt.Errorf("--five-hour must be switch or wait, not %q", fiveHour)
+	}
+	switch afterReset {
+	case "":
+	case "back", "stay":
+		stay = new(afterReset == "stay")
+	default:
+		return nil, nil, fmt.Errorf("--after-reset must be back or stay, not %q", afterReset)
+	}
+	return fh, stay, nil
+}
+
+// limitLines say what happens when first hits a limit, after the order.
+func limitLines(first string, f config.Failover) []string {
+	var out []string
+	if !f.FiveHour {
+		out = append(out, "At its 5-hour limit "+first+" waits for the reset; only its weekly limit or a login problem switches.")
+	}
+	if f.Stay {
+		out = append(out, "The account that takes over stays active after "+first+" works again.")
+	} else {
+		out = append(out, "When "+first+" works again, new sessions go back to it.")
+	}
+	return out
+}
+
+// limitsSummary is limitLines in one line, for the end of a command.
+func limitsSummary(first string, f config.Failover) string {
+	fh := "at the 5-hour limit: switch"
+	if !f.FiveHour {
+		fh = "at the 5-hour limit: wait for the reset"
+	}
+	after := "once " + first + " works again: back to it"
+	if f.Stay {
+		after = "once " + first + " works again: stay on the one that took over"
+	}
+	return "Failover " + fh + "; " + after
 }
 
 // orderTargets is the tool given, or else every tool that has all of names.
@@ -109,7 +190,7 @@ func orderTargets(only tool.Adapter, names []string) ([]tool.Adapter, error) {
 }
 
 // orderLines spells an order out, one account per line, for the confirmation.
-func orderLines(order []string) []string {
+func orderLines(order []string, f config.Failover) []string {
 	width := 0
 	for _, n := range order {
 		width = max(width, len(n))
@@ -118,6 +199,8 @@ func orderLines(order []string) []string {
 	for i, n := range order {
 		role := "new sessions use it"
 		switch {
+		case i == 1 && !f.FiveHour:
+			role = "while " + order[0] + " is at its weekly limit or logged out"
 		case i == 1:
 			role = "while " + order[0] + " is limited or logged out"
 		case i > 1:
@@ -126,9 +209,44 @@ func orderLines(order []string) []string {
 		lines[i] = fmt.Sprintf("%d. %-*s  %s", i+1, width, n, role)
 	}
 	if len(order) > 1 {
-		lines = append(lines, "When "+order[0]+" works again, new sessions go back to it.")
+		lines = append(lines, limitLines(order[0], f)...)
 	}
 	return lines
+}
+
+// askLimits asks what new sessions do when first uses up its 5-hour limit:
+// switch to next or wait for the reset; and, when they switch, whether they
+// go back to first once it works again or stay on the account that took over.
+func askLimits(r *ui.Rail, first, next, note string, f *config.Failover) error {
+	pick := "switch"
+	if !f.FiveHour {
+		pick = "wait"
+	}
+	opts := []ui.Option{
+		{Label: "Switch to " + next, Value: "switch", Hint: "new sessions go on with " + next},
+		{Label: "Wait for the reset", Value: "wait", Hint: "only the weekly limit or a login problem switches"},
+	}
+	desc := strings.TrimSpace("A running session keeps its account; this is where new and resumed ones go. " + note)
+	if err := r.Select("When "+first+" uses up its 5-hour limit?", desc, opts, &pick); err != nil {
+		return err
+	}
+	f.FiveHour = pick == "switch"
+	if !f.FiveHour {
+		return nil
+	}
+	pick = "back"
+	if f.Stay {
+		pick = "stay"
+	}
+	opts = []ui.Option{
+		{Label: "Go back to " + first, Value: "back", Hint: next + " only stands in until then"},
+		{Label: "Stay on " + next, Value: "stay", Hint: next + " becomes the active account"},
+	}
+	if err := r.Select("And once "+first+"'s limit resets?", "", opts, &pick); err != nil {
+		return err
+	}
+	f.Stay = pick == "stay"
+	return nil
 }
 
 // askOrder asks which tool and which account comes first (and next), shows
@@ -212,8 +330,23 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 	}
 	order = append(order, remaining...)
 
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	f := cfg.Failover
+	note := ""
+	for _, t := range report {
+		if len(t.Profiles) > 0 && !slices.ContainsFunc(picked, func(p ops.ToolStatus) bool { return p.ID == t.ID }) {
+			note = "This applies to every tool."
+		}
+	}
+	if err := askLimits(r, order[0], order[1], note, &f); err != nil {
+		return cancelled(r, err)
+	}
+
 	save := true
-	if err := r.Confirm("Save this order for "+title+"?", strings.Join(orderLines(order), "\n"), &save); err != nil {
+	if err := r.Confirm("Save this order for "+title+"?", strings.Join(orderLines(order, f), "\n"), &save); err != nil {
 		return cancelled(r, err)
 	}
 	if !save {
@@ -226,7 +359,11 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 			return err
 		}
 	}
-	r.Outro(ui.Out.OK.Render("Saved. ") + ui.OrderSummary(title, order, ui.Out.Bold))
+	if _, err := ops.SetFailover(&f.FiveHour, &f.Stay); err != nil {
+		r.Fail(err.Error())
+		return err
+	}
+	r.Outro(ui.Out.OK.Render("Saved. ") + ui.OrderSummary(title, order, ui.Out.Bold) + "\n   " + ui.Out.Dim.Render(limitsSummary(order[0], f)))
 	for _, t := range picked {
 		warnPinned(tools.Get(t.ID), order[0])
 	}

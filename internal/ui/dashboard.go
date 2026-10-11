@@ -255,7 +255,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Failover):
 		// Marking an account takes it out of use for hours: ask first.
 		m.confirm = &sel
-		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited, so new sessions use the next account until it resets? y/n", sel.toolID, sel.name), false
+		m.flash, m.flashBad = fmt.Sprintf("Mark %s/%s as limited, so new sessions use the next account? y/n", sel.toolID, sel.name), false
 	case key.Matches(msg, keys.Clear):
 		return m, func() tea.Msg {
 			if _, err := ops.ClearMarks(tools.Get(sel.toolID), sel.name); err != nil {

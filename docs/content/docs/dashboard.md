@@ -40,7 +40,7 @@ weight: 8
 | `shift+↑` `shift+↓` or `K` `J` | Move the selected account up or down the [failover order](../failover#order); the top one is active |
 | `s` | Close the dashboard and start the tool as the selected account |
 | `l` | Log the selected account in (the browser opens; the dashboard comes back after) |
-| `f` | Mark the selected account as limited, so new sessions use the next one until it resets (asks first) |
+| `f` | Mark the selected account as limited, so new sessions use the next one (asks first) |
 | `c` | Clear the selected account's marks |
 | `r` | Check every account live with its provider (see [costs](../failover#where-usage-numbers-come-from)) |
 | `a` | Add an account (runs the setup) |

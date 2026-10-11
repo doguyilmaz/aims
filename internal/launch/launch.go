@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -59,6 +60,9 @@ type Result struct {
 	// FinalText and ErrorText come from the analyzer of headless runs.
 	FinalText string
 	ErrorText string
+	// Waited: the failure was a five-hour limit that failover.fiveHour says
+	// to wait out, so the run was not repeated on another account.
+	Waited bool
 }
 
 func (o *Options) say(l Level, format string, args ...any) {
@@ -117,6 +121,11 @@ func Run(ctx context.Context, o Options) (Result, error) {
 		switch {
 		case pick.Name == "":
 			o.say(Warn, "no %s profile looks usable (%s); trying %q anyway", a.ID(), describe(pick.Skipped), preferred)
+		case pick.Name == preferred && len(pick.Waiting) > 0:
+			o.say(Info, "%s: %q waits for its 5-hour reset (%s) instead of failing over", a.ID(), preferred, strings.Join(pick.Waiting, ", "))
+			if other := profiles.Choose(ctx, cfg, config.LoadState(), a, "", []string{preferred}); other.Name != "" {
+				o.say(Hint, "another account now: aims %s@%s", a.ID(), other.Name)
+			}
 		case pick.Name != preferred:
 			o.say(Info, "%s: skipping %s, using %q", a.ID(), describe(pick.Skipped), pick.Name)
 			for _, e := range pick.Skipped {
@@ -128,10 +137,11 @@ func Run(ctx context.Context, o Options) (Result, error) {
 					o.say(Hint, "%s works again? aims clear %s %s", e.Name, a.ID(), e.Name)
 				}
 			}
+			stay(o, cfg, preferred, pick)
 			name = pick.Name
 		}
-	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable {
-		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(ev.Reasons, ", "))
+	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable || len(ev.Waiting) > 0 {
+		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(append(ev.Reasons, ev.Waiting...), ", "))
 	}
 
 	var input []byte
@@ -160,16 +170,20 @@ func Run(ctx context.Context, o Options) (Result, error) {
 		}
 
 		res, retry, err := attempt(ctx, o, cfg, bin, env, input, name, auto, tried)
-		if err != nil || retry == "" {
+		if err != nil || retry.Name == "" {
 			return res, err
 		}
-		o.say(Info, "%s/%s hit %s before doing anything, retrying with %q", a.ID(), name, failureText(res.Failure), retry)
-		name = retry
+		o.say(Info, "%s/%s hit %s before doing anything, retrying with %q", a.ID(), name, failureText(res.Failure), retry.Name)
+		if res.Failure != tool.FailBusy {
+			stay(o, cfg, name, retry)
+		}
+		name = retry.Name
 	}
 }
 
-// attempt runs one headless try. retry names the profile to try next, or "".
-func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env []string, input []byte, name string, auto bool, tried []string) (Result, string, error) {
+// attempt runs one headless try. retry is the profile to try next; its Name
+// is "" when there is none.
+func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env []string, input []byte, name string, auto bool, tried []string) (Result, profiles.Pick, error) {
 	a := o.Tool
 	an := a.NewAnalyzer(o.Args)
 	cap, err := proc.RunCaptured(bin, o.Args, proc.CaptureOptions{
@@ -178,7 +192,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	})
 	res := Result{Code: 127, Profile: name}
 	if err != nil {
-		return res, "", err
+		return res, profiles.Pick{}, err
 	}
 	res.Code, res.FinalText, res.ErrorText = cap.Code, an.FinalText(), an.ErrorText()
 	if cap.Code == 0 && !an.ResultFailed() {
@@ -187,7 +201,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 		if ps := config.LoadState().Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
 			_ = profiles.Clear(a.ID(), name)
 		}
-		return res, "", nil
+		return res, profiles.Pick{}, nil
 	}
 	res.Failure = tool.Classify(res.ErrorText)
 	const by = "a failed run"
@@ -195,7 +209,14 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	case tool.FailLogin:
 		_ = profiles.MarkNeedsLogin(a.ID(), name, by, res.ErrorText)
 	case tool.FailLimit:
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{ResetsAt: tool.ResetTime(res.ErrorText, config.Now()), By: by, Detail: res.ErrorText})
+		var windows []tool.Window
+		if u := config.LoadState().Get(a.ID(), name).Usage; u != nil {
+			windows = u.Windows
+		}
+		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
+			ResetsAt: tool.ResetTime(res.ErrorText, config.Now()), Window: profiles.LimitWindow(cfg, res.ErrorText, windows),
+			By: by, Detail: res.ErrorText,
+		})
 	case tool.FailBusy:
 		// A rate limit passes in moments; another account is worth a try, a
 		// long mark is not.
@@ -205,12 +226,23 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	// output that shows no tool call. Plain output hides tool calls, and even a
 	// login error can come mid-run (a refresh token rotated by another session).
 	safe := an.Activity() == tool.ActivityNone
-	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
+	// A five-hour limit that failover.fiveHour says to wait out leaves the
+	// profile usable: no retry, and new runs stay on it.
+	res.Waited = res.Failure == tool.FailLimit && profiles.Evaluate(ctx, cfg, config.LoadState(), a, name).Usable
+	if res.Failure != tool.FailNone && auto && !cap.Committed && safe && !res.Waited {
 		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
-			return res, next.Name, nil
+			return res, next, nil
 		}
 	}
 	cap.Flush()
+	if res.Waited {
+		next := "new runs wait for the reset on it"
+		if !auto {
+			next = "aims waits for the reset"
+		}
+		o.say(Warn, "%s/%s hit its 5-hour limit; %s instead of failing over", a.ID(), name, next)
+		return res, profiles.Pick{}, nil
+	}
 	if res.Failure != tool.FailNone {
 		why := ""
 		switch {
@@ -222,7 +254,31 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 		}
 		o.say(Warn, "%s/%s hit %s; new runs will use another profile%s", a.ID(), name, failureText(res.Failure), why)
 	}
-	return res, "", nil
+	return res, profiles.Pick{}, nil
+}
+
+// stay makes the profile picked to stand in for the active profile from the
+// active one itself when failover.stay is on, so new sessions keep using it
+// after from works again. A pick that passed over an account resting from a
+// short rate limit only stands in: that account is back in minutes. A
+// terminal pinned with aims env still goes back to its pin.
+func stay(o Options, cfg *config.Config, from string, pick profiles.Pick) {
+	id, to := o.Tool.ID(), pick.Name
+	if !cfg.Failover.Stay || cfg.Tools[id].Active != from || slices.ContainsFunc(pick.Skipped, profiles.Evaluation.Busy) {
+		return
+	}
+	moved := false
+	if _, err := config.Update(func(c *config.Config) error {
+		if t := c.Tools[id]; t.Active == from && t.Profiles[to] != nil {
+			t.Active, moved = to, true
+		}
+		return nil
+	}); err != nil || !moved {
+		return
+	}
+	cfg.Tools[id].Active = to
+	o.say(Info, "%s: %q is the active account now and stays so after %q works again", id, to, from)
+	o.say(Hint, "back to %s: aims use %s %s", from, id, from)
 }
 
 // failureText names a failure in a sentence: "hit its usage limit".

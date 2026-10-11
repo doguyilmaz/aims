@@ -87,6 +87,9 @@ const (
 //	work ▰▱▱▱▱  11% · 7d 47%
 //	work ▰▰▰▰▱  82% ↻1h20m · 7d 61%
 //	work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
+//
+// The arrow names the account new sessions get instead. It is missing while
+// the limit is one that is waited out (failover.fiveHour off).
 func segment(ctx context.Context, cfg *config.Config, name string, windows []tool.Window) string {
 	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), func() string {
 		return profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}).Name
@@ -112,8 +115,12 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	parts := []string{paint(bold, name)}
 	limited := false
 	if ps != nil && ps.Until.After(now) {
-		parts = append(parts, paint(red, "limited")+paint(dim, " ↻"+profiles.Duration(ps.Until.Sub(now))))
-		limited = true
+		limited = ps.Reason == "busy" || cfg.Failover.Counts(ps.Window)
+		word := paint(red, "limited")
+		if !limited {
+			word = paint(yellow, "waiting")
+		}
+		parts = append(parts, word+paint(dim, " ↻"+profiles.Duration(ps.Until.Sub(now))))
 	}
 	var tail []string
 	for _, w := range windows {
@@ -129,7 +136,7 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 		if w.Percent >= 70 && w.ResetsAt.After(now) {
 			p += paint(dim, " ↻"+profiles.Duration(w.ResetsAt.Sub(now)))
 		}
-		if w.Percent >= cfg.Failover.Threshold {
+		if w.Percent >= cfg.Failover.Threshold && cfg.Failover.Counts(w.Label) {
 			limited = true
 		}
 		if w.Label == "5h" {

@@ -23,9 +23,12 @@ type Account struct {
 // ProfileState is what aims learned about one profile.
 type ProfileState struct {
 	// Until is when a limited profile becomes usable again.
-	Until      time.Time `json:"until,omitzero"`
-	Reason     string    `json:"reason,omitempty"`
-	NeedsLogin bool      `json:"needsLogin,omitempty"`
+	Until  time.Time `json:"until,omitzero"`
+	Reason string    `json:"reason,omitempty"`
+	// Window is the usage window the limit is for ("5h", "7d"), when the
+	// provider's message or the usage report tells.
+	Window     string `json:"window,omitempty"`
+	NeedsLogin bool   `json:"needsLogin,omitempty"`
 	// MarkedBy and Detail say who set the limit or login mark and the
 	// provider's message, so a surprising mark can be explained.
 	MarkedBy   string    `json:"markedBy,omitempty"`
