@@ -90,6 +90,29 @@ func TestUsageThreshold(t *testing.T) {
 	}
 }
 
+func TestLimitWindow(t *testing.T) {
+	cfg, _ := setup(t)
+	short := tool.Window{Label: "5h", Percent: 100, ResetsAt: now.Add(time.Hour)}
+	weekly := tool.Window{Label: "7d", Percent: 97, ResetsAt: now.Add(48 * time.Hour)}
+	cases := []struct {
+		detail  string
+		windows []tool.Window
+		want    string
+	}{
+		{"You've hit your session limit · resets 5pm", []tool.Window{weekly}, "5h"},
+		{"You've hit your weekly limit", nil, "7d"},
+		{"usage limit reached", []tool.Window{short}, "5h"},
+		{"usage limit reached", []tool.Window{short, weekly}, "7d"},
+		{"usage limit reached", []tool.Window{{Label: "5h", Percent: 100, ResetsAt: now.Add(-time.Minute)}}, ""},
+		{"usage limit reached", nil, ""},
+	}
+	for _, c := range cases {
+		if got := LimitWindow(cfg, c.detail, c.windows); got != c.want {
+			t.Errorf("LimitWindow(%q, %v) = %q, want %q", c.detail, c.windows, got, c.want)
+		}
+	}
+}
+
 func TestMarkLimitedUsesKnownReset(t *testing.T) {
 	cfg, _ := setup(t)
 	_ = RecordUsage("codex", "a", []tool.Window{{Label: "5h", Percent: 100, ResetsAt: now.Add(70 * time.Minute)}}, "test")
@@ -102,6 +125,27 @@ func TestMarkLimitedUsesKnownReset(t *testing.T) {
 	if until := config.LoadState().Get("codex", "a").Until; !until.Equal(now.Add(70 * time.Minute)) {
 		t.Fatalf("stretched to %v", until)
 	}
+	// A weekly limit replaces a five-hour mark, until the weekly reset.
+	_ = RecordUsage("codex", "c", []tool.Window{
+		{Label: "5h", Percent: 100, ResetsAt: now.Add(time.Hour)},
+		{Label: "7d", Percent: 100, ResetsAt: now.Add(48 * time.Hour)},
+	}, "test")
+	_ = MarkLimited(cfg, "codex", "c", Limit{Window: "5h"})
+	_ = MarkLimited(cfg, "codex", "c", Limit{Window: "7d"})
+	if ps := config.LoadState().Get("codex", "c"); ps.Window != "7d" || !ps.Until.Equal(now.Add(48*time.Hour)) {
+		t.Fatalf("weekly after five-hour: %+v", ps)
+	}
+	_ = MarkLimited(cfg, "codex", "c", Limit{Window: "5h"})
+	if ps := config.LoadState().Get("codex", "c"); ps.Window != "7d" {
+		t.Fatalf("five-hour replaced the weekly mark: %+v", ps)
+	}
+	// A limit outlasts a short rate limit.
+	_ = MarkLimited(cfg, "codex", "b", Limit{Reason: "busy", For: 2 * time.Minute})
+	_ = MarkLimited(cfg, "codex", "b", Limit{})
+	if ps := config.LoadState().Get("codex", "b"); ps.Reason != "limit" || !ps.Until.Equal(now.Add(5*time.Hour)) {
+		t.Fatalf("limit after busy: %+v", ps)
+	}
+	_ = Clear("codex", "b")
 	// An explicit duration wins.
 	_ = MarkLimited(cfg, "codex", "b", Limit{For: 15 * time.Minute})
 	if until := config.LoadState().Get("codex", "b").Until; !until.Equal(now.Add(15 * time.Minute)) {

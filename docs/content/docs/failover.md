@@ -20,7 +20,7 @@ A limit mark lasts until the reset time the provider gave ("resets 5pm", "try ag
 Every mark remembers who set it and the provider's message. `aims status` and the dashboard show it, and the line aims prints when it skips an account names it, with the command that removes it:
 
 ```text
-› claude: skipping "work" (limit for 4h53m, marked by a live check), using "personal"
+› claude: skipping "work" (5h limit for 4h53m, marked by a live check), using "personal"
   works again? aims clear claude work
 ```
 

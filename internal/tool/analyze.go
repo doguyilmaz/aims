@@ -44,6 +44,32 @@ func Classify(text string) Failure {
 }
 
 var (
+	weeklyRe   = regexp.MustCompile(`(?i)\bweekly\b|\bweek\b|7-day|seven[- ]day`)
+	fiveHourRe = regexp.MustCompile(`(?i)5-hour|five[- ]hour|\b5h\b|\bsession limit\b`)
+)
+
+// LimitWindow reads which usage window a limit message is about: "7d" for
+// the weekly limit, "5h" for the five-hour one (Claude Code calls it the
+// session limit), "" when it does not say. Only the first line that reports
+// a limit counts, the run's own result: an "approaching weekly limit"
+// warning further down stderr does not make a five-hour limit weekly.
+func LimitWindow(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if !limitRe.MatchString(line) {
+			continue
+		}
+		switch {
+		case weeklyRe.MatchString(line):
+			return "7d"
+		case fiveHourRe.MatchString(line):
+			return "5h"
+		}
+		return ""
+	}
+	return ""
+}
+
+var (
 	epochRe   = regexp.MustCompile(`\|(\d{10})\b`)
 	clockRe   = regexp.MustCompile(`(?i)(?:resets?|try again)(?: at)? (\d{1,2})(?::(\d{2}))?\s*([ap]m)\b`)
 	durRe     = regexp.MustCompile(`(?i)try again in ((?:\d+\s*(?:days?|d|hours?|h|minutes?|mins?|m)\b[\s,]*(?:and\s+)?)+)`)

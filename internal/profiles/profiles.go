@@ -174,8 +174,11 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	}
 	if ps.Until.After(now) {
 		reason := ps.Reason
-		if reason == "" {
+		switch {
+		case reason == "":
 			reason = "limited"
+		case reason == "limit" && ps.Window != "":
+			reason = ps.Window + " limit"
 		}
 		ev.Reasons = append(ev.Reasons, reason+" for "+Duration(ps.Until.Sub(now)))
 	}
@@ -248,24 +251,28 @@ type Limit struct {
 	// For is how long the mark lasts when the reset time is unknown
 	// (default: the configured cooldown).
 	For time.Duration
+	// Window is the usage window the limit is for ("5h", "7d"), if known;
+	// see LimitWindow.
+	Window string
 	// By names who set the mark ("a live check"); Detail is the provider's message.
 	By, Detail string
 }
 
 // MarkLimited records that a profile hit a limit. Without a reset time or
-// duration it uses the soonest reset the provider reported, and never
-// stretches a mark that is already set.
+// duration it uses the soonest reset the provider reported (of the limit's
+// window, when known), and keeps a mark that is already set unless the new
+// one weighs more: see outweighs.
 func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
 		now := config.Now()
 		until := l.ResetsAt
 		if until.IsZero() && l.For == 0 {
-			if ps.Until.After(now) {
+			if ps.Until.After(now) && !outweighs(l, ps) {
 				return
 			}
 			if ps.Usage != nil {
 				for _, w := range ps.Usage.Windows {
-					if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
+					if (l.Window == "" || w.Label == l.Window) && w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
 						until = w.ResetsAt
 					}
 				}
@@ -282,9 +289,22 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 		if reason == "" {
 			reason = "limit"
 		}
-		ps.Until, ps.Reason = until.UTC(), reason
+		ps.Until, ps.Reason, ps.Window = until.UTC(), reason, l.Window
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = l.By, firstLine(l.Detail), now.UTC()
 	})
+}
+
+// outweighs reports whether a new limit without a reset time replaces the
+// live mark ps: a plan limit outlasts a short rate limit, and a weekly limit
+// a five-hour one.
+func outweighs(l Limit, ps *config.ProfileState) bool {
+	switch {
+	case l.Reason == "busy":
+		return false
+	case ps.Reason == "busy":
+		return true
+	}
+	return l.Window != "" && !tool.ShortWindow(l.Window) && tool.ShortWindow(ps.Window)
 }
 
 // MarkNeedsLogin records that a profile's login stopped working.
@@ -298,9 +318,30 @@ func MarkNeedsLogin(id tool.ID, name, by, detail string) error {
 // Clear forgets cooldowns and login problems.
 func Clear(id tool.ID, name string) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
-		ps.Until, ps.Reason, ps.NeedsLogin = time.Time{}, "", false
+		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 	})
+}
+
+// LimitWindow says which usage window a limit the provider reported is for:
+// the one its message names, else the one the usage report shows used up
+// (the weekly one when both are). "" when neither tells.
+func LimitWindow(cfg *config.Config, detail string, windows []tool.Window) string {
+	if w := tool.LimitWindow(detail); w != "" {
+		return w
+	}
+	now := config.Now()
+	found := ""
+	for _, w := range windows {
+		if w.Percent < cfg.Failover.Threshold || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
+			continue
+		}
+		if !w.Short() {
+			return w.Label
+		}
+		found = w.Label
+	}
+	return found
 }
 
 func firstLine(s string) string {
@@ -350,7 +391,11 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 				resets = w.ResetsAt
 			}
 		}
-		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, By: "a live check", Detail: p.Detail})
+		windows := p.Windows
+		if u := config.LoadState().Get(id, name).Usage; len(windows) == 0 && u != nil {
+			windows = u.Windows
+		}
+		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, Window: LimitWindow(cfg, p.Detail, windows), By: "a live check", Detail: p.Detail})
 	}
 	_ = RecordAccount(id, name, p.Email, p.Plan)
 	return p

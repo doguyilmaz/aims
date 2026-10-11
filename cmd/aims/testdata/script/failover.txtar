@@ -17,7 +17,7 @@ stdout 'personal .*limited [0-9hm]+ .*marked by a failed run'
 # The next run goes to work straight away.
 exec aims claude -p -- again
 stdout 'answer from work: again'
-stderr 'skipping "personal" \(limit for [0-9hm]+, marked by a failed run\), using "work"'
+stderr 'skipping "personal" \(5h limit for [0-9hm]+, marked by a failed run\), using "work"'
 stderr 'personal works again\? aims clear claude personal'
 
 # A run that already called a tool is not repeated, even with a profile to spare.

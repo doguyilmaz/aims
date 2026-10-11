@@ -195,7 +195,14 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	case tool.FailLogin:
 		_ = profiles.MarkNeedsLogin(a.ID(), name, by, res.ErrorText)
 	case tool.FailLimit:
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{ResetsAt: tool.ResetTime(res.ErrorText, config.Now()), By: by, Detail: res.ErrorText})
+		var windows []tool.Window
+		if u := config.LoadState().Get(a.ID(), name).Usage; u != nil {
+			windows = u.Windows
+		}
+		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
+			ResetsAt: tool.ResetTime(res.ErrorText, config.Now()), Window: profiles.LimitWindow(cfg, res.ErrorText, windows),
+			By: by, Detail: res.ErrorText,
+		})
 	case tool.FailBusy:
 		// A rate limit passes in moments; another account is worth a try, a
 		// long mark is not.

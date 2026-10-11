@@ -186,6 +186,17 @@ type Window struct {
 	ResetsAt time.Time `json:"resetsAt,omitzero"`
 }
 
+// Short reports whether the window is the short one, the five hours of
+// Claude Code and Codex, rather than the weekly one.
+func (w Window) Short() bool { return ShortWindow(w.Label) }
+
+// ShortWindow reports whether a window label ("5h", "7d") names a window of
+// less than a day. An empty or unknown label is not short.
+func ShortWindow(label string) bool {
+	d, err := time.ParseDuration(label)
+	return err == nil && d > 0 && d < 24*time.Hour
+}
+
 // ProbeStatus is the outcome of a Probe.
 type ProbeStatus string
 
