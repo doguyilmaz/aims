@@ -14,21 +14,25 @@ import (
 
 // ProfileStatus is one row of `aims status`.
 type ProfileStatus struct {
-	Name     string        `json:"name"`
-	Active   bool          `json:"active"`
-	Pinned   bool          `json:"pinned"`
-	Existing bool          `json:"existing"`
-	Share    string        `json:"share"`
-	Dir      string        `json:"dir"`
-	Email    string        `json:"email,omitempty"`
-	Plan     string        `json:"plan,omitempty"`
-	Method   string        `json:"method,omitempty"`
-	LoggedIn *bool         `json:"loggedIn"`
-	Usable   bool          `json:"usable"`
-	Reasons  []string      `json:"reasons,omitempty"`
-	Usage    []tool.Window `json:"usage,omitempty"`
-	UsageAt  time.Time     `json:"usageAt,omitzero"`
-	Until    time.Time     `json:"until,omitzero"`
+	Name     string   `json:"name"`
+	Active   bool     `json:"active"`
+	Pinned   bool     `json:"pinned"`
+	Existing bool     `json:"existing"`
+	Share    string   `json:"share"`
+	Dir      string   `json:"dir"`
+	Email    string   `json:"email,omitempty"`
+	Plan     string   `json:"plan,omitempty"`
+	Method   string   `json:"method,omitempty"`
+	LoggedIn *bool    `json:"loggedIn"`
+	Usable   bool     `json:"usable"`
+	Reasons  []string `json:"reasons,omitempty"`
+	// Waiting lists five-hour limits a usable profile is waiting out instead
+	// of failing over (failover.fiveHour off), until WaitsUntil if known.
+	Waiting    []string      `json:"waiting,omitempty"`
+	WaitsUntil time.Time     `json:"waitsUntil,omitzero"`
+	Usage      []tool.Window `json:"usage,omitempty"`
+	UsageAt    time.Time     `json:"usageAt,omitzero"`
+	Until      time.Time     `json:"until,omitzero"`
 	// Reason ("limit", "busy"), MarkedBy and Detail explain a mark.
 	Reason   string    `json:"reason,omitempty"`
 	MarkedBy string    `json:"markedBy,omitempty"`
@@ -92,7 +96,7 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			Existing: p.Existing, Share: p.ShareMode(), Dir: cfg.Dir(id, ev.Name),
 			Email: ev.Account.Email, Plan: ev.Account.Plan, Method: ev.Account.Method,
 			LoggedIn: ev.Account.LoggedIn, Usable: ev.Usable, Reasons: ev.Reasons,
-			LastUsed: ps.LastUsedAt,
+			Waiting: ev.Waiting, WaitsUntil: ev.WaitsUntil, LastUsed: ps.LastUsedAt,
 		}
 		if ps.Account != nil {
 			if row.Email == "" {

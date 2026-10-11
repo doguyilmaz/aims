@@ -156,8 +156,13 @@ type Evaluation struct {
 	Name    string
 	Usable  bool
 	Reasons []string
-	Account tool.Account
-	State   *config.ProfileState
+	// Waiting lists limits the profile waits out instead of failing over:
+	// five-hour ones, when failover.fiveHour is off. WaitsUntil is when the
+	// last of them resets, if known.
+	Waiting    []string
+	WaitsUntil time.Time
+	Account    tool.Account
+	State      *config.ProfileState
 }
 
 // Evaluate checks login, cooldown and usage for one profile.
@@ -180,7 +185,13 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		case reason == "limit" && ps.Window != "":
 			reason = ps.Window + " limit"
 		}
-		ev.Reasons = append(ev.Reasons, reason+" for "+Duration(ps.Until.Sub(now)))
+		r := reason + " for " + Duration(ps.Until.Sub(now))
+		if ps.Reason == "busy" || cfg.Failover.Counts(ps.Window) {
+			ev.Reasons = append(ev.Reasons, r)
+		} else {
+			ev.Waiting = append(ev.Waiting, r)
+			ev.WaitsUntil = later(ev.WaitsUntil, ps.Until)
+		}
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
@@ -189,12 +200,24 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 				if !w.ResetsAt.IsZero() {
 					r += " for " + Duration(w.ResetsAt.Sub(now))
 				}
-				ev.Reasons = append(ev.Reasons, r)
+				if cfg.Failover.Counts(w.Label) {
+					ev.Reasons = append(ev.Reasons, r)
+				} else {
+					ev.Waiting = append(ev.Waiting, r)
+					ev.WaitsUntil = later(ev.WaitsUntil, w.ResetsAt)
+				}
 			}
 		}
 	}
 	ev.Usable = len(ev.Reasons) == 0
 	return ev
+}
+
+func later(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 // EvaluateAll checks every profile of a tool in parallel, in configured order.
@@ -218,6 +241,9 @@ func EvaluateAll(ctx context.Context, cfg *config.Config, st config.State, a too
 type Pick struct {
 	Name    string
 	Skipped []Evaluation
+	// Waiting is the chosen profile's: limits it is used through, waiting
+	// for their reset, instead of failing over.
+	Waiting []string
 }
 
 // Choose finds the profile a new session should use.
@@ -233,7 +259,7 @@ func Choose(ctx context.Context, cfg *config.Config, st config.State, a tool.Ada
 	for _, n := range candidates {
 		ev := Evaluate(ctx, cfg, st, a, n)
 		if ev.Usable {
-			p.Name = n
+			p.Name, p.Waiting = n, ev.Waiting
 			return p
 		}
 		p.Skipped = append(p.Skipped, ev)
@@ -251,8 +277,8 @@ type Limit struct {
 	// For is how long the mark lasts when the reset time is unknown
 	// (default: the configured cooldown).
 	For time.Duration
-	// Window is the usage window the limit is for ("5h", "7d"), if known;
-	// see LimitWindow.
+	// Window is the usage window the limit is for ("5h", "7d"), if known.
+	// A mark without one always counts; see LimitWindow.
 	Window string
 	// By names who set the mark ("a live check"); Detail is the provider's message.
 	By, Detail string
@@ -267,8 +293,15 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 		now := config.Now()
 		until := l.ResetsAt
 		if until.IsZero() && l.For == 0 {
-			if ps.Until.After(now) && !outweighs(l, ps) {
-				return
+			var inherit time.Time
+			if ps.Until.After(now) {
+				ok, keepEnd := outweighs(cfg, l, ps)
+				if !ok {
+					return
+				}
+				if keepEnd {
+					inherit = ps.Until
+				}
 			}
 			if ps.Usage != nil {
 				for _, w := range ps.Usage.Windows {
@@ -276,6 +309,9 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 						until = w.ResetsAt
 					}
 				}
+			}
+			if until.IsZero() {
+				until = inherit
 			}
 		}
 		if until.IsZero() {
@@ -295,16 +331,22 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 }
 
 // outweighs reports whether a new limit without a reset time replaces the
-// live mark ps: a plan limit outlasts a short rate limit, and a weekly limit
-// a five-hour one.
-func outweighs(l Limit, ps *config.ProfileState) bool {
+// live mark ps: a plan limit outlasts a short rate limit, a weekly limit a
+// five-hour one, and a limit that counts one that is waited out
+// (failover.fiveHour off). In the last case the new mark keeps the old end,
+// which is still the best guess.
+func outweighs(cfg *config.Config, l Limit, ps *config.ProfileState) (ok, keepEnd bool) {
 	switch {
 	case l.Reason == "busy":
-		return false
+		return false, false
 	case ps.Reason == "busy":
-		return true
+		return true, false
+	case l.Window != "" && !tool.ShortWindow(l.Window) && tool.ShortWindow(ps.Window):
+		return true, false
+	case !cfg.Failover.Counts(ps.Window) && cfg.Failover.Counts(l.Window):
+		return true, true
 	}
-	return l.Window != "" && !tool.ShortWindow(l.Window) && tool.ShortWindow(ps.Window)
+	return false, false
 }
 
 // MarkNeedsLogin records that a profile's login stopped working.

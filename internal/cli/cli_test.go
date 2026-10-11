@@ -67,7 +67,8 @@ func TestHelpListsEveryCommand(t *testing.T) {
 }
 
 func TestOrderLines(t *testing.T) {
-	got := strings.Join(orderLines([]string{"personal", "work", "client"}), "\n")
+	order := []string{"personal", "work", "client"}
+	got := strings.Join(orderLines(order, config.Failover{FiveHour: true}), "\n")
 	want := "1. personal  new sessions use it\n" +
 		"2. work      while personal is limited or logged out\n" +
 		"3. client    while the ones above are limited or logged out\n" +
@@ -75,8 +76,28 @@ func TestOrderLines(t *testing.T) {
 	if got != want {
 		t.Errorf("orderLines:\n%s\nwant:\n%s", got, want)
 	}
-	if got := orderLines([]string{"solo"}); len(got) != 1 {
+	got = strings.Join(orderLines(order, config.Failover{}), "\n")
+	if !strings.Contains(got, "2. work      while personal is at its weekly limit or logged out\n") ||
+		!strings.Contains(got, "\nAt its 5-hour limit personal waits for the reset; only its weekly limit or a login problem switches.\n") {
+		t.Errorf("wait:\n%s", got)
+	}
+	if got := orderLines([]string{"solo"}, config.Failover{FiveHour: true}); len(got) != 1 {
 		t.Errorf("one account: %q", got)
+	}
+}
+
+func TestLimitFlags(t *testing.T) {
+	if fh, err := limitFlags(""); err != nil || fh != nil {
+		t.Fatalf("none given: %v %v", fh, err)
+	}
+	if fh, err := limitFlags("wait"); err != nil || fh == nil || *fh {
+		t.Fatalf("wait: %v %v", fh, err)
+	}
+	if fh, _ := limitFlags("switch"); fh == nil || !*fh {
+		t.Fatalf("switch: %v", fh)
+	}
+	if _, err := limitFlags("never"); err == nil {
+		t.Error("never accepted")
 	}
 }
 

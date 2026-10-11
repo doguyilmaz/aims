@@ -251,7 +251,8 @@ func newRunCmd() *cobra.Command {
 		Long: "Runs the tool with the profile's login. Without @profile it uses the active\n" +
 			"profile and moves to the next one if that is limited or logged out.\n" +
 			"Headless runs (claude -p, codex exec) that fail on a limit before doing\n" +
-			"anything are retried on the next account.",
+			"anything are retried on the next account, unless it is a 5-hour limit\n" +
+			"aims is set to wait out (aims order --five-hour wait).",
 		Example: `aims claude@work
 aims codex@personal exec "summarize the diff"
 aims run claude -p "explain this error"`,

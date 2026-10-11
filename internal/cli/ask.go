@@ -194,6 +194,8 @@ func accountHint(p ops.ProfileStatus) string {
 		state = "not logged in"
 	case !p.Usable:
 		state = strings.Join(p.Reasons, ", ")
+	case len(p.Waiting) > 0:
+		state = "waiting out " + strings.Join(p.Waiting, ", ")
 	}
 	if p.MarkedBy != "" {
 		state += ", marked by " + p.MarkedBy

@@ -100,7 +100,13 @@ Removes limit and login marks. Without arguments, aims lists the marked accounts
 
 Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
 
-Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts) and which account comes first, shows the order and saves it once you confirm.
+Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts), which account comes first and what to do at its five-hour limit, shows the order and saves it once you confirm.
+
+| Flag | Default | |
+| --- | --- | --- |
+| `--five-hour` | `switch` | At an account's five-hour limit: `switch` to the next one or `wait` for the reset |
+
+It applies to every tool and works without an order too: `aims order --five-hour wait`. See [The five-hour limit](../failover#the-five-hour-limit).
 
 ### `aims logout [tool] [profile]`
 

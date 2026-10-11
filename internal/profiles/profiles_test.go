@@ -90,6 +90,54 @@ func TestUsageThreshold(t *testing.T) {
 	}
 }
 
+// With failover.fiveHour off, a five-hour limit leaves the profile usable,
+// as something it waits out; the weekly one, and a mark of unknown window,
+// still fail over.
+func TestFiveHourWaits(t *testing.T) {
+	cfg, a := setup(t)
+	cfg.Failover.FiveHour = false
+	_ = RecordUsage("codex", "a", []tool.Window{
+		{Label: "5h", Percent: 110, ResetsAt: now.Add(200 * time.Minute)},
+		{Label: "7d", Percent: 44, ResetsAt: now.Add(48 * time.Hour)},
+	}, "test")
+	ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a")
+	if !ev.Usable || !slices.Equal(ev.Waiting, []string{"5h at 110% for 3h20m"}) || !ev.WaitsUntil.Equal(now.Add(200*time.Minute)) {
+		t.Fatalf("five-hour usage: %+v", ev)
+	}
+	if p := Choose(t.Context(), cfg, config.LoadState(), a, "a", nil); p.Name != "a" || len(p.Waiting) != 1 {
+		t.Fatalf("choose: %+v", p)
+	}
+
+	_ = MarkLimited(cfg, "codex", "a", Limit{ResetsAt: now.Add(time.Hour), Window: "5h", By: "a failed run"})
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a"); !ev.Usable || !slices.Contains(ev.Waiting, "5h limit for 1h") {
+		t.Fatalf("five-hour mark: %+v", ev)
+	}
+	cfg.Failover.FiveHour = true
+	if p := Choose(t.Context(), cfg, config.LoadState(), a, "a", nil); p.Name != "b" || !slices.Contains(p.Skipped[0].Reasons, "5h limit for 1h") {
+		t.Fatalf("fiveHour on: %+v", p)
+	}
+	cfg.Failover.FiveHour = false
+
+	_ = Clear("codex", "a")
+	if ps := config.LoadState().Get("codex", "a"); ps.Window != "" {
+		t.Fatalf("clear kept the window: %+v", ps)
+	}
+	_ = MarkLimited(cfg, "codex", "a", Limit{For: time.Hour, By: "aims failover"})
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a"); ev.Usable {
+		t.Fatalf("a mark of unknown window must count: %+v", ev)
+	}
+	_ = Clear("codex", "a")
+	_ = RecordUsage("codex", "a", []tool.Window{{Label: "7d", Percent: 100, ResetsAt: now.Add(48 * time.Hour)}}, "test")
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a"); ev.Usable {
+		t.Fatalf("weekly limit must count: %+v", ev)
+	}
+
+	_ = MarkLimited(cfg, "codex", "b", Limit{Reason: "busy", For: 2 * time.Minute, Window: "5h"})
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "b"); ev.Usable {
+		t.Fatalf("busy always counts: %+v", ev)
+	}
+}
+
 func TestLimitWindow(t *testing.T) {
 	cfg, _ := setup(t)
 	short := tool.Window{Label: "5h", Percent: 100, ResetsAt: now.Add(time.Hour)}
@@ -145,6 +193,20 @@ func TestMarkLimitedUsesKnownReset(t *testing.T) {
 	if ps := config.LoadState().Get("codex", "b"); ps.Reason != "limit" || !ps.Until.Equal(now.Add(5*time.Hour)) {
 		t.Fatalf("limit after busy: %+v", ps)
 	}
+	_ = Clear("codex", "b")
+	// With fiveHour off, a mark that counts replaces a waited five-hour one
+	// and keeps its end.
+	cfg.Failover.FiveHour = false
+	_ = MarkLimited(cfg, "codex", "b", Limit{ResetsAt: now.Add(2 * time.Hour), Window: "5h"})
+	_ = MarkLimited(cfg, "codex", "b", Limit{By: "aims failover"})
+	if ps := config.LoadState().Get("codex", "b"); ps.Window != "" || ps.MarkedBy != "aims failover" || !ps.Until.Equal(now.Add(2*time.Hour)) {
+		t.Fatalf("counting mark over a waited one: %+v", ps)
+	}
+	_ = MarkLimited(cfg, "codex", "b", Limit{Window: "5h", By: "a failed run"})
+	if ps := config.LoadState().Get("codex", "b"); ps.MarkedBy != "aims failover" {
+		t.Fatalf("a waited mark replaced one that counts: %+v", ps)
+	}
+	cfg.Failover.FiveHour = true
 	_ = Clear("codex", "b")
 	// An explicit duration wins.
 	_ = MarkLimited(cfg, "codex", "b", Limit{For: 15 * time.Minute})

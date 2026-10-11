@@ -65,7 +65,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_run",
 		Description: "Run a self-contained task right now with another account (`claude -p` or `codex exec`), failing over to the next account on a limit or login error " +
-			"when the failed attempt did nothing. Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
+			"when the failed attempt did nothing (not on a 5-hour limit aims is set to wait out). Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
 			"with write=true the tool's own settings decide what it may change. Tool: " + toolList + ".",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, runTool)
@@ -316,6 +316,9 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		head += ", login error"
 	case tool.FailLimit:
 		head += ", usage limit"
+		if res.Waited {
+			head += " (5-hour, waited out: not retried on another account)"
+		}
 	case tool.FailBusy:
 		head += ", rate limited"
 	}

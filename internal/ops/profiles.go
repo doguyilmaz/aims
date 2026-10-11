@@ -296,6 +296,21 @@ func SetOrder(a tool.Adapter, names []string) ([]string, error) {
 	return cfg.Tools[a.ID()].Order, nil
 }
 
+// SetFailover changes how failover treats the five-hour limit; nil leaves it
+// as it is.
+func SetFailover(fiveHour *bool) (config.Failover, error) {
+	cfg, err := config.Update(func(c *config.Config) error {
+		if fiveHour != nil {
+			c.Failover.FiveHour = *fiveHour
+		}
+		return nil
+	})
+	if err != nil {
+		return config.Failover{}, err
+	}
+	return cfg.Failover, nil
+}
+
 // LastUsed is the profile aims launched most recently. It can differ from the
 // active one after an automatic skip, and it is the account a person means
 // by "the one I was just using".

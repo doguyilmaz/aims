@@ -21,7 +21,8 @@ Both JSON files are written atomically with owner-only permissions, under a lock
   "failover": {
     "auto": true,
     "cooldownMinutes": 300,
-    "threshold": 95
+    "threshold": 95,
+    "fiveHour": true
   },
   "statusline": {
     "chain": "~/bin/my-status-line"

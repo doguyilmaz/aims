@@ -15,6 +15,8 @@ Plans have usage windows (five hours, a week) and logins expire. aims keeps trac
 | **Not logged in** | the account's folder has no login | `aims login` |
 | **Near limit** | the last usage report has a window at or over the threshold (95% by default) | when that window resets |
 
+A limit of the five-hour window counts only while `fiveHour` is on, the default; see [The five-hour limit](#the-five-hour-limit).
+
 A limit mark lasts until the reset time the provider gave ("resets 5pm", "try again in 2 hours") or the last usage report shows, and for 5 hours when neither says. `aims failover --minutes 90` sets it yourself.
 
 Every mark remembers who set it and the provider's message. `aims status` and the dashboard show it, and the line aims prints when it skips an account names it, with the command that removes it:
@@ -26,7 +28,7 @@ Every mark remembers who set it and the provider's message. `aims status` and th
 
 ## Before a session starts
 
-Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If none is usable it starts the preferred one anyway, with a warning, so you still see the tool's own message.
+Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If none is usable it starts the preferred one anyway, with a warning, so you still see the tool's own message. A five-hour limit you chose to [wait out](#the-five-hour-limit) does not make an account unusable: aims starts it and says it is waiting.
 
 `@profile` means "this account, no matter what": aims warns if it looks unusable but does not switch.
 
@@ -39,8 +41,9 @@ A headless run (`claude -p`, `codex exec`, or the `aims_run` MCP tool) that fail
 | `claude -p --output-format stream-json`, `codex exec --json` | limit or login, no tool call seen | yes | the stream shows every tool call, and there was none |
 | same | limit or login, after a tool call | no | the run may already have edited files or run commands |
 | plain text or `json` | limit or login | no | the output does not show whether tools ran |
+| any | a five-hour limit you chose to [wait out](#the-five-hour-limit) | no | the account is waiting for its reset, not out |
 
-When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
+When it does not repeat a run, aims says so, and the next run goes to another account (or, for a five-hour limit that is waited out, back to the same one). Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
 
 Errors are read only from the tool's own error output and final status, never from the model's answer or your prompt, so a prompt about rate limits does not trigger a failover.
 
@@ -78,6 +81,34 @@ aims order                          # asks, shows the order, saves it once you c
 
 The first account named becomes the active one. `aims use` moves an account to the front the same way.
 
+## The five-hour limit
+
+Claude Code and Codex plans have a five-hour window and a weekly one. `aims order` asks what to do when the first account uses up its five-hour window:
+
+```text
+◆  When personal uses up its 5-hour limit?
+   1. Switch to work        new sessions go on with work
+   2. Wait for the reset    only the weekly limit or a login problem switches
+```
+
+| Answer | What new sessions do |
+| --- | --- |
+| Switch (the default) | use work while personal's five-hour window is used up, and personal again once it resets |
+| Wait | stay on personal until its five-hour window resets. Only the weekly limit or a login problem moves them to work. |
+
+In a script, `aims order --five-hour switch|wait`, with or without an order. It applies to every tool, and is `fiveHour` in the [settings](#settings).
+
+While personal waits for the reset, `aims status` and the status line show it as `waiting`, and a new session says so and names the account it would otherwise use:
+
+```text
+› claude: "personal" waits for its 5-hour reset (5h at 100% for 3h20m) instead of failing over
+  another account now: aims claude@work
+```
+
+A headless run that fails on the five-hour limit is then not repeated on another account. `aims failover` (or `f` in the dashboard, or the AI's `aims_failover`) still marks and switches when you run it: it is you deciding.
+
+aims tells the five-hour limit from the weekly one by the provider's message ("session limit" and "5-hour limit" are the five-hour one) or, when the message does not say, by which window the last usage report shows used up. A limit it cannot place counts as a reason to switch.
+
 ## Settings
 
 In `~/.aims/config.json` (see [Configuration](../configuration)):
@@ -87,7 +118,8 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
   "failover": {
     "auto": true,
     "threshold": 95,
-    "cooldownMinutes": 300
+    "cooldownMinutes": 300,
+    "fiveHour": true
   }
 }
 ```
@@ -97,6 +129,7 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
 | `auto` | `true` | Pick another account when the preferred one is unusable. With `false`, aims warns but starts the preferred one. |
 | `threshold` | `95` | Usage percentage of a window that counts as "near limit". |
 | `cooldownMinutes` | `300` | How long a limit mark lasts when the reset time is unknown. |
+| `fiveHour` | `true` | Switch when the five-hour window is used up. With `false`, only the weekly limit and login problems switch; sessions wait for the five-hour reset on the same account. |
 
 ## Undoing a mark
 

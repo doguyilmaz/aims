@@ -59,6 +59,9 @@ type Result struct {
 	// FinalText and ErrorText come from the analyzer of headless runs.
 	FinalText string
 	ErrorText string
+	// Waited: the failure was a five-hour limit that failover.fiveHour says
+	// to wait out, so the run was not repeated on another account.
+	Waited bool
 }
 
 func (o *Options) say(l Level, format string, args ...any) {
@@ -117,6 +120,11 @@ func Run(ctx context.Context, o Options) (Result, error) {
 		switch {
 		case pick.Name == "":
 			o.say(Warn, "no %s profile looks usable (%s); trying %q anyway", a.ID(), describe(pick.Skipped), preferred)
+		case pick.Name == preferred && len(pick.Waiting) > 0:
+			o.say(Info, "%s: %q waits for its 5-hour reset (%s) instead of failing over", a.ID(), preferred, strings.Join(pick.Waiting, ", "))
+			if other := profiles.Choose(ctx, cfg, config.LoadState(), a, "", []string{preferred}); other.Name != "" {
+				o.say(Hint, "another account now: aims %s@%s", a.ID(), other.Name)
+			}
 		case pick.Name != preferred:
 			o.say(Info, "%s: skipping %s, using %q", a.ID(), describe(pick.Skipped), pick.Name)
 			for _, e := range pick.Skipped {
@@ -130,8 +138,8 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			}
 			name = pick.Name
 		}
-	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable {
-		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(ev.Reasons, ", "))
+	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable || len(ev.Waiting) > 0 {
+		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(append(ev.Reasons, ev.Waiting...), ", "))
 	}
 
 	var input []byte
@@ -212,12 +220,23 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	// output that shows no tool call. Plain output hides tool calls, and even a
 	// login error can come mid-run (a refresh token rotated by another session).
 	safe := an.Activity() == tool.ActivityNone
-	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
+	// A five-hour limit that failover.fiveHour says to wait out leaves the
+	// profile usable: no retry, and new runs stay on it.
+	res.Waited = res.Failure == tool.FailLimit && profiles.Evaluate(ctx, cfg, config.LoadState(), a, name).Usable
+	if res.Failure != tool.FailNone && auto && !cap.Committed && safe && !res.Waited {
 		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
 			return res, next.Name, nil
 		}
 	}
 	cap.Flush()
+	if res.Waited {
+		next := "new runs wait for the reset on it"
+		if !auto {
+			next = "aims waits for the reset"
+		}
+		o.say(Warn, "%s/%s hit its 5-hour limit; %s instead of failing over", a.ID(), name, next)
+		return res, "", nil
+	}
 	if res.Failure != tool.FailNone {
 		why := ""
 		switch {

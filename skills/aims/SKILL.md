@@ -52,6 +52,9 @@ Otherwise use the CLI:
    next account on their own, but only when the failed attempt did nothing;
    otherwise the account is marked and the next run uses another one. Check
    what a failed run already changed before running it again.
+   If aims is set to wait out the 5-hour limit (`failover.fiveHour` off), a
+   5-hour limit keeps new sessions on the same account until the reset: tell
+   the user, and call `aims_failover` only if they want to switch anyway.
 2. **Dead login** ("Please run /login", "OAuth token revoked", "refresh token
    was already used"). Call `aims_failover` with `reason: "login"` so new
    sessions avoid the account, and give the user `aims login <tool> <profile>`.
