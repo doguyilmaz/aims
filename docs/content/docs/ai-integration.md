@@ -57,7 +57,7 @@ Use one or the other. With both, the model sees the tools twice.
 ~/src/app main  work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
 ```
 
-The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account aims would move to.
+The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account **new** sessions get instead. The running session keeps its account; `aims failover claude --resume` continues its conversation on the next one (see [In an interactive session](../failover#in-an-interactive-session)).
 
 The usage numbers come from Claude Code itself, which passes them to the status line command. aims records them, which is how it knows to skip an account before the limit hits, at no cost.
 

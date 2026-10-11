@@ -46,13 +46,13 @@ Errors are read only from the tool's own error output and final status, never fr
 
 ## In an interactive session
 
-A running session cannot change its login. When Claude Code or Codex reports a limit in the middle of a conversation:
+A running session cannot change its login. Claude Code and Codex read the login once, when they start, and aims only starts them: it is not a proxy between the tool and the provider, so it cannot move a request that is already under way to another account. When Claude Code or Codex reports a limit in the middle of a conversation, end the session (`esc`, then `/exit` or `ctrl+c` twice) and run:
 
 ```bash
 aims failover claude --resume
 ```
 
-marks the account you used last and continues the same conversation on the next one. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts. `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
+It marks the account you used last and continues the same conversation on the next one. With history shared (the default) the new session reads the whole conversation, so the context is all there; only work that was cut off, such as a background agent that failed on the limit, has to be asked for again. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts. `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
 
 With the [status line](../ai-integration#status-line) on, Claude Code shows the plan usage of the running account, and suggests `aims failover claude` with the next account's name once a window passes the threshold.
 

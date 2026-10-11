@@ -93,13 +93,13 @@ With the shell integration on, plain `claude` and `codex` behave like `aims clau
 
 ## 4. When an account hits its limit
 
-Usually you do nothing: the next session you start skips the limited account. To move a conversation in the middle of a task:
+Usually you do nothing: the next session you start skips the limited account. A running session keeps its account, though; Claude Code and Codex read the login when they start. To move a conversation in the middle of a task, end the session and run:
 
 ```bash
 aims failover claude --resume
 ```
 
-This marks the account you were using as limited until its reset time and continues your last conversation on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. [Limits and failover](../failover) explains what aims does on its own.
+This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. [Limits and failover](../failover) explains what aims does on its own.
 
 ## Adding more accounts
 
