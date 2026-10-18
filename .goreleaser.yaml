@@ -36,6 +36,24 @@ archives:
       - README.md
       - completions/*
 
+# Developer ID signature with the hardened runtime, then notarization, so
+# Gatekeeper opens the macOS binaries without a prompt. Releases fail without
+# the secrets; snapshots skip it.
+notarize:
+  macos:
+    - enabled: "{{ not .IsSnapshot }}"
+      ids: [aims]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        # The cask points at the archives right away; Gatekeeper must find the ticket.
+        wait: true
+        timeout: 20m
+
 checksum:
   name_template: checksums.txt
 
@@ -52,7 +70,7 @@ homebrew_casks:
     repository:
       owner: doguyilmaz
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks
     homepage: https://doguyilmaz.github.io/aims/
     description: Several Claude Code and Codex accounts on one machine
@@ -65,20 +83,13 @@ homebrew_casks:
       bash: completions/aims.bash
       zsh: completions/aims.zsh
       fish: completions/aims.fish
-    hooks:
-      post:
-        # The binary is not notarized; let macOS run it without a Gatekeeper prompt.
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aims"]
-          end
 
 scoops:
   - name: aims
     repository:
       owner: doguyilmaz
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: bucket
     homepage: https://doguyilmaz.github.io/aims/
     description: Several Claude Code and Codex accounts on one machine
