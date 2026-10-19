@@ -3,6 +3,7 @@ package launch
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -42,7 +43,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		return Result{Code: 1, Profile: name}, err
 	}
 	defer os.RemoveAll(dir)
-	self, err := os.Executable()
+	self, err := selfPath()
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
 	}
@@ -239,4 +240,18 @@ func takeMove(dir string) string {
 	}
 	_ = os.Remove(path)
 	return strings.TrimSpace(string(b))
+}
+
+// selfPath is how the session's hooks start aims: through PATH's link when
+// that is this aims, so an upgrade that removes this version's folder does
+// not break the hooks of a running session.
+func selfPath() (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if p, err := exec.LookPath("aims"); err == nil && filepath.IsAbs(p) && fsx.Real(p) == fsx.Real(self) {
+		return p, nil
+	}
+	return self, nil
 }
