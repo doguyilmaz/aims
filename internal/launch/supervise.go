@@ -3,7 +3,9 @@ package launch
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
@@ -11,9 +13,6 @@ import (
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
-
-// RunEnv points the hooks of a supervised session at its run directory.
-const RunEnv = "AIMS_RUN"
 
 // continuePrompt is sent when a conversation moves on after a limit cut a
 // turn short.
@@ -45,6 +44,9 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	}
 
 	args := o.Args
+	// asked is the profile `aims move` asked for; held is the one it moved
+	// to, which the conversation stays on while it works.
+	var asked, held string
 	for {
 		cfg, err := config.Load()
 		if err != nil {
@@ -55,7 +57,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return Result{Code: 2, Profile: name}, err
 		}
 		env := sessionEnv(o, cfg, name)
-		env = append(env, RunEnv+"="+dir)
+		env = append(env, profiles.RunVar+"="+dir)
 		child, err := proc.StartAttached(bin, watched, env, o.Dir)
 		if err != nil {
 			return Result{Code: 127, Profile: name}, err
@@ -76,23 +78,36 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				return Result{Code: child.Code(), Profile: name}, nil
 			case <-ticker.C:
 			}
+			if to := takeMove(dir); to != "" {
+				asked = to
+			}
 			evs := append(carry, poll()...)
-			carry, next = nil, ""
+			carry, next, prompt = nil, "", ""
 			for _, ev := range evs {
 				if ev.Session != "" {
 					session = ev.Session
 				}
 				switch {
+				case ev.Opened:
 				case ev.Started:
 					running, wake, next = true, nil, ""
 				case ev.Failure != tool.FailNone:
-					running = false
+					running, held = false, ""
 					next, prompt, why, wake = onFailure(ctx, o, name, ev)
 				default:
 					running, wake = false, nil
-					next, why = onStop(ctx, o, name)
+					next, why = onStop(ctx, o, name, held)
 					prompt = ""
 				}
+			}
+			// A move asked for wins over one aims chose, but not over a turn
+			// cut short, which must go on.
+			if asked != "" && !running && session != "" && prompt == "" {
+				next, why = "", ""
+				if asked != name {
+					next, why = asked, "moving this conversation to "+asked+", as asked"
+				}
+				held, asked = asked, ""
 			}
 			if wake != nil && !config.Now().Before(wake.ReadyAt.Add(wakeAfter)) {
 				next, prompt = wake.Soonest, continuePrompt
@@ -130,20 +145,6 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	}
 }
 
-// apart lists the profiles a conversation on name cannot move to: those
-// that do not share history with it, so would not find the conversation.
-func apart(cfg *config.Config, id tool.ID, name string) []string {
-	t := cfg.Tools[id]
-	shared := t.Profiles[name] != nil && t.Profiles[name].ShareMode() == config.ShareAll
-	var out []string
-	for _, n := range t.Order {
-		if n != name && (!shared || t.Profiles[n].ShareMode() != config.ShareAll) {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
 // onFailure handles a turn that ended on an error: it marks the profile and
 // names the profile to continue on, or what to wait for when every one is
 // limited.
@@ -171,7 +172,7 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: busyFor, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart(cfg, a.ID(), name))
+	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, profiles.Apart(cfg, a.ID(), name))
 	switch {
 	case pick.Name != "" && pick.Name != name:
 		return pick.Name, continuePrompt, name + " hit " + failureText(f) + "; continuing this conversation on " + pick.Name, nil
@@ -182,15 +183,19 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 }
 
 // onStop names the profile a conversation should move to after a turn that
-// went well: the preferred one once it works again, or the next usable one
-// when this one is about to run out.
-func onStop(ctx context.Context, o Options, name string) (next, why string) {
+// went well: the preferred one (or the one held, which `aims move` chose)
+// once it works again, or the next usable one when this one is about to
+// run out.
+func onStop(ctx context.Context, o Options, name, held string) (next, why string) {
 	cfg, err := config.Load()
 	if err != nil {
 		return "", ""
 	}
 	preferred, _ := cfg.Preferred(o.Tool.ID(), "")
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), o.Tool, preferred, apart(cfg, o.Tool.ID(), name))
+	if held != "" {
+		preferred = held
+	}
+	pick := profiles.Choose(ctx, cfg, config.LoadState(), o.Tool, preferred, profiles.Apart(cfg, o.Tool.ID(), name))
 	switch {
 	case pick.Name == "" || pick.Name == name:
 		return "", ""
@@ -198,4 +203,18 @@ func onStop(ctx context.Context, o Options, name string) (next, why string) {
 		return pick.Name, name + " is about to run out; this conversation moves to " + pick.Name
 	}
 	return pick.Name, pick.Name + " works again; this conversation goes back to it"
+}
+
+// MoveFile is the request `aims move` leaves in a run's directory.
+const MoveFile = "move"
+
+// takeMove returns and removes the profile `aims move` asked for.
+func takeMove(dir string) string {
+	path := filepath.Join(dir, MoveFile)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	_ = os.Remove(path)
+	return strings.TrimSpace(string(b))
 }

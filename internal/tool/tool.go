@@ -101,11 +101,14 @@ type Watch struct {
 	Since time.Time
 }
 
-// SessionEvent is the start or the end of a turn in a supervised session.
+// SessionEvent is what happened in a supervised session: it was opened, or
+// a turn began or ended.
 type SessionEvent struct {
 	// Session is the conversation id.
 	Session string `json:"session"`
-	// Started: a turn began (the user sent a prompt).
+	// Opened: the conversation was opened (started, resumed or cleared),
+	// no turn yet. Started: a turn began (the user sent a prompt).
+	Opened  bool `json:"opened,omitempty"`
 	Started bool `json:"started,omitempty"`
 	// Failure is why the turn failed, when another account can help; Text
 	// is the provider's message.

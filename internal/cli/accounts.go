@@ -354,6 +354,19 @@ aims failover codex --to work --minutes 90`,
 				}
 				return err
 			}
+			// Inside a session aims moves, the conversation itself moves on.
+			if id, p, ok := profiles.Session(); ok && id == a.ID() && p == res.From {
+				if mv, err := ops.Move(ctx, res.To); err == nil {
+					if r != nil {
+						r.OK(failoverText(ui.Out, a, res))
+						r.Outro(movedText(mv))
+						return nil
+					}
+					ui.Done("%s", failoverText(ui.Err, a, res))
+					ui.Info("%s", movedText(mv))
+					return nil
+				}
+			}
 			resumeCmd := "aims " + string(a.ID()) + " " + strings.Join(a.Commands().Resume, " ")
 			if r == nil {
 				ui.Done("%s", failoverText(ui.Err, a, res))

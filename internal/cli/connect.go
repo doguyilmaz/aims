@@ -294,7 +294,7 @@ func newHookCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
-			dir := os.Getenv(launch.RunEnv)
+			dir := os.Getenv(profiles.RunVar)
 			a, ok := tools.Parse(args[0])
 			if dir == "" || !ok {
 				return

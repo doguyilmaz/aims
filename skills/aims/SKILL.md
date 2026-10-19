@@ -20,6 +20,10 @@ logout, and a conversation started on one account can continue on another.
   conversation; once the first account works again, aims moves it back after a
   turn. When every account is limited, it waits for the first reset and goes
   on. Nothing to do; tell the user what happened if they ask.
+- **To move such a session to another account on purpose**, call `aims_move`
+  (or run `aims move [profile]`), then end your turn: aims restarts the session
+  on that account once the turn ends and resumes the conversation, which stays
+  there while it works. The user can do the same with `!aims move work`.
 - Any other running session (`aims claude@work`, plain `claude` or `codex`) keeps
   the login it started with. `aims use` and `aims failover` change the account
   of **new** sessions. To move such a conversation, the user exits and runs
@@ -34,7 +38,7 @@ logout, and a conversation started on one account can continue on another.
 ## Tools
 
 Prefer the MCP tools when they are available: `aims_status`, `aims_switch`,
-`aims_failover`, `aims_clear`, `aims_run`, `aims_login_help`. Codex may not list
+`aims_failover`, `aims_move`, `aims_clear`, `aims_run`, `aims_login_help`. Codex may not list
 them up front: look for `mcp__aims__aims_status` and the rest among its deferred
 tools (in `exec`, `ALL_TOOLS`; call `await tools.mcp__aims__aims_status({})`).
 Otherwise use the CLI:
@@ -44,6 +48,7 @@ Otherwise use the CLI:
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
 | Switch the account for new sessions | `aims use work` (every tool) or `aims use claude work` |
 | The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one) |
+| Move this session's conversation now | `aims move work` (only in a session aims moves) |
 | Undo a wrong mark | `aims clear claude [profile]` |
 | Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
 | Log an account in again | tell the user: `aims login claude work` |

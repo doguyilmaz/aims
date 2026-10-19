@@ -94,6 +94,12 @@ Without a tool, aims uses the only tool with a second account, or asks. On a ter
 | `--reason` | `limit` (default) or `login`. A login mark lasts until `aims login`. |
 | `--resume` | Continue the last conversation on the new account |
 
+Run inside a session that [moves by itself](../failover#in-an-interactive-session), it also moves that session's conversation to the next account.
+
+### `aims move [profile]`
+
+Run inside a session started with `aims claude` or `aims codex` (no `@profile`), for example as `!aims move work` in Claude Code. aims restarts the session on that account and resumes the conversation: right away when the session is idle, once the current turn ends otherwise. The conversation then stays there while that account works, instead of going back to the first one. Without a profile, the next usable account takes it. The model can do the same with the `aims_move` MCP tool.
+
 ### `aims clear [tool] [profile]`
 
 Removes limit and login marks. Without arguments, aims lists the marked accounts, all picked, and clears the ones you keep picked. A script names the account, or passes `--all` to clear every mark.

@@ -71,18 +71,18 @@ func TestOnFailure(t *testing.T) {
 
 func TestOnStop(t *testing.T) {
 	o := setup(t)
-	if next, _ := onStop(t.Context(), o, "a"); next != "" {
+	if next, _ := onStop(t.Context(), o, "a", ""); next != "" {
 		t.Fatalf("stays on a usable first account: %q", next)
 	}
 	limit(t, "a", time.Hour)
-	if next, _ := onStop(t.Context(), o, "b"); next != "" {
+	if next, _ := onStop(t.Context(), o, "b", ""); next != "" {
 		t.Fatalf("stays on the stand-in while a is limited: %q", next)
 	}
-	if next, why := onStop(t.Context(), o, "a"); next != "b" || why != "a is about to run out; this conversation moves to b" {
+	if next, why := onStop(t.Context(), o, "a", ""); next != "b" || why != "a is about to run out; this conversation moves to b" {
 		t.Fatalf("moves on before the limit: %q %q", next, why)
 	}
 	_ = profiles.Clear("codex", "a")
-	if next, why := onStop(t.Context(), o, "b"); next != "a" || why != "a works again; this conversation goes back to it" {
+	if next, why := onStop(t.Context(), o, "b", ""); next != "a" || why != "a works again; this conversation goes back to it" {
 		t.Fatalf("back: %q %q", next, why)
 	}
 }

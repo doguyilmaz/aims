@@ -271,3 +271,28 @@ func TestBusyMarkIsShort(t *testing.T) {
 		t.Fatalf("busy mark: %+v", ps)
 	}
 }
+
+// Two logins of one account share its plan: a limit on one keeps the other
+// out too, but a rate limit or a dead login is the login's own.
+func TestSameAccount(t *testing.T) {
+	cfg, a := setup(t)
+	_ = RecordAccount("codex", "a", "me@corp.com", "plus")
+	_ = RecordAccount("codex", "b", "ME@corp.com", "plus")
+	_ = RecordAccount("codex", "c", "other@corp.com", "plus")
+	_ = MarkLimited(cfg, "codex", "a", Limit{ResetsAt: now.Add(2 * time.Hour)})
+	p := Choose(t.Context(), cfg, config.LoadState(), a, "a", nil)
+	if p.Name != "c" || len(p.Skipped) != 2 || !slices.Contains(p.Skipped[1].Reasons, "same account as a, limited for 2h") || !p.Skipped[1].ReadyAt.Equal(now.Add(2*time.Hour)) {
+		t.Fatalf("b shares a's limit: %+v", p)
+	}
+	_ = Clear("codex", "a")
+	_ = RecordUsage("codex", "a", []tool.Window{{Label: "5h", Percent: 99, ResetsAt: now.Add(time.Hour)}}, "test")
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "b"); ev.Usable || !slices.Contains(ev.Reasons, "same account as a, 5h at 99% for 1h") {
+		t.Fatalf("b shares a's usage: %+v", ev)
+	}
+	_ = RecordUsage("codex", "a", nil, "test")
+	_ = MarkLimited(cfg, "codex", "a", Limit{Reason: "busy", For: 2 * time.Minute})
+	_ = MarkNeedsLogin("codex", "a", "a test", "")
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "b"); !ev.Usable {
+		t.Fatalf("a's rate limit and login are its own: %+v", ev)
+	}
+}

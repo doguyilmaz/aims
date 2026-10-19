@@ -42,10 +42,10 @@ func (a *Adapter) Supervises(args []string) bool {
 	return true
 }
 
-// hookEvents are the Claude Code hooks a supervised session reports: a
-// prompt sent, the end of every turn, and a turn ended by an API error such
-// as a usage limit.
-var hookEvents = []string{"UserPromptSubmit", "Stop", "StopFailure"}
+// hookEvents are the Claude Code hooks a supervised session reports: the
+// conversation opened, a prompt sent, the end of every turn, and a turn
+// ended by an API error such as a usage limit.
+var hookEvents = []string{"SessionStart", "UserPromptSubmit", "Stop", "StopFailure"}
 
 // Watch passes Claude Code the hooks with --settings, merged into the
 // user's own --settings when there is one, so the user's settings files stay
@@ -122,6 +122,9 @@ func (*Adapter) HookEvent(raw []byte) (tool.SessionEvent, bool) {
 	}
 	ev := tool.SessionEvent{Session: id}
 	switch name {
+	case "SessionStart":
+		ev.Opened = true
+		return ev, true
 	case "UserPromptSubmit":
 		ev.Started = true
 		return ev, true

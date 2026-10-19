@@ -75,6 +75,10 @@ When the account of a supervised session hits a usage limit or its login dies, a
 
 How aims knows: for Claude Code it passes `--settings` with UserPromptSubmit, Stop and StopFailure hooks to each session (your settings files are not changed, and a `--settings` you pass is merged). For Codex it follows the conversation's rollout file under `sessions/`, and starts `codex` with `-c features.daemon_auto_start=false` so the conversation lives in the process aims stops.
 
+To move a supervised conversation yourself, run `aims move work` inside it (`!aims move work` in Claude Code), or ask the model, which calls `aims_move`. It stays on that account while it works.
+
+Two logins of the same account share its limits: when one is limited, aims does not move the conversation to the other.
+
 For the sessions that do not move, end the session (`esc`, then `/exit` or `ctrl+c` twice) and run:
 
 ```bash

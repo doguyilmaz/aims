@@ -27,7 +27,7 @@ const MaxRun = time.Hour
 
 // MCPServer is the aims MCP server as the tools register it.
 func MCPServer() tool.MCPServer {
-	env := []string{profiles.SessionVar, profiles.NestedVar, config.HomeVar}
+	env := []string{profiles.SessionVar, profiles.NestedVar, profiles.RunVar, config.HomeVar}
 	for _, a := range tools.All() {
 		l := a.Layout()
 		env = append(env, config.PinVar(a.ID()), l.BinEnv, l.HomeEnv)

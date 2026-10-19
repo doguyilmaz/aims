@@ -153,7 +153,7 @@ aims status --live`,
 	for _, a := range tools.All() {
 		add("daily", newToolCmd(a))
 	}
-	add("accounts", newAddCmd(), newFailoverCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
+	add("accounts", newAddCmd(), newFailoverCmd(), newMoveCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
 	add("connect", newSetupCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
 	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd(), newHookCmd())

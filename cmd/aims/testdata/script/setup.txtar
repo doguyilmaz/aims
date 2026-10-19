@@ -21,7 +21,7 @@ grep '"aims"' $HOME/.claude.json
 grep '"aims"' $HOME/.aims/profiles/claude/work/.claude.json
 grep '\[mcp_servers.aims\]' $HOME/.codex/config.toml
 # Codex passes only a few variables to MCP servers and waits 60s for a tool.
-grep 'env_vars = \["AIMS_SESSION_PROFILE", "AIMS_RUN_NESTED", "AIMS_HOME", ' $HOME/.codex/config.toml
+grep 'env_vars = \["AIMS_SESSION_PROFILE", "AIMS_RUN_NESTED", "AIMS_RUN", "AIMS_HOME", ' $HOME/.codex/config.toml
 grep 'tool_timeout_sec = 3660' $HOME/.codex/config.toml
 grep 'statusline' $HOME/.claude/settings.json
 grep '"model": "opus"' $HOME/.claude/settings.json

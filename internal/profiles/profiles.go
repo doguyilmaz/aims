@@ -27,6 +27,30 @@ const SessionVar = "AIMS_SESSION_PROFILE"
 // loads in turn refuses to start yet another run.
 const NestedVar = "AIMS_RUN_NESTED"
 
+// RunVar names the directory of a session aims moves between accounts: its
+// hooks record turns there, and `aims move` leaves its request there.
+const RunVar = "AIMS_RUN"
+
+// Session reads SessionVar: the tool and profile this process runs under.
+func Session() (id tool.ID, name string, ok bool) {
+	t, n, ok := strings.Cut(os.Getenv(SessionVar), ":")
+	return tool.ID(t), n, ok && t != "" && n != ""
+}
+
+// Apart lists the profiles a conversation on name cannot move to: those
+// that do not share history with it, so would not find the conversation.
+func Apart(cfg *config.Config, id tool.ID, name string) []string {
+	t := cfg.Tools[id]
+	shared := t.Profiles[name] != nil && t.Profiles[name].ShareMode() == config.ShareAll
+	var out []string
+	for _, n := range t.Order {
+		if n != name && (!shared || t.Profiles[n].ShareMode() != config.ShareAll) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // Bin resolves the tool's binary, honouring its override variable.
 func Bin(a tool.Adapter) string {
 	l := a.Layout()
@@ -208,11 +232,57 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 			}
 		}
 	}
+	email := acct.Email
+	if email == "" && ps.Account != nil {
+		email = ps.Account.Email
+	} else if email != "" && (ps.Account == nil || ps.Account.Email != email) {
+		_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) {
+			if ps.Account == nil {
+				ps.Account = &config.Account{}
+			}
+			ps.Account.Email = email
+		})
+	}
+	if email != "" {
+		for _, n := range cfg.Tools[a.ID()].Order {
+			if r, until := sameAccount(cfg, st.Get(a.ID(), n), now); n != name && r != "" && strings.EqualFold(accountEmail(st.Get(a.ID(), n)), email) {
+				ev.Reasons = append(ev.Reasons, "same account as "+n+", "+r)
+				ev.ReadyAt = later(ev.ReadyAt, until)
+				if until.IsZero() {
+					open = true
+				}
+			}
+		}
+	}
 	ev.Usable = len(ev.Reasons) == 0
 	if open {
 		ev.ReadyAt = time.Time{}
 	}
 	return ev
+}
+
+func accountEmail(ps *config.ProfileState) string {
+	if ps.Account == nil {
+		return ""
+	}
+	return ps.Account.Email
+}
+
+// sameAccount says what limits a profile, as far as it counts for another
+// login of the same account: the plan's limits, which the account shares,
+// and not a short rate limit or a dead login, which are the login's own.
+func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (reason string, until time.Time) {
+	if ps.Until.After(now) && ps.Reason != "busy" {
+		reason, until = "limited for "+Duration(ps.Until.Sub(now)), ps.Until
+	}
+	if ps.Usage != nil {
+		for _, w := range ps.Usage.Windows {
+			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
+				reason, until = fmt.Sprintf("%s at %.0f%% for %s", w.Label, w.Percent, Duration(w.ResetsAt.Sub(now))), w.ResetsAt
+			}
+		}
+	}
+	return reason, until
 }
 
 func later(a, b time.Time) time.Time {
