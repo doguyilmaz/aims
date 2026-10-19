@@ -100,6 +100,9 @@ type Watch struct {
 	Dir string
 	// Since is when this run started.
 	Since time.Time
+	// Env is what the commands the session runs (a shell command, the aims
+	// MCP server) must see, so `aims move` finds its session.
+	Env map[string]string
 }
 
 // SessionEvent is what happened in a supervised session: it was opened, or

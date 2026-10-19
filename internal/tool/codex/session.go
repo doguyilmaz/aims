@@ -3,9 +3,11 @@ package codex
 import (
 	"bufio"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,7 +107,12 @@ func (a *Adapter) Watch(w tool.Watch) ([]string, func() []tool.SessionEvent, err
 			f.find(next)
 		}
 	}
-	return append(slices.Clone(noDaemon), w.Args...), f.poll, nil
+	args := slices.Clone(noDaemon)
+	// Codex hands its shell commands a filtered environment.
+	for _, k := range slices.Sorted(maps.Keys(w.Env)) {
+		args = append(args, "-c", "shell_environment_policy.set."+k+"="+strconv.Quote(w.Env[k]))
+	}
+	return append(args, w.Args...), f.poll, nil
 }
 
 // workDir is where the conversation runs: -C/--cd, else aims' directory.

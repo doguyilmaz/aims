@@ -56,7 +56,10 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		if err != nil {
 			return Result{Code: 1, Profile: name}, err
 		}
-		watched, poll, err := sv.Watch(tool.Watch{Args: args, Self: self, RunDir: dir, Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now()})
+		watched, poll, err := sv.Watch(tool.Watch{
+			Args: args, Self: self, RunDir: dir, Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now(),
+			Env: map[string]string{profiles.RunVar: dir, profiles.SessionVar: string(a.ID()) + ":" + name},
+		})
 		if err != nil {
 			return Result{Code: 2, Profile: name}, err
 		}

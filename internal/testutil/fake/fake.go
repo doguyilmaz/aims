@@ -311,6 +311,9 @@ func Codex() int {
 	supervised := len(args) > 1 && args[0] == "-c" && args[1] == "features.daemon_auto_start=false"
 	if supervised {
 		args = args[2:]
+		for len(args) > 1 && args[0] == "-c" && strings.HasPrefix(args[1], "shell_environment_policy.set.") {
+			args = args[2:]
+		}
 	}
 
 	if len(args) == 0 {
