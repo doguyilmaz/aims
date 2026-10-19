@@ -13,9 +13,22 @@ Plans have usage windows (five hours, a week) and logins expire. aims keeps trac
 | **Busy** for 2 minutes | a run that failed on a short rate limit (HTTP 429, "too many requests") | at that time |
 | **Login expired** | a run that failed on a login error; `aims failover --reason login`; a live check | `aims login`, a run that succeeds, or `aims clear` |
 | **Not logged in** | the account's folder has no login | `aims login` |
-| **Near limit** | the last usage report has a window at or over the threshold (95% by default) | when that window resets |
+| **Near limit** | the last usage report has a window at or over the threshold (95% by default); `aims status` shows it as `limited` with the time left | when that window resets |
 
-A limit of the five-hour window counts only while `fiveHour` is on, the default; see [The five-hour limit](#the-five-hour-limit).
+## What aims does
+
+The policy is fixed. The accounts are tried in [order](#order), the active one first:
+
+| Situation | What aims does |
+| --- | --- |
+| Nothing wrong | New and running sessions use the first usable account. |
+| The first account's 5-hour limit is used up | Sessions use the next usable account. Once the first works again, they go back to it. |
+| The first account's weekly limit is used up | Sessions stay on the next account until the weekly reset. |
+| Every account is limited | The session uses the account that resets first, and continues on its own when it resets. |
+| A login died | Next account, and a hint to run `aims login <tool> <profile>`. |
+| A short 429 rate limit | Next account for about 2 minutes, then back. |
+
+aims tells the 5-hour limit from the weekly one by the provider's message ("session limit" and "5-hour limit" are the 5-hour one) or, when the message does not say, by which window the last usage report shows used up.
 
 A limit mark lasts until the reset time the provider gave ("resets 5pm", "try again in 2 hours") or the last usage report shows, and for 5 hours when neither says. `aims failover --minutes 90` sets it yourself.
 
@@ -28,8 +41,7 @@ Every mark remembers who set it and the provider's message. `aims status` and th
 
 ## Before a session starts
 
-Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If none is usable it starts the preferred one anyway, with a warning, so you still see the tool's own message. A five-hour limit you chose to [wait out](#the-five-hour-limit) does not make an account unusable: aims starts it and says it is waiting.
-
+Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If every account is limited, it starts the one that resets first and says when it is back (`claude: every account is limited; using work, the first back (in 30m)`). If no reset time is known, it starts the preferred one anyway, with a warning, so you still see the tool's own message.
 `@profile` means "this account, no matter what": aims warns if it looks unusable but does not switch.
 
 ## During a headless run
@@ -41,21 +53,35 @@ A headless run (`claude -p`, `codex exec`, or the `aims_run` MCP tool) that fail
 | `claude -p --output-format stream-json`, `codex exec --json` | limit or login, no tool call seen | yes | the stream shows every tool call, and there was none |
 | same | limit or login, after a tool call | no | the run may already have edited files or run commands |
 | plain text or `json` | limit or login | no | the output does not show whether tools ran |
-| any | a five-hour limit you chose to [wait out](#the-five-hour-limit) | no | the account is waiting for its reset, not out |
 
-When it does not repeat a run, aims says so, and the next run goes to another account (or, for a five-hour limit that is waited out, back to the same one). Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
+When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
 
 Errors are read only from the tool's own error output and final status, never from the model's answer or your prompt, so a prompt about rate limits does not trigger a failover.
 
 ## In an interactive session
 
-A running session cannot change its login. Claude Code and Codex read the login once, when they start, and aims only starts them: it is not a proxy between the tool and the provider, so it cannot move a request that is already under way to another account. When Claude Code or Codex reports a limit in the middle of a conversation, end the session (`esc`, then `/exit` or `ctrl+c` twice) and run:
+A session started with `aims claude` or `aims codex` without `@profile` is supervised and moves by itself. Plain `claude`, `aims claude@work`, a Claude Code session in a worktree (`-w`) or tmux (`--tmux`), and tools started without aims are not: they keep the login they started with, because Claude Code and Codex read it once, when they start. A conversation only moves to accounts that share its history (the default); one with its own history stays put.
+
+When the account of a supervised session hits a usage limit or its login dies, aims stops the tool and starts it again on the next usable account. It resumes the same conversation (`--resume <id>` for Claude Code, `codex resume <id>` for Codex) with the prompt "continue". Every option you passed is kept; your original prompt is not sent again. aims says what it did:
+
+```text
+› claude: personal hit its usage limit; continuing this conversation on work
+› claude: personal works again; this conversation goes back to it
+```
+
+- **Going back.** Once a turn ends and the first account works again, aims moves the conversation back to it. No prompt is sent, and a turn you have already started is never cut short for it.
+- **Before the limit.** If the account is at the threshold (95% by default) when a turn ends, the conversation moves on before the hard limit.
+- **Every account limited.** aims waits for the first reset, a minute after it so the tool's own automatic continue wins, and continues on that account.
+
+How aims knows: for Claude Code it passes `--settings` with UserPromptSubmit, Stop and StopFailure hooks to each session (your settings files are not changed, and a `--settings` you pass is merged). For Codex it follows the conversation's rollout file under `sessions/`, and starts `codex` with `-c features.daemon_auto_start=false` so the conversation lives in the process aims stops.
+
+For the sessions that do not move, end the session (`esc`, then `/exit` or `ctrl+c` twice) and run:
 
 ```bash
 aims failover claude --resume
 ```
 
-It marks the account you used last and continues the same conversation on the next one. With history shared (the default) the new session reads the whole conversation, so the context is all there; only work that was cut off, such as a background agent that failed on the limit, has to be asked for again. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts, or stay on it with [`stay`](#the-five-hour-limit). `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
+It marks the account you used last and continues the same conversation on the next one. With history shared (the default) the new session reads the whole conversation, so the context is all there; only work that was cut off, such as a background agent that failed on the limit, has to be asked for again. The active account stays as it is: new sessions use the next one while the mark lasts and come back on their own when it lifts. `--to <profile>` makes another account active instead, as `aims use` would. Inside the session, the model can do the first part itself through the [MCP server](../ai-integration#mcp-server) and then tell you the command to continue.
 
 With the [status line](../ai-integration#status-line) on, Claude Code shows the plan usage of the running account, and suggests `aims failover claude` with the next account's name once a window passes the threshold.
 
@@ -71,7 +97,7 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 
 ## Order
 
-`aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again (or stay on the stand-in, with [`stay`](#the-five-hour-limit)). To use personal and fall back on work:
+`aims status` lists each tool's accounts in failover order, the active one first. While the active account is limited or logged out, new sessions use the next usable one in this order, tagged `standing in for <active>`, and return to the active one once it works again. To use personal and fall back on work:
 
 ```bash
 aims order personal work            # every tool that has both
@@ -80,41 +106,6 @@ aims order                          # asks, shows the order, saves it once you c
 ```
 
 The first account named becomes the active one. `aims use` moves an account to the front the same way.
-
-## The five-hour limit
-
-Claude Code and Codex plans have a five-hour window and a weekly one. `aims order` asks what to do when the first account uses up its five-hour window, and then, if it switches, what to do once that window resets:
-
-```text
-◆  When personal uses up its 5-hour limit?
-   1. Switch to work        new sessions go on with work
-   2. Wait for the reset    only the weekly limit or a login problem switches
-
-◆  And once personal's limit resets?
-   1. Go back to personal   work only stands in until then
-   2. Stay on work          work becomes the active account
-```
-
-| Answer | What new sessions do |
-| --- | --- |
-| Switch, go back (the default) | use work while personal's five-hour window is used up, and personal again once it resets |
-| Switch, stay | use work, which becomes the active account and stays so after personal resets. When work is out in turn, they move to personal, which becomes active again. |
-| Wait | stay on personal until its five-hour window resets. Only the weekly limit or a login problem moves them to work. |
-
-In a script, `aims order --five-hour switch|wait --after-reset back|stay`, with or without an order. Both apply to every tool, and both are `fiveHour` and `stay` in the [settings](#settings).
-
-While personal waits for the reset, `aims status` and the status line show it as `waiting`, and a new session says so and names the account it would otherwise use:
-
-```text
-› claude: "personal" waits for its 5-hour reset (5h at 100% for 3h20m) instead of failing over
-  another account now: aims claude@work
-```
-
-A headless run that fails on the five-hour limit is then not repeated on another account. `aims failover` (or `f` in the dashboard, or the AI's `aims_failover`) still marks and switches when you run it: it is you deciding.
-
-With `stay`, the account that takes over is the next one in failover order, whatever a terminal is pinned to, and a pick that only passed over an account resting from a [short rate limit](#when-an-account-counts-as-unusable) just stands in: that account is back in minutes.
-
-aims tells the five-hour limit from the weekly one by the provider's message ("session limit" and "5-hour limit" are the five-hour one) or, when the message does not say, by which window the last usage report shows used up. A limit it cannot place counts as a reason to switch.
 
 ## Settings
 
@@ -125,9 +116,7 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
   "failover": {
     "auto": true,
     "threshold": 95,
-    "cooldownMinutes": 300,
-    "fiveHour": true,
-    "stay": false
+    "cooldownMinutes": 300
   }
 }
 ```
@@ -137,8 +126,28 @@ In `~/.aims/config.json` (see [Configuration](../configuration)):
 | `auto` | `true` | Pick another account when the preferred one is unusable. With `false`, aims warns but starts the preferred one. |
 | `threshold` | `95` | Usage percentage of a window that counts as "near limit". |
 | `cooldownMinutes` | `300` | How long a limit mark lasts when the reset time is unknown. |
-| `fiveHour` | `true` | Switch when the five-hour window is used up. With `false`, only the weekly limit and login problems switch; sessions wait for the five-hour reset on the same account. |
-| `stay` | `false` | The account that takes over becomes the active one, so new sessions stay on it after the other works again. A terminal pinned with `aims env` still goes back to its pin. |
+
+## Keeping logins alive
+
+A login lasts while it is used: the tool renews its short-lived access token on the next request after it runs out. An account left alone for days can lose its login. `aims keepalive` renews every login whose access token has run out or is within 10 minutes of it, through the tool itself. A fresh login costs nothing.
+
+```text
+claude/work: renewed
+claude/personal: fresh for 1h12m
+codex/work: the login has lapsed (...)
+```
+
+Codex renews without a request to the model (its app server reads the account with a refresh). Claude Code has no such way, so aims sends a one-word prompt to its smallest model, the same check as `aims status --live`.
+
+`aims keepalive on` runs it every hour in the background and `aims keepalive off` stops it:
+
+| System | Uses |
+| --- | --- |
+| macOS | launchd: `~/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist`, output in `~/.aims/keepalive.log` |
+| Linux | a systemd user timer: `~/.config/systemd/user/aims-keepalive.timer`, output in the journal. It runs while you are logged in, or always after `loginctl enable-linger` |
+| Windows | the Task Scheduler: task `aims keepalive` |
+
+It records your `PATH` so the background run finds `claude` and `codex`. `aims setup --keepalive` and `aims init --integrations keepalive` do the same as `on`, `aims doctor` reports whether it is on, and `aims clean` removes it. A login that has lapsed needs `aims login <tool> <profile>`.
 
 ## Undoing a mark
 

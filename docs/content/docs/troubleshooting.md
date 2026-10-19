@@ -29,6 +29,7 @@ Integrations
   ✓ shell integration in ~/.zshrc
   ✓ Claude Code skill
   ✓ Codex skill
+  ✓ login keepalive ~/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
 ```
 
 It checks the tools, every login and shared folder, and the integrations, repairs shared links as it goes, and prints the command for anything left. It exits with 1 when something needs you, so it also works in scripts.
@@ -55,6 +56,10 @@ The [shell integration](../everyday#plain-claude-and-codex) is missing or not lo
 ### A profile shows "limited" but works again
 
 The limit reset early, or the mark was a mistake. `aims clear claude work` removes it, and `aims status --live` checks with the provider.
+
+### A login lapsed after weeks of not using an account
+
+The tool could not renew it. Run `aims login <tool> <profile>`, and `aims keepalive on` so it does not happen again; see [Keeping logins alive](../failover#keeping-logins-alive).
 
 ### "shared 'settings.json': points to …, not the shared folder"
 

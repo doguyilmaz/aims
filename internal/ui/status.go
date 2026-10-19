@@ -30,12 +30,6 @@ func State(s *Styles, p ops.ProfileStatus) string {
 	switch {
 	case p.LoggedIn != nil && !*p.LoggedIn:
 		return s.Bad.Render("not logged in")
-	case p.Usable && len(p.Waiting) > 0:
-		// At its five-hour limit, which new sessions wait out on it.
-		if p.WaitsUntil.IsZero() {
-			return s.Warn.Render("waiting")
-		}
-		return s.Warn.Render("waiting " + profiles.Duration(time.Until(p.WaitsUntil)))
 	case p.Usable && p.LoggedIn == nil:
 		return s.OK.Render("ready") + s.Dim.Render("?")
 	case p.Usable:
@@ -46,12 +40,12 @@ func State(s *Styles, p ops.ProfileStatus) string {
 			return s.Bad.Render("login expired")
 		}
 	}
-	if !p.Until.IsZero() {
+	if !p.ReadyAt.IsZero() {
 		word := "limited "
-		if p.Reason == "busy" {
+		if p.Reason == "busy" && p.ReadyAt.Equal(p.Until) {
 			word = "busy "
 		}
-		return s.Warn.Render(word + profiles.Duration(time.Until(p.Until)))
+		return s.Warn.Render(word + profiles.Duration(time.Until(p.ReadyAt)))
 	}
 	if len(p.Reasons) > 0 {
 		return s.Warn.Render("near limit") // a usage window is over the threshold; the bar shows which
@@ -256,12 +250,6 @@ func PlainStatus(report []ops.ToolStatus) string {
 				mark = "*"
 			}
 			state := "ready"
-			if len(p.Waiting) > 0 {
-				state = "at its 5-hour limit, new sessions wait for the reset (" + strings.Join(p.Waiting, ", ") + ")"
-				if p.MarkedBy != "" {
-					state += " (marked by " + p.MarkedBy + ")"
-				}
-			}
 			if !p.Usable {
 				state = strings.Join(p.Reasons, ", ")
 				if p.MarkedBy != "" {
@@ -277,7 +265,7 @@ func PlainStatus(report []ops.ToolStatus) string {
 			}
 			fmt.Fprintf(&b, "  %s %s: %s, %s", mark, p.Name, acct, state)
 			for _, w := range p.Usage {
-				if !slices.ContainsFunc(slices.Concat(p.Reasons, p.Waiting), func(r string) bool { return strings.HasPrefix(r, w.Label+" at ") }) {
+				if !slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.HasPrefix(r, w.Label+" at ") }) {
 					fmt.Fprintf(&b, ", %s %.0f%%", w.Label, w.Percent)
 				}
 			}

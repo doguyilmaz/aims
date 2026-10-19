@@ -16,6 +16,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 )
 
 var (
@@ -85,15 +87,70 @@ func relay(cmd *exec.Cmd, forwardInt bool) (stop func()) {
 
 // RunAttached runs bin with the terminal attached and returns its exit status.
 func RunAttached(bin string, args, env []string, dir string) (int, error) {
+	a, err := StartAttached(bin, args, env, dir)
+	if err != nil {
+		return 127, err
+	}
+	<-a.Done()
+	return a.Code(), nil
+}
+
+// Attached is a tool running with the terminal attached.
+type Attached struct {
+	cmd   *exec.Cmd
+	done  chan struct{}
+	code  int
+	term  *term.State
+	stdin int
+}
+
+// StartAttached starts bin with the terminal attached.
+func StartAttached(bin string, args, env []string, dir string) (*Attached, error) {
 	cmd := exec.Command(bin, args...)
 	cmd.Env, cmd.Dir = env, dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	a := &Attached{cmd: cmd, done: make(chan struct{}), stdin: int(os.Stdin.Fd())}
+	if term.IsTerminal(a.stdin) {
+		a.term, _ = term.GetState(a.stdin)
+	}
 	if err := cmd.Start(); err != nil {
-		return 127, err
+		return nil, err
 	}
 	stop := relay(cmd, false)
-	defer stop()
-	return ExitCode(cmd.Wait()), nil
+	go func() {
+		a.code = ExitCode(cmd.Wait())
+		stop()
+		close(a.done)
+	}()
+	return a, nil
+}
+
+// Done is closed when the tool has exited.
+func (a *Attached) Done() <-chan struct{} { return a.done }
+
+// Code is the exit status, once Done is closed.
+func (a *Attached) Code() int { return a.code }
+
+// resetModes turns off what a full-screen tool may leave on:
+// the alternate screen, hidden cursor, bracketed paste, focus and mouse
+// reporting, the kitty keyboard protocol, colours.
+const resetModes = "\x1b[?1049l\x1b[?25h\x1b[?2004l\x1b[?1004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[<u\x1b[0m\r\n"
+
+// Stop asks the tool to quit, kills it after grace, and puts the terminal
+// back the way it was before the tool started: a tool stopped from outside
+// may not clean up after itself.
+func (a *Attached) Stop(grace time.Duration) {
+	_ = terminate(a.cmd.Process)
+	select {
+	case <-a.done:
+	case <-time.After(grace):
+		_ = a.cmd.Process.Kill()
+		<-a.done
+	}
+	if a.term != nil {
+		_ = term.Restore(a.stdin, a.term)
+		_, _ = io.WriteString(os.Stdout, resetModes)
+	}
 }
 
 // CommitAfter is how long headless stdout is held back. Limit and login errors

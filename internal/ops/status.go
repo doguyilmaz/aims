@@ -26,13 +26,11 @@ type ProfileStatus struct {
 	LoggedIn *bool    `json:"loggedIn"`
 	Usable   bool     `json:"usable"`
 	Reasons  []string `json:"reasons,omitempty"`
-	// Waiting lists five-hour limits a usable profile is waiting out instead
-	// of failing over (failover.fiveHour off), until WaitsUntil if known.
-	Waiting    []string      `json:"waiting,omitempty"`
-	WaitsUntil time.Time     `json:"waitsUntil,omitzero"`
-	Usage      []tool.Window `json:"usage,omitempty"`
-	UsageAt    time.Time     `json:"usageAt,omitzero"`
-	Until      time.Time     `json:"until,omitzero"`
+	// ReadyAt is when an unusable profile works again, if known.
+	ReadyAt time.Time     `json:"readyAt,omitzero"`
+	Usage   []tool.Window `json:"usage,omitempty"`
+	UsageAt time.Time     `json:"usageAt,omitzero"`
+	Until   time.Time     `json:"until,omitzero"`
 	// Reason ("limit", "busy"), MarkedBy and Detail explain a mark.
 	Reason   string    `json:"reason,omitempty"`
 	MarkedBy string    `json:"markedBy,omitempty"`
@@ -96,7 +94,7 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			Existing: p.Existing, Share: p.ShareMode(), Dir: cfg.Dir(id, ev.Name),
 			Email: ev.Account.Email, Plan: ev.Account.Plan, Method: ev.Account.Method,
 			LoggedIn: ev.Account.LoggedIn, Usable: ev.Usable, Reasons: ev.Reasons,
-			Waiting: ev.Waiting, WaitsUntil: ev.WaitsUntil, LastUsed: ps.LastUsedAt,
+			ReadyAt: ev.ReadyAt, LastUsed: ps.LastUsedAt,
 		}
 		if ps.Account != nil {
 			if row.Email == "" {

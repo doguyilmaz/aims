@@ -30,6 +30,7 @@ Before each launch aims checks the profile's links and repairs any the tool repl
 | Logins | whether a login file (or keychain entry) exists; the e-mail and plan stored next to it | never; the tools write their own logins |
 | Tool settings | Claude Code's `.claude.json` (MCP servers, project trust) to seed a new profile | the aims MCP server and status line entries, when you run `aims setup` |
 | Your shell | nothing | one marked block in your rc file, when you run `aims setup --shell` |
+| Background job | nothing | an hourly `aims keepalive` job (launchd, systemd or Task Scheduler), only after `aims keepalive on` |
 | aims' own files | `~/.aims` | `~/.aims` |
 
 The Codex login's ID token is decoded locally for the e-mail and plan name. It is never verified against or sent to anything.

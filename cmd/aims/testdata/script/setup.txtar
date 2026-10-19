@@ -66,7 +66,7 @@ exec aims statusline
 stdout '^mine  work ▰▰▰▰▰  97% ↻[0-9dhm]+ · 7d 20% → personal$'
 env CLAUDE_CONFIG_DIR=
 exec aims status claude
-stdout 'work .*near limit'
+stdout 'work .*limited [0-9]'
 
 # clean puts every file back the way it was.
 exec aims clean -y

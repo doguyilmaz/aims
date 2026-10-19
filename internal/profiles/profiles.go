@@ -156,13 +156,12 @@ type Evaluation struct {
 	Name    string
 	Usable  bool
 	Reasons []string
-	// Waiting lists limits the profile waits out instead of failing over:
-	// five-hour ones, when failover.fiveHour is off. WaitsUntil is when the
-	// last of them resets, if known.
-	Waiting    []string
-	WaitsUntil time.Time
-	Account    tool.Account
-	State      *config.ProfileState
+	// ReadyAt is when the last limit keeping the profile unusable resets.
+	// It is zero when the profile is usable, or when something without a
+	// known end (a dead login, a limit without a reset time) keeps it out.
+	ReadyAt time.Time
+	Account tool.Account
+	State   *config.ProfileState
 }
 
 // Busy reports whether a short rate limit is all that keeps the profile from
@@ -177,11 +176,12 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	acct := a.Account(ctx, Home(cfg, a, name))
 	ev := Evaluation{Name: name, Account: acct, State: ps}
 	now := config.Now()
+	open := false // something keeps the profile out with no known end
 	switch {
 	case acct.LoggedIn != nil && !*acct.LoggedIn:
-		ev.Reasons = append(ev.Reasons, "not logged in")
+		ev.Reasons, open = append(ev.Reasons, "not logged in"), true
 	case ps.NeedsLogin:
-		ev.Reasons = append(ev.Reasons, "login expired")
+		ev.Reasons, open = append(ev.Reasons, "login expired"), true
 	}
 	if ps.Until.After(now) {
 		reason := ps.Reason
@@ -191,31 +191,27 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		case reason == "limit" && ps.Window != "":
 			reason = ps.Window + " limit"
 		}
-		r := reason + " for " + Duration(ps.Until.Sub(now))
-		if ps.Reason == "busy" || cfg.Failover.Counts(ps.Window) {
-			ev.Reasons = append(ev.Reasons, r)
-		} else {
-			ev.Waiting = append(ev.Waiting, r)
-			ev.WaitsUntil = later(ev.WaitsUntil, ps.Until)
-		}
+		ev.Reasons = append(ev.Reasons, reason+" for "+Duration(ps.Until.Sub(now)))
+		ev.ReadyAt = later(ev.ReadyAt, ps.Until)
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
 			if w.Percent >= cfg.Failover.Threshold && (w.ResetsAt.IsZero() || w.ResetsAt.After(now)) {
 				r := fmt.Sprintf("%s at %.0f%%", w.Label, w.Percent)
-				if !w.ResetsAt.IsZero() {
-					r += " for " + Duration(w.ResetsAt.Sub(now))
-				}
-				if cfg.Failover.Counts(w.Label) {
-					ev.Reasons = append(ev.Reasons, r)
+				if w.ResetsAt.IsZero() {
+					open = true
 				} else {
-					ev.Waiting = append(ev.Waiting, r)
-					ev.WaitsUntil = later(ev.WaitsUntil, w.ResetsAt)
+					r += " for " + Duration(w.ResetsAt.Sub(now))
+					ev.ReadyAt = later(ev.ReadyAt, w.ResetsAt)
 				}
+				ev.Reasons = append(ev.Reasons, r)
 			}
 		}
 	}
 	ev.Usable = len(ev.Reasons) == 0
+	if open {
+		ev.ReadyAt = time.Time{}
+	}
 	return ev
 }
 
@@ -242,14 +238,15 @@ func EvaluateAll(ctx context.Context, cfg *config.Config, st config.State, a too
 	return out
 }
 
-// Pick returns the first usable profile, trying preferred and then the
-// configured order, skipping exclude. Name is "" when none is usable.
+// Pick is the profile a session should use: the first usable one, trying
+// preferred and then the configured order, skipping exclude. Name is "" when
+// none is usable; Soonest is then the skipped profile that works again first,
+// "" when no reset time is known.
 type Pick struct {
 	Name    string
 	Skipped []Evaluation
-	// Waiting is the chosen profile's: limits it is used through, waiting
-	// for their reset, instead of failing over.
-	Waiting []string
+	Soonest string
+	ReadyAt time.Time
 }
 
 // Choose finds the profile a new session should use.
@@ -265,10 +262,13 @@ func Choose(ctx context.Context, cfg *config.Config, st config.State, a tool.Ada
 	for _, n := range candidates {
 		ev := Evaluate(ctx, cfg, st, a, n)
 		if ev.Usable {
-			p.Name, p.Waiting = n, ev.Waiting
+			p.Name = n
 			return p
 		}
 		p.Skipped = append(p.Skipped, ev)
+		if !ev.ReadyAt.IsZero() && (p.Soonest == "" || ev.ReadyAt.Before(p.ReadyAt)) {
+			p.Soonest, p.ReadyAt = n, ev.ReadyAt
+		}
 	}
 	return p
 }
@@ -299,15 +299,8 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 		now := config.Now()
 		until := l.ResetsAt
 		if until.IsZero() && l.For == 0 {
-			var inherit time.Time
-			if ps.Until.After(now) {
-				ok, keepEnd := outweighs(cfg, l, ps)
-				if !ok {
-					return
-				}
-				if keepEnd {
-					inherit = ps.Until
-				}
+			if ps.Until.After(now) && !outweighs(l, ps) {
+				return
 			}
 			if ps.Usage != nil {
 				for _, w := range ps.Usage.Windows {
@@ -315,9 +308,6 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 						until = w.ResetsAt
 					}
 				}
-			}
-			if until.IsZero() {
-				until = inherit
 			}
 		}
 		if until.IsZero() {
@@ -338,21 +328,15 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 
 // outweighs reports whether a new limit without a reset time replaces the
 // live mark ps: a plan limit outlasts a short rate limit, a weekly limit a
-// five-hour one, and a limit that counts one that is waited out
-// (failover.fiveHour off). In the last case the new mark keeps the old end,
-// which is still the best guess.
-func outweighs(cfg *config.Config, l Limit, ps *config.ProfileState) (ok, keepEnd bool) {
+// five-hour one.
+func outweighs(l Limit, ps *config.ProfileState) bool {
 	switch {
 	case l.Reason == "busy":
-		return false, false
+		return false
 	case ps.Reason == "busy":
-		return true, false
-	case l.Window != "" && !tool.ShortWindow(l.Window) && tool.ShortWindow(ps.Window):
-		return true, false
-	case !cfg.Failover.Counts(ps.Window) && cfg.Failover.Counts(l.Window):
-		return true, true
+		return true
 	}
-	return false, false
+	return l.Window != "" && !tool.ShortWindow(l.Window) && tool.ShortWindow(ps.Window)
 }
 
 // MarkNeedsLogin records that a profile's login stopped working.
@@ -422,7 +406,35 @@ func RecordAccount(id tool.ID, name, email, plan string) error {
 
 // Live asks the provider about a profile and stores what it learned.
 func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	p := a.Probe(ctx, Home(cfg, a, name))
+	return record(cfg, a, name, a.Probe(ctx, Home(cfg, a, name)))
+}
+
+// RefreshDue is how close to running out a login's access token must be for
+// KeepAlive to renew it.
+const RefreshDue = 10 * time.Minute
+
+// KeepAlive renews a login whose access token has run out or is about to, so
+// a refresh token does not lapse while the account is not used. It makes no
+// request for a login that is fresh, logged out or of unknown age, and
+// reports whether it renewed this one.
+func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, tool.Account, bool) {
+	h := Home(cfg, a, name)
+	acct := a.Account(ctx, h)
+	if acct.LoggedIn == nil || !*acct.LoggedIn || acct.Expires.IsZero() || acct.Expires.After(config.Now().Add(RefreshDue)) {
+		return tool.Probe{}, acct, false
+	}
+	var p tool.Probe
+	if r, ok := a.(tool.Refresher); ok {
+		p = r.Refresh(ctx, h)
+	} else {
+		p = a.Probe(ctx, h)
+	}
+	record(cfg, a, name, p)
+	return p, a.Account(ctx, h), true
+}
+
+// record keeps what a probe found: usage, a limit, a dead login.
+func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
 	id := a.ID()
 	if len(p.Windows) > 0 {
 		_ = RecordUsage(id, name, p.Windows, "live")

@@ -1,0 +1,43 @@
+[windows] skip 'stops the tool with SIGTERM and runs hooks with sh'
+# Setup: personal (existing login) and work, both logged in.
+exec codex login
+exec aims init --yes --tools codex --integrations none
+exec aims login codex work
+env FAKE_LINGER=2500ms
+
+# personal hits its usage limit mid-session: aims stops codex and resumes the
+# same conversation on work, keeping the options.
+cp LIMITED $HOME/.codex/LIMITED
+exec aims codex -m gpt-5 -s workspace-write 'fix it'
+stdout 'codex interactive as default args=\["-m" "gpt-5" "-s" "workspace-write" "fix it"\]'
+stdout 'codex stopped as default'
+stderr 'codex: personal hit its usage limit; continuing this conversation on work'
+stdout 'codex interactive as work args=\["-m" "gpt-5" "-s" "workspace-write" "resume" "c-default" "--" "continue"\]'
+! stdout 'stopped as work'
+exec aims status codex
+stdout 'personal .*limited .*marked by a session'
+
+# Once personal works again, the conversation goes back to it after a turn.
+env FAKE_BEFORE_TURN='aims clear codex personal'
+rm $HOME/.codex/LIMITED
+exec aims codex resume c-default
+stdout 'codex interactive as work args=\["resume" "c-default"\]'
+stderr 'codex: personal works again; this conversation goes back to it'
+stdout 'codex interactive as default args=\["resume" "c-default"\]'
+env FAKE_BEFORE_TURN=
+
+# A dead login moves it on too.
+cp LIMITED $HOME/.codex/EXPIRED
+exec aims codex resume c-default
+stderr 'codex: personal hit a login error; continuing this conversation on work'
+exec aims status codex
+stdout 'personal .*login expired'
+
+# Other commands are not followed.
+rm $HOME/.codex/EXPIRED
+exec aims login codex personal
+exec aims codex login status
+stdout 'Logged in'
+! stdout 'interactive'
+
+-- LIMITED --

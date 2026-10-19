@@ -12,12 +12,19 @@ logout, and a conversation started on one account can continue on another.
 
 ## What a running session can and cannot do
 
-- **This session's account is fixed.** A running `claude` or `codex` keeps the
-  login it started with. Env `AIMS_SESSION_PROFILE` names it (`claude:work`,
+- Env `AIMS_SESSION_PROFILE` names this session's account (`claude:work`,
   `codex:personal`); unset means the session was not started through aims.
-- `aims use` and `aims failover` change the account of **new** sessions. To
-  move this conversation, the user exits and runs `aims claude --continue` or
-  `aims codex resume --last`; `aims failover claude --resume` does both.
+- **A session started with `aims claude` or `aims codex` (no `@profile`) moves
+  on its own** (env `AIMS_RUN` is set): when its account hits a limit or its login
+  dies, aims restarts it on the next usable account and continues the
+  conversation; once the first account works again, aims moves it back after a
+  turn. When every account is limited, it waits for the first reset and goes
+  on. Nothing to do; tell the user what happened if they ask.
+- Any other running session (`aims claude@work`, plain `claude` or `codex`) keeps
+  the login it started with. `aims use` and `aims failover` change the account
+  of **new** sessions. To move such a conversation, the user exits and runs
+  `aims claude --continue` or `aims codex resume --last`;
+  `aims failover claude --resume` does both.
 - To use another account **right now**, run a self-contained task with it:
   the `aims_run` MCP tool (read-only unless you pass `write: true`), or
   `aims claude@work -p "..."` / `aims codex@work exec "..."`.
@@ -45,17 +52,14 @@ Otherwise use the CLI:
 
 ## Limits and login errors
 
-1. **Usage limit.** Call `aims_failover` (or `aims failover <tool>`), then tell
-   the user which account new sessions use now, as its answer says, and how to
+1. **Usage limit.** In a session aims moves on its own (above), do nothing.
+   Otherwise call `aims_failover` (or `aims failover <tool>`), then tell the
+   user which account new sessions use now, as its answer says, and how to
    continue (`aims claude --continue`). Once the limit resets, new sessions
-   return to the active account on their own, unless aims is set to stay on the
-   one that took over (`failover.stay`). Headless runs started through aims move
+   return to the active account on their own. Headless runs started through aims move
    to the next account on their own, but only when the failed attempt did
    nothing; otherwise the account is marked and the next run uses another one.
    Check what a failed run already changed before running it again.
-   If aims is set to wait out the 5-hour limit (`failover.fiveHour` off), a
-   5-hour limit keeps new sessions on the same account until the reset: tell
-   the user, and call `aims_failover` only if they want to switch anyway.
 2. **Dead login** ("Please run /login", "OAuth token revoked", "refresh token
    was already used"). Call `aims_failover` with `reason: "login"` so new
    sessions avoid the account, and give the user `aims login <tool> <profile>`.

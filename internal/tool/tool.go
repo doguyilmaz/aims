@@ -72,6 +72,60 @@ type StatusLiner interface {
 	RemoveStatusLine(home, command, previous string) (removed bool, err error)
 }
 
+// Supervisor lets aims move a running interactive session to another
+// account: aims stops the tool when the session's account hits a limit and
+// starts it again on another one, resuming the same conversation.
+type Supervisor interface {
+	// Supervises reports whether args start an interactive conversation
+	// (not a subcommand such as mcp or login).
+	Supervises(args []string) bool
+	// Watch returns the args to start the session with, and poll, which
+	// reports the turns that ended since it was last called.
+	Watch(w Watch) (args []string, poll func() []SessionEvent, err error)
+	// ResumeArgs turns args into ones that resume conversation id instead of
+	// starting one, and send prompt first when it is not "".
+	ResumeArgs(bin string, args []string, id, prompt string) ([]string, error)
+}
+
+// Watch describes a supervised run.
+type Watch struct {
+	Args []string
+	// Self is the path of aims, for hooks that report back to it.
+	Self string
+	// RunDir is the run's own directory, AIMS_RUN in the tool's environment.
+	RunDir string
+	Home   Home
+	// Dir is the working directory; "" is aims' own.
+	Dir string
+	// Since is when this run started.
+	Since time.Time
+}
+
+// SessionEvent is the start or the end of a turn in a supervised session.
+type SessionEvent struct {
+	// Session is the conversation id.
+	Session string `json:"session"`
+	// Started: a turn began (the user sent a prompt).
+	Started bool `json:"started,omitempty"`
+	// Failure is why the turn failed, when another account can help; Text
+	// is the provider's message.
+	Failure Failure `json:"failure,omitempty"`
+	Text    string  `json:"text,omitempty"`
+}
+
+// Hooker reads what a tool passes to the hook `aims hook <tool>`.
+type Hooker interface {
+	// HookEvent returns the start or end of a turn; ok is false for anything
+	// else.
+	HookEvent(raw []byte) (ev SessionEvent, ok bool)
+}
+
+// Refresher renews a login through the tool's own refresh, without a paid
+// request, and reports on it like Probe.
+type Refresher interface {
+	Refresh(ctx context.Context, h Home) Probe
+}
+
 // Layout is where a tool keeps its state and which parts accounts can share.
 type Layout struct {
 	// Bin is the command name; BinEnv overrides it.
@@ -174,6 +228,9 @@ type Account struct {
 	Email    string
 	Plan     string
 	Org      string
+	// Expires is when the login's access token runs out; the tool renews it
+	// on its next request after that. Zero when unknown.
+	Expires time.Time
 }
 
 // Known reports a definite login state.

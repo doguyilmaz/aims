@@ -18,7 +18,7 @@ import (
 // shell line) and forgets its settings and marks. Logins and account folders
 // stay, so `aims init` brings everything back without logging in again.
 func Clean(ctx context.Context) ([]Step, error) {
-	steps, err := Uninstall(ctx, Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect()})
+	steps, err := Uninstall(ctx, Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect(), KeepAlive: true})
 	if err != nil {
 		return steps, err
 	}

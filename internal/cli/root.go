@@ -155,8 +155,8 @@ aims status --live`,
 	}
 	add("accounts", newAddCmd(), newFailoverCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
 	add("connect", newSetupCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
-	add("maintain", newDoctorCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
-	root.AddCommand(newStatusLineCmd())
+	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
+	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {

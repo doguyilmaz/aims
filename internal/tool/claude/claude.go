@@ -116,6 +116,7 @@ type oauth struct {
 	AccessToken      string `json:"accessToken"`
 	RefreshToken     string `json:"refreshToken"`
 	SubscriptionType string `json:"subscriptionType"`
+	ExpiresAt        int64  `json:"expiresAt"` // Unix milliseconds
 }
 
 func keychainAccount() string {
@@ -183,6 +184,9 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 		acct.Method = "claude.ai"
 		if o != nil {
 			acct.Plan = o.SubscriptionType
+			if o.ExpiresAt > 0 {
+				acct.Expires = time.UnixMilli(o.ExpiresAt)
+			}
 		}
 	}
 	return acct

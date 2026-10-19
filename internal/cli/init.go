@@ -79,7 +79,7 @@ aims init --yes --current personal --second work --share settings`,
 	f.StringVar(&o.current, "current", o.current, "name for the login you already have")
 	f.StringVar(&o.second, "second", o.second, "name for your other account")
 	f.StringVar(&o.share, "share", o.share, "what accounts share: all, settings or none")
-	f.StringVar(&o.integrations, "integrations", o.integrations, "skill, mcp, statusline, shell (comma-separated), all or none")
+	f.StringVar(&o.integrations, "integrations", o.integrations, "skill, mcp, statusline, shell, keepalive (comma-separated), all or none")
 	return cmd
 }
 
@@ -378,6 +378,7 @@ func askIntegrations(r *ui.Rail, inst []found) (ops.Integrations, error) {
 	if rc != "" {
 		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " follow the active account", Value: "shell", Hint: fsx.Tildify(rc), Short: "shell integration"})
 	}
+	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive", Hint: "an hourly check renews a login only when it runs out", Short: "login keepalive"})
 	picked := make([]string, len(opts))
 	for i, o := range opts {
 		picked[i] = o.Value
@@ -385,7 +386,7 @@ func askIntegrations(r *ui.Rail, inst []found) (ops.Integrations, error) {
 	if err := r.MultiSelect("Connect aims to your tools", "Space toggles, Enter confirms.", opts, &picked); err != nil {
 		return ops.Integrations{}, err
 	}
-	in := ops.Integrations{Skill: slices.Contains(picked, "mcp"), MCP: slices.Contains(picked, "mcp"), StatusLine: slices.Contains(picked, "statusline")}
+	in := ops.Integrations{Skill: slices.Contains(picked, "mcp"), MCP: slices.Contains(picked, "mcp"), StatusLine: slices.Contains(picked, "statusline"), KeepAlive: slices.Contains(picked, "keepalive")}
 	if slices.Contains(picked, "shell") {
 		in.Shell = sh
 	}
@@ -393,7 +394,7 @@ func askIntegrations(r *ui.Rail, inst []found) (ops.Integrations, error) {
 }
 
 func applyIntegrations(ctx context.Context, r *ui.Rail, in ops.Integrations) {
-	if !in.Skill && !in.MCP && !in.StatusLine && in.Shell == "" {
+	if !in.Skill && !in.MCP && !in.StatusLine && in.Shell == "" && !in.KeepAlive {
 		return
 	}
 	var steps []ops.Step
@@ -592,7 +593,7 @@ func parseIntegrations(list string) (ops.Integrations, error) {
 	for _, part := range strings.Split(list, ",") {
 		switch strings.TrimSpace(part) {
 		case "all":
-			in = ops.Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect()}
+			in = ops.Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect(), KeepAlive: true}
 		case "skill":
 			in.Skill = true
 		case "mcp":
@@ -601,6 +602,8 @@ func parseIntegrations(list string) (ops.Integrations, error) {
 			in.StatusLine = true
 		case "shell":
 			in.Shell = shell.Detect()
+		case "keepalive":
+			in.KeepAlive = true
 		case "none", "":
 		default:
 			return in, fmt.Errorf("unknown integration %q (skill, mcp, statusline, shell, all or none)", part)

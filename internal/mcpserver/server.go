@@ -27,8 +27,10 @@ import (
 )
 
 const instructions = "aims manages several Claude Code and Codex accounts on this machine. " +
-	"A running session cannot change its own account: aims_switch and aims_failover affect sessions started afterwards, " +
-	"and aims_run uses another account right now for a self-contained task. Logins need a browser, so give the user the command from aims_login_help."
+	"aims_switch and aims_failover affect sessions started afterwards. A session started with `aims claude` or `aims codex` (no @profile) moves on its own: " +
+	"at a limit or a dead login aims restarts it on the next account and continues the conversation, and moves it back once the first account works again. " +
+	"Other running sessions keep their account. " +
+	"aims_run uses another account right now for a self-contained task. Logins need a browser, so give the user the command from aims_login_help."
 
 // New builds the server.
 func New(version string) *mcp.Server {
@@ -52,8 +54,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_failover",
 		Description: "The current account hit its usage limit or its login died: mark it (until its reset time, or for `minutes`). " +
-			"New sessions use the next usable account until then and return to the active one on their own, unless aims is set to stay on the one that took over " +
-			"(the answer says which); `to` makes another account active instead. " +
+			"New sessions use the next usable account until then and return to the active one on their own; `to` makes another account active instead. " +
 			"Then tell the user to continue the conversation with `aims claude --continue` or `aims codex resume --last`.",
 	}, failoverTool)
 
@@ -66,7 +67,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_run",
 		Description: "Run a self-contained task right now with another account (`claude -p` or `codex exec`), failing over to the next account on a limit or login error " +
-			"when the failed attempt did nothing (not on a 5-hour limit aims is set to wait out). Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
+			"when the failed attempt did nothing. Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
 			"with write=true the tool's own settings decide what it may change. Tool: " + toolList + ".",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, runTool)
@@ -321,9 +322,6 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		head += ", login error"
 	case tool.FailLimit:
 		head += ", usage limit"
-		if res.Waited {
-			head += " (5-hour, waited out: not retried on another account)"
-		}
 	case tool.FailBusy:
 		head += ", rate limited"
 	}

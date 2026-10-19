@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/launch"
 	"github.com/doguyilmaz/aims/internal/mcpserver"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/profiles"
@@ -20,14 +22,15 @@ import (
 )
 
 func newSetupCmd() *cobra.Command {
-	var all, noSkill, noMCP, statusLine bool
+	var all, noSkill, noMCP, statusLine, keepAlive bool
 	var sh, only string
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Connect aims to Claude Code and Codex (skill, MCP server, status line, shell)",
+		Short: "Connect aims to Claude Code and Codex (skill, MCP server, status line, shell, keepalive)",
 		Long: "Installs the aims skill and MCP server so Claude Code and Codex can check and\n" +
 			"switch accounts themselves. --statusline shows the account and plan usage in\n" +
-			"Claude Code; --shell makes plain `claude` and `codex` follow the active account.",
+			"Claude Code; --shell makes plain `claude` and `codex` follow the active account;\n" +
+			"--keepalive renews logins before they lapse unused (see aims keepalive).",
 		Example: `aims setup --all
 aims setup --statusline --shell zsh
 aims setup --tools codex --no-skill`,
@@ -37,7 +40,7 @@ aims setup --tools codex --no-skill`,
 			if err != nil {
 				return err
 			}
-			in := ops.Integrations{Skill: !noSkill, MCP: !noMCP, StatusLine: statusLine || all}
+			in := ops.Integrations{Skill: !noSkill, MCP: !noMCP, StatusLine: statusLine || all, KeepAlive: keepAlive || all}
 			if sh != "" || all {
 				s := shell.Detect()
 				if sh != "" && sh != "auto" {
@@ -55,7 +58,8 @@ aims setup --tools codex --no-skill`,
 			return reportSteps(steps, "restart running sessions to pick these up")
 		},
 	}
-	cmd.Flags().BoolVar(&all, "all", false, "everything: skill, MCP server, status line and shell integration")
+	cmd.Flags().BoolVar(&all, "all", false, "everything: skill, MCP server, status line, shell integration and keepalive")
+	cmd.Flags().BoolVar(&keepAlive, "keepalive", false, "renew logins before they lapse unused")
 	cmd.Flags().BoolVar(&noSkill, "no-skill", false, "skip the skill")
 	cmd.Flags().BoolVar(&noMCP, "no-mcp", false, "skip the MCP server")
 	cmd.Flags().BoolVar(&statusLine, "statusline", false, "show account and plan usage in Claude Code's status line")
@@ -276,6 +280,33 @@ func newStatusLineCmd() *cobra.Command {
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return statusline.Run(cmd.Context(), os.Stdout)
+		},
+	}
+}
+
+// newHookCmd is `aims hook <tool>`, the hook a session aims supervises runs
+// at the end of each turn. Outside such a session it does nothing; it never
+// fails, so it cannot get in the tool's way.
+func newHookCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "hook tool",
+		Short:  "Record the end of a turn for the session's supervisor",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		Run: func(_ *cobra.Command, args []string) {
+			dir := os.Getenv(launch.RunEnv)
+			a, ok := tools.Parse(args[0])
+			if dir == "" || !ok {
+				return
+			}
+			h, ok := a.(tool.Hooker)
+			if !ok {
+				return
+			}
+			raw, _ := launch.ReadStdin(2*time.Second, false)
+			if ev, ok := h.HookEvent(raw); ok {
+				_ = tool.RecordEvent(dir, ev)
+			}
 		},
 	}
 }

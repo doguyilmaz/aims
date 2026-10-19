@@ -6,7 +6,7 @@ weight: 7
 aims can tell Claude Code and Codex which accounts exist and let them act on it: switch the account for new sessions, fail over when this one hits its limit, or hand a self-contained task to another account right now.
 
 ```bash
-aims setup --all          # everything below
+aims setup --all          # everything below, and the login keepalive
 aims setup                # skill and MCP server only
 aims clean                # take it all back out
 ```
@@ -23,12 +23,12 @@ Codex starts MCP servers with only a few variables (`HOME`, `PATH` and the like)
 | --- | --- |
 | `aims_status` | Every account with its login, plan usage and marks, and which account this session runs as. `live: true` asks the providers first. |
 | `aims_switch` | Make a profile active for new sessions of one tool, or of every tool that has it. |
-| `aims_failover` | This account hit its limit or lost its login: mark it, so new sessions use the next one (until it works again, or for good with [`stay`](../failover#the-five-hour-limit)). Answers with the command that continues the conversation there. |
+| `aims_failover` | This account hit its limit or lost its login: mark it, so new sessions use the next one (until it works again). Answers with the command that continues the conversation there. |
 | `aims_clear` | Remove marks from one profile or all of a tool's profiles. |
 | `aims_run` | Run a prompt now with another account (`claude -p` or `codex exec`), with the same [retry rules](../failover#during-a-headless-run) as the CLI. Returns the final answer. Read-only unless the call sets `write`. Gives up after 10 minutes, or `timeoutSeconds` (at most an hour). |
 | `aims_login_help` | The command a person must run to log a profile in. The model cannot complete a browser login, and does not try. |
 
-A session cannot change its own login. The server's instructions say so, so the model tells you to restart (`aims claude --continue`) instead of pretending it switched. Each session started through aims carries `AIMS_SESSION_PROFILE` (for example `claude:work`), which `aims_status` reports and `aims_failover` uses as the account to mark.
+A session started with `aims claude` or `aims codex` (no `@profile`) moves on by itself at a limit; the model has nothing to do. Any other running session cannot change its own login, so the model tells you to restart (`aims claude --continue`) instead of pretending it switched. Each session started through aims carries `AIMS_SESSION_PROFILE` (for example `claude:work`), which `aims_status` reports and `aims_failover` uses as the account to mark.
 
 `aims_run` is read-only by default: Claude Code runs in plan mode and Codex in its read-only sandbox, whatever your settings allow. With `write: true` the run gets your normal settings, which for a headless Claude Code run still excludes anything that would ask for approval. Unless you approved the tool for good, your client shows the call, `write` included, before it runs. A run started this way cannot start another `aims_run`, and when the MCP client disconnects, aims stops any run it started.
 
@@ -57,7 +57,7 @@ Use one or the other. With both, the model sees the tools twice.
 ~/src/app main  work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
 ```
 
-The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account **new** sessions get instead. The running session keeps its account; `aims failover claude --resume` continues its conversation on the next one (see [In an interactive session](../failover#in-an-interactive-session)). When the five-hour limit is [waited out](../failover#the-five-hour-limit), it shows no `→`.
+The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account **new** sessions get instead. The running session keeps its account; aims moves a supervised session by itself, and `aims failover claude --resume` continues any other conversation on the next account (see [In an interactive session](../failover#in-an-interactive-session)).
 
 The usage numbers come from Claude Code itself, which passes them to the status line command. aims records them, which is how it knows to skip an account before the limit hits, at no cost.
 

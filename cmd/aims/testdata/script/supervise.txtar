@@ -1,0 +1,53 @@
+[windows] skip 'stops the tool with SIGTERM and runs hooks with sh'
+# Setup: personal (existing login) and work, both logged in.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+env FAKE_LINGER=2500ms
+
+# personal hits its limit mid-session: aims stops it and continues the same
+# conversation on work, keeping the options and dropping the first prompt.
+cp LIMITED $HOME/.claude/LIMITED
+exec aims claude --model opus --add-dir a b -- hello
+stdout 'claude interactive as default args=\["--model" "opus" "--add-dir" "a" "b" "--" "hello"\]'
+stdout 'claude stopped as default'
+stderr 'claude: personal hit its usage limit; continuing this conversation on work'
+stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
+! stdout 'stopped as work'
+exec aims status claude
+stdout 'personal .*limited .*marked by a session'
+
+# Once personal works again, the conversation goes back to it after a turn.
+env FAKE_BEFORE_TURN='aims clear claude personal'
+rm $HOME/.claude/LIMITED
+exec aims claude -r s-old
+stdout 'claude interactive as work args=\["-r" "s-old"\]'
+stdout 'claude stopped as work'
+stderr 'claude: personal works again; this conversation goes back to it'
+stdout 'claude interactive as default args=\["--resume" "s-old"\]'
+env FAKE_BEFORE_TURN=
+
+# A dead login moves the conversation on too, and marks the account.
+cp LIMITED $HOME/.claude/EXPIRED
+exec aims claude
+stderr 'claude: personal hit a login error; continuing this conversation on work'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+exec aims status claude
+stdout 'personal .*login expired'
+rm $HOME/.claude/EXPIRED
+exec aims login claude personal
+
+# A pinned session keeps its account: nothing watches it.
+cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
+exec aims claude@work
+stdout 'claude interactive as work args=\[\]'
+! stdout 'stopped'
+
+# The user's own --settings keep working, with the hooks merged in.
+rm $HOME/.aims/profiles/claude/work/LIMITED
+cp LIMITED $HOME/.claude/LIMITED
+exec aims claude --settings '{"model":"haiku"}'
+stderr 'continuing this conversation on work'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+
+-- LIMITED --

@@ -313,9 +313,8 @@ func newFailoverCmd() *cobra.Command {
 		Short: "Mark the current account as limited and switch to the next",
 		Long: "Marks the account you used last as limited (until its reset time when aims\n" +
 			"knows it). New sessions use the next usable account until then and come\n" +
-			"back to the active one on their own; with aims order --after-reset stay,\n" +
-			"the next account becomes the active one instead. Conversations are shared,\n" +
-			"so --resume continues the one you just left on the next account.\n\n" +
+			"back to the active one on their own. Conversations are shared, so --resume\n" +
+			"continues the one you just left on the next account.\n\n" +
 			"Without a tool, aims asks which account hit its limit and what happened,\n" +
 			"and offers to continue the conversation.",
 		Example: `aims failover

@@ -13,6 +13,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/profiles"
+	"github.com/doguyilmaz/aims/internal/schedule"
 	"github.com/doguyilmaz/aims/internal/shell"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
@@ -56,6 +57,9 @@ type Integrations struct {
 	MCP        bool
 	StatusLine bool
 	Shell      shell.Shell // "" for none
+	// KeepAlive schedules `aims keepalive`, which renews logins before they
+	// lapse unused.
+	KeepAlive bool
 }
 
 // Step is one change made (or attempted) by Setup or Uninstall.
@@ -140,6 +144,10 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		path, err := shell.Install(in.Shell)
 		steps = append(steps, Step{What: "shell integration", Target: fsx.Tildify(path), Err: err})
 	}
+	if in.KeepAlive {
+		path, err := schedule.Install(KeepAliveJob())
+		steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
+	}
 	return steps, nil
 }
 
@@ -183,6 +191,11 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 					steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
 				}
 			}
+		}
+	}
+	if in.KeepAlive {
+		if path, found, err := schedule.Uninstall(KeepAliveName); found || err != nil {
+			steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 		}
 	}
 	if in.Shell != "" {

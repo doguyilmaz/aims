@@ -68,44 +68,17 @@ func TestHelpListsEveryCommand(t *testing.T) {
 
 func TestOrderLines(t *testing.T) {
 	order := []string{"personal", "work", "client"}
-	got := strings.Join(orderLines(order, config.Failover{FiveHour: true}), "\n")
+	got := strings.Join(orderLines(order), "\n")
 	want := "1. personal  new sessions use it\n" +
 		"2. work      while personal is limited or logged out\n" +
 		"3. client    while the ones above are limited or logged out\n" +
-		"When personal works again, new sessions go back to it."
+		"When personal works again, sessions go back to it.\n" +
+		"When every account is limited, sessions wait on the one that resets first."
 	if got != want {
 		t.Errorf("orderLines:\n%s\nwant:\n%s", got, want)
 	}
-	got = strings.Join(orderLines(order, config.Failover{FiveHour: true, Stay: true}), "\n")
-	if !strings.HasSuffix(got, "\nThe account that takes over stays active after personal works again.") {
-		t.Errorf("stay:\n%s", got)
-	}
-	got = strings.Join(orderLines(order, config.Failover{}), "\n")
-	if !strings.Contains(got, "2. work      while personal is at its weekly limit or logged out\n") ||
-		!strings.Contains(got, "\nAt its 5-hour limit personal waits for the reset; only its weekly limit or a login problem switches.\n") {
-		t.Errorf("wait:\n%s", got)
-	}
-	if got := orderLines([]string{"solo"}, config.Failover{FiveHour: true}); len(got) != 1 {
+	if got := orderLines([]string{"solo"}); len(got) != 1 {
 		t.Errorf("one account: %q", got)
-	}
-}
-
-func TestLimitFlags(t *testing.T) {
-	fh, stay, err := limitFlags("", "")
-	if err != nil || fh != nil || stay != nil {
-		t.Fatalf("none given: %v %v %v", fh, stay, err)
-	}
-	fh, stay, err = limitFlags("wait", "stay")
-	if err != nil || fh == nil || *fh || stay == nil || !*stay {
-		t.Fatalf("wait, stay: %v %v %v", fh, stay, err)
-	}
-	if fh, _, _ := limitFlags("switch", ""); fh == nil || !*fh {
-		t.Fatalf("switch: %v", fh)
-	}
-	for _, bad := range [][2]string{{"never", ""}, {"", "later"}} {
-		if _, _, err := limitFlags(bad[0], bad[1]); err == nil {
-			t.Errorf("%q accepted", bad)
-		}
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
+	"github.com/doguyilmaz/aims/internal/schedule"
 	"github.com/doguyilmaz/aims/internal/shell"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
@@ -153,6 +154,12 @@ func newDoctorCmd(version string) *cobra.Command {
 			} else {
 				fmt.Println("  " + s.Dim.Render("no shell integration (plain `claude` and `codex` ignore the active profile)"))
 				fix1("aims setup --shell")
+			}
+			if path, on := schedule.Installed(ops.KeepAliveName); on {
+				ok("login keepalive %s", s.Dim.Render(fsx.Tildify(path)))
+			} else {
+				fmt.Println("  " + s.Dim.Render("no login keepalive (a login unused for days can lapse)"))
+				fix1("aims keepalive on")
 			}
 			for _, a := range tools.All() {
 				hub := cfg.Tools[a.ID()].Hub
