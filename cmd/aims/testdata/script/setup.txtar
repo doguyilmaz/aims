@@ -48,6 +48,18 @@ grep 'tool_timeout_sec = 3660' $HOME/.codex/config.toml
 exec aims doctor
 ! stdout 'MCP server is missing'
 
+# Starting a session brings what is installed up to this aims by itself: an
+# old skill and an old MCP entry.
+exec codex mcp remove aims
+exec codex mcp add aims -- aims mcp
+cp OLD_SKILL $HOME/.codex/skills/aims/SKILL.md
+exec aims codex@work
+grep 'tool_timeout_sec = 3660' $HOME/.codex/config.toml
+! grep 'an older skill' $HOME/.codex/skills/aims/SKILL.md
+exec aims doctor
+! stdout 'MCP server is missing'
+! stdout 'from another aims version'
+
 # So does a skill from another aims version.
 cp stale.md $HOME/.codex/skills/aims/SKILL.md
 ! exec aims doctor
@@ -94,4 +106,6 @@ alias ll='ls -l'
 #!/bin/sh
 echo mine
 -- stale.md --
+an older skill
+-- OLD_SKILL --
 an older skill
