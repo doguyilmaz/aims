@@ -21,7 +21,7 @@ func newMoveCmd() *cobra.Command {
 			"account takes it.",
 		Example: `aims move work
 aims move`,
-		Args:              cobra.MaximumNArgs(1),
+		Args: cobra.MaximumNArgs(1),
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
