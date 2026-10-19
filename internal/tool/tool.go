@@ -83,7 +83,8 @@ type Supervisor interface {
 	// reports the turns that ended since it was last called.
 	Watch(w Watch) (args []string, poll func() []SessionEvent, err error)
 	// ResumeArgs turns args into ones that resume conversation id instead of
-	// starting one, and send prompt first when it is not "".
+	// starting one, and send prompt first when it is not "". With id "" they
+	// start a new conversation without args' prompt.
 	ResumeArgs(bin string, args []string, id, prompt string) ([]string, error)
 }
 
@@ -110,6 +111,9 @@ type SessionEvent struct {
 	// no turn yet. Started: a turn began (the user sent a prompt).
 	Opened  bool `json:"opened,omitempty"`
 	Started bool `json:"started,omitempty"`
+	// Transcript is the file the conversation is saved to, when the tool
+	// says; until it exists there is nothing to resume.
+	Transcript string `json:"transcript,omitempty"`
 	// Failure is why the turn failed, when another account can help; Text
 	// is the provider's message.
 	Failure Failure `json:"failure,omitempty"`

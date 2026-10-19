@@ -43,6 +43,9 @@ func TestResumeArgs(t *testing.T) {
 	if got, _ := a.ResumeArgs("", []string{"hi"}, "S", ""); !slices.Equal(got, []string{"resume", "S"}) {
 		t.Errorf("no prompt: %q", got)
 	}
+	if got, _ := a.ResumeArgs("", []string{"-m", "o5", "resume", "--last"}, "", ""); !slices.Equal(got, []string{"-m", "o5"}) {
+		t.Errorf("a new conversation: %q", got)
+	}
 }
 
 func TestTurn(t *testing.T) {

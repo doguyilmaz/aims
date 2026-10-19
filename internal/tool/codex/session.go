@@ -74,6 +74,9 @@ func (*Adapter) ResumeArgs(_ string, args []string, id, prompt string) ([]string
 			out = append(out, a)
 		}
 	}
+	if id == "" {
+		return out, nil
+	}
 	out = append(out, "resume", id)
 	if prompt != "" {
 		out = append(out, "--", prompt)

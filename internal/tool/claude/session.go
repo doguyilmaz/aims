@@ -130,7 +130,7 @@ func (*Adapter) HookEvent(raw []byte) (tool.SessionEvent, bool) {
 	if id == "" || !slices.Contains(hookEvents, name) {
 		return tool.SessionEvent{}, false
 	}
-	ev := tool.SessionEvent{Session: id}
+	ev := tool.SessionEvent{Session: id, Transcript: j.Get("transcript_path").String()}
 	switch name {
 	case "SessionStart":
 		ev.Opened = true
@@ -195,6 +195,9 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 			out = append(out, args[i:end]...)
 		}
 		i = end - 1
+	}
+	if id == "" {
+		return out, nil
 	}
 	out = append(out, "--resume", id)
 	if prompt != "" {

@@ -54,6 +54,9 @@ func TestResumeArgs(t *testing.T) {
 	if got, _ := a.ResumeArgs(bin, []string{"hi"}, "S", ""); !slices.Equal(got, []string{"--resume", "S"}) {
 		t.Errorf("no prompt: %q", got)
 	}
+	if got, _ := a.ResumeArgs(bin, []string{"--model", "opus", "hi"}, "", ""); !slices.Equal(got, []string{"--model", "opus"}) {
+		t.Errorf("a new conversation: %q", got)
+	}
 	// Without the help, a prompt cannot be told from an option's value.
 	if _, err := a.ResumeArgs(filepath.Join(dir, "missing"), []string{"--model", "opus"}, "S", ""); err == nil {
 		t.Error("a missing claude must fail")
@@ -124,6 +127,9 @@ func TestHookEvent(t *testing.T) {
 	ev, ok = a.HookEvent([]byte(`{"hook_event_name":"Stop","session_id":"S","last_assistant_message":"401 unauthorized is a status code"}`))
 	if !ok || ev.Failure != tool.FailNone || ev.Text != "" {
 		t.Fatalf("a turn that went well is not read for errors: %+v", ev)
+	}
+	if ev, ok := a.HookEvent([]byte(`{"hook_event_name":"SessionStart","session_id":"S","transcript_path":"/t/S.jsonl"}`)); !ok || !ev.Opened || ev.Transcript != "/t/S.jsonl" {
+		t.Fatalf("opened: %+v", ev)
 	}
 	if ev, ok := a.HookEvent([]byte(`{"hook_event_name":"UserPromptSubmit","session_id":"S","prompt":"hi"}`)); !ok || !ev.Started {
 		t.Fatalf("a prompt starts a turn: %+v", ev)

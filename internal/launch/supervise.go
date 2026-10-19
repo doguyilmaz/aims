@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
@@ -66,7 +67,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return Result{Code: 127, Profile: name}, err
 		}
 
-		var session string
+		var session, transcript string
 		var wake *profiles.Pick
 		var carry []tool.SessionEvent
 		running := false // a turn is under way: no move that is not forced
@@ -89,6 +90,9 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			for _, ev := range evs {
 				if ev.Session != "" {
 					session = ev.Session
+				}
+				if ev.Transcript != "" {
+					transcript = ev.Transcript
 				}
 				switch {
 				case ev.Opened:
@@ -128,8 +132,14 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 					continue
 				}
 			}
+			// A conversation with nothing saved yet cannot be resumed: start
+			// a new one instead.
+			id := session
+			if transcript != "" && fsx.Stat(transcript) == nil {
+				id, prompt = "", ""
+			}
 			var err error
-			if resume, err = sv.ResumeArgs(bin, o.Args, session, prompt); err != nil {
+			if resume, err = sv.ResumeArgs(bin, o.Args, id, prompt); err != nil {
 				wake = nil
 				continue // stay: a resume that cannot be built would lose the conversation
 			}
