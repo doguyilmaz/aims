@@ -85,6 +85,11 @@ func newDoctorCmd(version string) *cobra.Command {
 					continue
 				}
 				ok("%s %s", toolVersion(bin), s.Dim.Render(fsx.Tildify(bin)))
+				if d, isDiagnoser := a.(tool.Diagnoser); isDiagnoser {
+					for _, p := range d.Diagnose(profiles.HubHome(cfg, a)) {
+						bad("%s", p)
+					}
+				}
 				for _, k := range a.Layout().ConflictingEnv {
 					if os.Getenv(k) != "" {
 						bad("%s is set in your shell; it overrides profile logins (aims drops it when it starts %s)", k, id)

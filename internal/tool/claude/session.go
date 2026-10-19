@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +21,7 @@ import (
 var (
 	_ tool.Supervisor = (*Adapter)(nil)
 	_ tool.Hooker     = (*Adapter)(nil)
+	_ tool.Diagnoser  = (*Adapter)(nil)
 )
 
 // subcommands are Claude Code's commands that are not a conversation.
@@ -110,7 +113,14 @@ func withHooks(settings, command string) (string, error) {
 	return doc, nil
 }
 
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+// shellQuote makes s one word for the shell that runs hooks: sh, or on
+// Windows Git Bash or cmd, which both take a double-quoted path.
+func shellQuote(s string) string {
+	if runtime.GOOS == "windows" {
+		return `"` + s + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
 
 // HookEvent reads a Stop or StopFailure hook. Of the errors a turn can end
 // on, only a limit and a dead login are ones another account fixes.
@@ -237,4 +247,28 @@ func optionArity(bin string) (map[string]int, error) {
 		}
 	}
 	return out, nil
+}
+
+// managedSettings is where an organization's policy for Claude Code lives.
+func managedSettings() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "/Library/Application Support/ClaudeCode/managed-settings.json"
+	case "windows":
+		return `C:\Program Files\ClaudeCode\managed-settings.json`
+	}
+	return "/etc/claude-code/managed-settings.json"
+}
+
+// Diagnose reports settings that turn off the hooks a session reports its
+// turns with, so it would not move between accounts.
+func (*Adapter) Diagnose(h tool.Home) []string {
+	var out []string
+	if b, err := os.ReadFile(filepath.Join(h.Dir, "settings.json")); err == nil && gjson.GetBytes(b, "disableAllHooks").Bool() {
+		out = append(out, "disableAllHooks is set in settings.json, so sessions do not move between accounts by themselves")
+	}
+	if b, err := os.ReadFile(managedSettings()); err == nil && (gjson.GetBytes(b, "allowManagedHooksOnly").Bool() || gjson.GetBytes(b, "disableAllHooks").Bool()) {
+		out = append(out, "your organization's Claude Code policy blocks other hooks, so sessions do not move between accounts by themselves")
+	}
+	return out
 }

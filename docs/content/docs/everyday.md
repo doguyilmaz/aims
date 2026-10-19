@@ -33,7 +33,7 @@ aims use work               # every tool that has a "work" profile
 aims use codex personal     # one tool
 ```
 
-This changes the account for **new** sessions and moves it to the front of the [failover order](../failover#order). A session that is already running keeps its login, unless it is [supervised](../failover#in-an-interactive-session): one started with `aims claude` or `aims codex` (no `@profile`) moves on by itself when its account hits a limit. To move any other, see [continuing on another account](#continuing-on-another-account).
+This changes the account for **new** sessions and moves it to the front of the [failover order](../failover#order). A session that is already running keeps its login, unless it is [supervised](../failover#in-an-interactive-session): one started with `aims claude` or `aims codex` (no `@profile`) moves on by itself when its account hits a limit, and to the new active account once its current turn ends; `aims move` inside it moves just that one. To move any other, see [continuing on another account](#continuing-on-another-account).
 
 ## Continuing on another account
 

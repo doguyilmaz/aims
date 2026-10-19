@@ -103,3 +103,19 @@ func TestOnFailureKeepsHistory(t *testing.T) {
 		t.Fatalf("b's conversation is nowhere else: %q", next)
 	}
 }
+
+// A rate limit that comes back soon after the last rests the account longer.
+func TestBusyBackoff(t *testing.T) {
+	o := setup(t)
+	busy := tool.SessionEvent{Session: "s", Failure: tool.FailBusy}
+	onFailure(t.Context(), o, "a", busy)
+	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(now.Add(busyFor)) {
+		t.Fatalf("first: %v", ps.Until)
+	}
+	_ = profiles.Clear("codex", "a")
+	_ = config.UpdateState("codex", "a", func(ps *config.ProfileState) { ps.Reason, ps.MarkedAt = "busy", now.Add(-5*time.Minute) })
+	onFailure(t.Context(), o, "a", busy)
+	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(now.Add(busyAgain)) {
+		t.Fatalf("again: %v", ps.Until)
+	}
+}

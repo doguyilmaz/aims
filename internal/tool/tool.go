@@ -123,6 +123,12 @@ type Hooker interface {
 	HookEvent(raw []byte) (ev SessionEvent, ok bool)
 }
 
+// Diagnoser reports settings of the tool that keep aims from doing its job,
+// for aims doctor.
+type Diagnoser interface {
+	Diagnose(h Home) []string
+}
+
 // Refresher renews a login through the tool's own refresh, without a paid
 // request, and reports on it like Probe.
 type Refresher interface {

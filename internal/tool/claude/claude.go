@@ -194,12 +194,16 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 
 // Probe sends a one-word prompt to the smallest model. Claude Code has no
 // account API that works without refreshing the login, so this costs a few
-// tokens; it runs only when asked for (aims status --live).
+// tokens; it runs only when asked for (aims status --live, aims keepalive).
+// It starts no MCP server, runs no hook and offers no tool, which keeps it
+// cheap, quick and free of side effects.
 func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
 	if h.Bin == "" {
 		return tool.Probe{Status: tool.ProbeError, Detail: "claude is not installed"}
 	}
-	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku", "--", "Reply with just: OK"}
+	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku",
+		"--strict-mcp-config", "--settings", `{"disableAllHooks":true}`, "--tools", "", "--system-prompt", "Answer in one word.",
+		"--", "Reply with just: OK"}
 	out, code, err := proc.Output(h.Bin, args, h.Env, 2*time.Minute)
 	if err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}

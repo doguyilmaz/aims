@@ -150,6 +150,15 @@ func TestFollowNext(t *testing.T) {
 	if evs := poll(); len(evs) != 1 || evs[0].Failure != tool.FailNone || evs[0].Session != "fork" {
 		t.Fatalf("fork: %+v", evs)
 	}
+	// Another codex in the same directory, while this conversation goes on,
+	// is not followed.
+	other := filepath.Join(day, "rollout-3-other.jsonl")
+	testutil.Write(t, other, line("other", now.Add(2*time.Second), limit(now.Add(3*time.Second))))
+	_ = os.Chtimes(other, now.Add(3*time.Second), now.Add(3*time.Second))
+	_ = os.Chtimes(first, now.Add(4*time.Second), now.Add(4*time.Second))
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("another codex's conversation: %+v", evs)
+	}
 	second := filepath.Join(day, "rollout-2-next.jsonl")
 	testutil.Write(t, second, line("next", now.Add(5*time.Second), limit(now.Add(6*time.Second))))
 	_ = os.Chtimes(second, now.Add(time.Minute), now.Add(time.Minute))

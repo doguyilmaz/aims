@@ -180,9 +180,9 @@ func (f *follower) poll() []tool.SessionEvent {
 }
 
 // discover finds the rollout this run writes, and the next one when the
-// user starts another conversation in it: the newest rollout of a
+// user starts another conversation in it (/new): the newest rollout of a
 // conversation in the run's working directory that started since the run
-// did. A run that opens an old conversation without naming it takes the
+// did, and after the current one was last written. A run that opens an old conversation without naming it takes the
 // newest one written to since, until a newer conversation starts.
 func (f *follower) discover() {
 	type candidate struct {
@@ -222,6 +222,11 @@ func (f *follower) discover() {
 			f.metas[c.path] = r
 		}
 		if r.id == "" || fsx.Real(r.cwd) != f.cwd || (r.started.Before(f.since) && !old) {
+			continue
+		}
+		// A conversation still written to after the newer one started is
+		// not one the user left: the newer one is another codex's.
+		if fi, err := os.Stat(f.path); f.path != "" && err == nil && fi.ModTime().After(r.started.Add(time.Second)) {
 			continue
 		}
 		f.path, f.id, f.offset = c.path, r.id, 0

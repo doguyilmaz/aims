@@ -25,6 +25,9 @@ const (
 	// continued: a little later than the tool would itself, so its own
 	// automatic continue wins.
 	wakeAfter = time.Minute
+	// busyAgain is how long an account rests after a second rate limit
+	// within that time.
+	busyAgain = 15 * time.Minute
 )
 
 // supervise runs an interactive session that moves between profiles: to the
@@ -169,7 +172,13 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 			By: by, Detail: ev.Text,
 		})
 	case tool.FailBusy:
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: busyFor, By: by, Detail: ev.Text})
+		// A rate limit that comes back soon after the last is not passing:
+		// rest longer, so the conversation does not bounce between accounts.
+		rest := busyFor
+		if ps := config.LoadState().Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
+			rest = busyAgain
+		}
+		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
 	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, profiles.Apart(cfg, a.ID(), name))

@@ -79,7 +79,11 @@ func TestWithSettings(t *testing.T) {
 	if err != nil || got[0] != "--settings" || got[2] != "--model" {
 		t.Fatalf("prepended: %q %v", got, err)
 	}
-	if cmd := gjson.Get(got[1], "hooks.StopFailure.0.hooks.0.command").String(); cmd != `'/opt/it'\''s/aims' hook claude` {
+	want := `'/opt/it'\''s/aims' hook claude`
+	if runtime.GOOS == "windows" {
+		want = `"/opt/it's/aims" hook claude`
+	}
+	if cmd := gjson.Get(got[1], "hooks.StopFailure.0.hooks.0.command").String(); cmd != want {
 		t.Fatalf("command: %s", cmd)
 	}
 
@@ -129,5 +133,16 @@ func TestHookEvent(t *testing.T) {
 	}
 	if _, ok := a.HookEvent([]byte(`not json`)); ok {
 		t.Fatal("garbage")
+	}
+}
+
+func TestDiagnose(t *testing.T) {
+	dir := t.TempDir()
+	if got := New().Diagnose(tool.Home{Dir: dir}); len(got) != 0 {
+		t.Fatalf("no settings: %q", got)
+	}
+	testutil.Write(t, filepath.Join(dir, "settings.json"), `{"disableAllHooks": true}`)
+	if got := New().Diagnose(tool.Home{Dir: dir}); len(got) != 1 {
+		t.Fatalf("hooks off: %q", got)
 	}
 }
