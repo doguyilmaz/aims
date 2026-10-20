@@ -1,12 +1,10 @@
 package claude
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -202,13 +200,13 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 		end := i + 1
 		if !inline {
 			switch arity[name] {
-			case argRequired:
+			case tool.ArgRequired:
 				end = min(i+2, len(args))
-			case argOptional:
+			case tool.ArgOptional:
 				if end < len(args) && !strings.HasPrefix(args[end], "-") {
 					end++
 				}
-			case argVariadic:
+			case tool.ArgVariadic:
 				for end < len(args) && !strings.HasPrefix(args[end], "-") {
 					end++
 				}
@@ -229,22 +227,10 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 	return out, nil
 }
 
-const (
-	argNone = iota
-	argRequired
-	argOptional
-	argVariadic
-)
-
-// optionLine matches an option in `claude --help`:
-// "  -r, --resume [value]", "  --add-dir <directories...>".
-var optionLine = regexp.MustCompile(`^\s+((?:-{1,2}[\w-]+)(?:, -{1,2}[\w-]+)*)(?: ([<\[][^>\]]*[>\]]))?`)
-
 // optionArity reads which options take a value from the installed claude's
 // help, so a prompt is told apart from an option's value whatever version
 // is installed.
-func optionArity(bin string) (map[string]int, error) {
-	out := map[string]int{}
+func optionArity(bin string) (map[string]tool.Arity, error) {
 	help, code, err := proc.Output(bin, []string{"--help"}, nil, 10*time.Second)
 	if err == nil && (code != 0 || !strings.Contains(help, "--resume")) {
 		err = fmt.Errorf("claude --help did not list its options")
@@ -252,27 +238,7 @@ func optionArity(bin string) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	sc := bufio.NewScanner(strings.NewReader(help))
-	for sc.Scan() {
-		m := optionLine.FindStringSubmatch(sc.Text())
-		if m == nil {
-			continue
-		}
-		kind := argNone
-		switch v := m[2]; {
-		case v == "":
-		case strings.Contains(v, "..."):
-			kind = argVariadic
-		case strings.HasPrefix(v, "<"):
-			kind = argRequired
-		default:
-			kind = argOptional
-		}
-		for n := range strings.SplitSeq(m[1], ", ") {
-			out[n] = kind
-		}
-	}
-	return out, nil
+	return tool.ParseOptions(help), nil
 }
 
 // managedSettings is where an organization's policy for Claude Code lives.

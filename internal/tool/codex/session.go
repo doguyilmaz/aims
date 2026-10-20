@@ -14,6 +14,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
@@ -60,20 +61,33 @@ func command(args []string) (string, int) {
 var resumeFlags = []string{"--last", "--all", "--include-non-interactive"}
 
 // ResumeArgs keeps the options of args and drops the command and its words:
-// the prompt, or resume's or fork's conversation.
-func (*Adapter) ResumeArgs(_ string, args []string, id, prompt string) ([]string, error) {
+// the prompt, or resume's or fork's conversation. Which options take a
+// value comes from the installed codex's help, and from valueFlags when
+// that cannot be read.
+func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]string, error) {
+	arity := optionArity(bin)
 	var out []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		name, _, inline := strings.Cut(a, "=")
 		switch {
 		case a == "--":
 			i = len(args)
-		case valueFlags[a]:
+		case slices.Contains(resumeFlags, a) || !strings.HasPrefix(a, "-"):
+		case inline || arity[name] == tool.ArgNone:
+			out = append(out, a)
+		case arity[name] == tool.ArgVariadic:
+			end := i + 1
+			for end < len(args) && !strings.HasPrefix(args[end], "-") {
+				end++
+			}
+			out = append(out, args[i:end]...)
+			i = end - 1
+		case arity[name] == tool.ArgOptional && (i+1 >= len(args) || strings.HasPrefix(args[i+1], "-")):
+			out = append(out, a)
+		default:
 			out = append(out, args[i:min(i+2, len(args))]...)
 			i++
-		case slices.Contains(resumeFlags, a) || !strings.HasPrefix(a, "-"):
-		default:
-			out = append(out, a)
 		}
 	}
 	if id == "" {
@@ -84,6 +98,24 @@ func (*Adapter) ResumeArgs(_ string, args []string, id, prompt string) ([]string
 		out = append(out, "--", prompt)
 	}
 	return out, nil
+}
+
+// optionArity is valueFlags, with what the help of codex and of its resume
+// command adds.
+func optionArity(bin string) map[string]tool.Arity {
+	out := map[string]tool.Arity{}
+	for f := range valueFlags {
+		out[f] = tool.ArgRequired
+	}
+	if bin == "" {
+		return out
+	}
+	for _, args := range [][]string{{"--help"}, {"resume", "--help"}} {
+		if help, code, err := proc.Output(bin, args, nil, 10*time.Second); err == nil && code == 0 {
+			maps.Copy(out, tool.ParseOptions(help))
+		}
+	}
+	return out
 }
 
 // noDaemon keeps the conversation in the codex process aims stops: a shared

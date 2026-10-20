@@ -192,3 +192,42 @@ func (t *Tail) Add(line string) {
 }
 
 func (t *Tail) String() string { return strings.Join(t.lines, "\n") }
+
+// Arity is how many values an option takes.
+type Arity int
+
+const (
+	ArgNone Arity = iota
+	ArgRequired
+	ArgOptional
+	ArgVariadic
+)
+
+// optionLine matches an option in a CLI's help: "  -r, --resume [value]",
+// "  --add-dir <directories...>", "      --search".
+var optionLine = regexp.MustCompile(`^\s+((?:-{1,2}[\w-]+)(?:, -{1,2}[\w-]+)*)(?: ([<\[][^>\]]*[>\]](?:\.\.\.)?))?`)
+
+// ParseOptions reads which options take a value from a CLI's help text.
+func ParseOptions(help string) map[string]Arity {
+	out := map[string]Arity{}
+	for line := range strings.SplitSeq(help, "\n") {
+		m := optionLine.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		kind := ArgNone
+		switch v := m[2]; {
+		case v == "":
+		case strings.Contains(v, "..."):
+			kind = ArgVariadic
+		case strings.HasPrefix(v, "<"):
+			kind = ArgRequired
+		default:
+			kind = ArgOptional
+		}
+		for n := range strings.SplitSeq(m[1], ", ") {
+			out[n] = kind
+		}
+	}
+	return out
+}
