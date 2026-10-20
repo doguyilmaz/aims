@@ -27,8 +27,10 @@ import (
 )
 
 const instructions = "aims manages several Claude Code and Codex accounts on this machine. " +
-	"A running session cannot change its own account: aims_switch and aims_failover affect sessions started afterwards, " +
-	"and aims_run uses another account right now for a self-contained task. Logins need a browser, so give the user the command from aims_login_help."
+	"aims_switch and aims_failover affect sessions started afterwards. A session started with `aims claude` or `aims codex` (no @profile) moves on its own: " +
+	"at a limit or a dead login aims restarts it on the next account and continues the conversation, and moves it back once the first account works again. " +
+	"Other running sessions keep their account. " +
+	"aims_run uses another account right now for a self-contained task. Logins need a browser, so give the user the command from aims_login_help."
 
 // New builds the server.
 func New(version string) *mcp.Server {
@@ -52,10 +54,19 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_failover",
 		Description: "The current account hit its usage limit or its login died: mark it (until its reset time, or for `minutes`). " +
-			"New sessions use the next usable account until then and return to the active one on their own, unless aims is set to stay on the one that took over " +
-			"(the answer says which); `to` makes another account active instead. " +
-			"Then tell the user to continue the conversation with `aims claude --continue` or `aims codex resume --last`.",
+			"New sessions use the next usable account until then and return to the active one on their own; `to` makes another account active instead. " +
+			"In a session aims moves (env " + profiles.RunVar + " set) this conversation also moves there once the turn ends; " +
+			"otherwise tell the user to continue it with `aims claude --continue` or `aims codex resume --last`.",
 	}, failoverTool)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "aims_move",
+		Description: "Move THIS conversation to another account of the same tool: once the current turn ends, aims restarts the session on that account " +
+			"and resumes the conversation, which then stays there while it works. Works only in a session started with `aims claude` or `aims codex` " +
+			"without @profile (env " + profiles.RunVar + " is set). profile: default the next usable account. End your turn after calling it. " +
+			"The conversation, with everything in it, goes to that account's provider: only move between work and personal accounts when the user asks.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
+	}, moveTool)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "aims_clear",
@@ -66,7 +77,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "aims_run",
 		Description: "Run a self-contained task right now with another account (`claude -p` or `codex exec`), failing over to the next account on a limit or login error " +
-			"when the failed attempt did nothing (not on a 5-hour limit aims is set to wait out). Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
+			"when the failed attempt did nothing. Returns the final answer. Read-only unless write=true (Claude: plan mode; Codex: read-only sandbox); " +
 			"with write=true the tool's own settings decide what it may change. Tool: " + toolList + ".",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, runTool)
@@ -218,6 +229,11 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 	}
 	msg := fmt.Sprintf("%s: %q %s; %s. To continue this conversation there, exit this session and run: %s",
 		a.ID(), res.From, state, next, resume)
+	if id, p, ok := profiles.Session(); ok && id == a.ID() && p == res.From {
+		if mv, err := ops.Move(ctx, res.To); err == nil {
+			msg = fmt.Sprintf("%s: %q %s; %s. This conversation continues on %q once this turn ends: end your turn now.", a.ID(), res.From, state, next, mv.To)
+		}
+	}
 	switch {
 	case res.Pinned == "" || res.Pinned == res.To:
 	case res.Pinned == res.From:
@@ -226,6 +242,20 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 		msg += fmt.Sprintf("\nThis terminal is pinned to %q (%s) and keeps using it.", res.Pinned, config.PinVar(a.ID()))
 	}
 	r := text(msg)
+	r.StructuredContent = res
+	return r, nil, nil
+}
+
+type moveIn struct {
+	Profile string `json:"profile,omitempty" jsonschema:"the account to move to; default the next usable one"`
+}
+
+func moveTool(ctx context.Context, _ *mcp.CallToolRequest, in moveIn) (*mcp.CallToolResult, any, error) {
+	res, err := ops.Move(ctx, in.Profile)
+	if err != nil {
+		return fail(err)
+	}
+	r := text(fmt.Sprintf("%s: this conversation moves from %q to %q once the current turn ends. End your turn now; the user sees aims restart the session.", res.Tool, res.From, res.To))
 	r.StructuredContent = res
 	return r, nil, nil
 }
@@ -305,7 +335,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		Dir:      in.Cwd,
 		Timeout:  timeout,
 		// The child is not nested in, or attached to the IDE of, this session.
-		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"},
+		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT", profiles.RunVar},
 		ExtraEnv: []string{profiles.NestedVar + "=1"},
 	})
 	if err != nil {
@@ -321,9 +351,6 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		head += ", login error"
 	case tool.FailLimit:
 		head += ", usage limit"
-		if res.Waited {
-			head += " (5-hour, waited out: not retried on another account)"
-		}
 	case tool.FailBusy:
 		head += ", rate limited"
 	}

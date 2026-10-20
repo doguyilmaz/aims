@@ -13,6 +13,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/profiles"
+	"github.com/doguyilmaz/aims/internal/schedule"
 	"github.com/doguyilmaz/aims/internal/shell"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
@@ -26,7 +27,7 @@ const MaxRun = time.Hour
 
 // MCPServer is the aims MCP server as the tools register it.
 func MCPServer() tool.MCPServer {
-	env := []string{profiles.SessionVar, profiles.NestedVar, config.HomeVar}
+	env := []string{profiles.SessionVar, profiles.NestedVar, profiles.RunVar, config.HomeVar}
 	for _, a := range tools.All() {
 		l := a.Layout()
 		env = append(env, config.PinVar(a.ID()), l.BinEnv, l.HomeEnv)
@@ -56,6 +57,9 @@ type Integrations struct {
 	MCP        bool
 	StatusLine bool
 	Shell      shell.Shell // "" for none
+	// KeepAlive schedules `aims keepalive`, which renews logins before they
+	// lapse unused.
+	KeepAlive bool
 }
 
 // Step is one change made (or attempted) by Setup or Uninstall.
@@ -140,7 +144,37 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		path, err := shell.Install(in.Shell)
 		steps = append(steps, Step{What: "shell integration", Target: fsx.Tildify(path), Err: err})
 	}
+	if in.KeepAlive {
+		path, err := schedule.Install(KeepAliveJob())
+		steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
+	}
 	return steps, nil
+}
+
+// Installed says which integrations are set up now, in any tool.
+func Installed() Integrations {
+	var in Integrations
+	cfg, err := config.Load()
+	if err != nil {
+		return in
+	}
+	for _, a := range tools.All() {
+		hub := cfg.Tools[a.ID()].Hub
+		if hub == "" {
+			continue
+		}
+		if dir := a.Layout().SkillsDir; dir != "" && fsx.Stat(filepath.Join(hub, dir, "aims", "SKILL.md")) != nil {
+			in.Skill, in.MCP = true, true
+		}
+		if sl, ok := a.(tool.StatusLiner); ok && sl.HasStatusLine(hub) {
+			in.StatusLine = true
+		}
+	}
+	if sh := shell.Detect(); shell.Installed(sh) {
+		in.Shell = sh
+	}
+	_, in.KeepAlive = schedule.Installed(KeepAliveName)
+	return in
 }
 
 // Uninstall removes what Setup added. Profiles and logins stay.
@@ -183,6 +217,11 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 					steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
 				}
 			}
+		}
+	}
+	if in.KeepAlive {
+		if path, found, err := schedule.Uninstall(KeepAliveName); found || err != nil {
+			steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 		}
 	}
 	if in.Shell != "" {

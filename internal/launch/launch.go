@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -60,9 +59,6 @@ type Result struct {
 	// FinalText and ErrorText come from the analyzer of headless runs.
 	FinalText string
 	ErrorText string
-	// Waited: the failure was a five-hour limit that failover.fiveHour says
-	// to wait out, so the run was not repeated on another account.
-	Waited bool
 }
 
 func (o *Options) say(l Level, format string, args ...any) {
@@ -117,31 +113,9 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	auto := cfg.Failover.Auto && o.Profile == ""
 	name := preferred
 	if auto {
-		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
-		switch {
-		case pick.Name == "":
-			o.say(Warn, "no %s profile looks usable (%s); trying %q anyway", a.ID(), describe(pick.Skipped), preferred)
-		case pick.Name == preferred && len(pick.Waiting) > 0:
-			o.say(Info, "%s: %q waits for its 5-hour reset (%s) instead of failing over", a.ID(), preferred, strings.Join(pick.Waiting, ", "))
-			if other := profiles.Choose(ctx, cfg, config.LoadState(), a, "", []string{preferred}); other.Name != "" {
-				o.say(Hint, "another account now: aims %s@%s", a.ID(), other.Name)
-			}
-		case pick.Name != preferred:
-			o.say(Info, "%s: skipping %s, using %q", a.ID(), describe(pick.Skipped), pick.Name)
-			for _, e := range pick.Skipped {
-				switch {
-				case e.State == nil || (e.Account.LoggedIn != nil && !*e.Account.LoggedIn):
-				case e.State.NeedsLogin:
-					o.say(Hint, "log %s in again: aims login %s %s", e.Name, a.ID(), e.Name)
-				case e.State.Until.After(config.Now()):
-					o.say(Hint, "%s works again? aims clear %s %s", e.Name, a.ID(), e.Name)
-				}
-			}
-			stay(o, cfg, preferred, pick)
-			name = pick.Name
-		}
-	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable || len(ev.Waiting) > 0 {
-		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(append(ev.Reasons, ev.Waiting...), ", "))
+		name = choose(ctx, o, cfg, preferred)
+	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable {
+		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(ev.Reasons, ", "))
 	}
 
 	var input []byte
@@ -151,32 +125,20 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	var tried []string
 	for {
 		tried = append(tried, name)
-		for _, r := range profiles.Sync(cfg, a, name, false) {
-			if r.Action == links.Conflict && !r.Quiet {
-				o.say(Warn, "%s/%s: shared %q: %s (aims doctor)", a.ID(), name, r.Name, r.Detail)
-			}
-		}
-		env, dropped := profiles.Env(cfg, a, name, os.Environ())
-		env = append(strip(env, o.StripEnv), o.ExtraEnv...)
-		if len(dropped) > 0 {
-			o.say(Info, "ignoring %s from your shell so the %q login is used", strings.Join(dropped, ", "), name)
-		}
-		usedAt := config.Now().UTC()
-		_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.LastUsedAt = usedAt })
-
 		if !headless {
-			code, err := proc.RunAttached(bin, o.Args, env, o.Dir)
+			if sv, ok := a.(tool.Supervisor); ok && auto && sv.Supervises(o.Args) {
+				return supervise(ctx, o, sv, bin, name)
+			}
+			code, err := proc.RunAttached(bin, o.Args, sessionEnv(o, cfg, name), o.Dir)
 			return Result{Code: code, Profile: name}, err
 		}
+		env := sessionEnv(o, cfg, name)
 
 		res, retry, err := attempt(ctx, o, cfg, bin, env, input, name, auto, tried)
 		if err != nil || retry.Name == "" {
 			return res, err
 		}
 		o.say(Info, "%s/%s hit %s before doing anything, retrying with %q", a.ID(), name, failureText(res.Failure), retry.Name)
-		if res.Failure != tool.FailBusy {
-			stay(o, cfg, name, retry)
-		}
 		name = retry.Name
 	}
 }
@@ -226,23 +188,12 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	// output that shows no tool call. Plain output hides tool calls, and even a
 	// login error can come mid-run (a refresh token rotated by another session).
 	safe := an.Activity() == tool.ActivityNone
-	// A five-hour limit that failover.fiveHour says to wait out leaves the
-	// profile usable: no retry, and new runs stay on it.
-	res.Waited = res.Failure == tool.FailLimit && profiles.Evaluate(ctx, cfg, config.LoadState(), a, name).Usable
-	if res.Failure != tool.FailNone && auto && !cap.Committed && safe && !res.Waited {
+	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
 		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
 			return res, next, nil
 		}
 	}
 	cap.Flush()
-	if res.Waited {
-		next := "new runs wait for the reset on it"
-		if !auto {
-			next = "aims waits for the reset"
-		}
-		o.say(Warn, "%s/%s hit its 5-hour limit; %s instead of failing over", a.ID(), name, next)
-		return res, profiles.Pick{}, nil
-	}
 	if res.Failure != tool.FailNone {
 		why := ""
 		switch {
@@ -257,28 +208,58 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	return res, profiles.Pick{}, nil
 }
 
-// stay makes the profile picked to stand in for the active profile from the
-// active one itself when failover.stay is on, so new sessions keep using it
-// after from works again. A pick that passed over an account resting from a
-// short rate limit only stands in: that account is back in minutes. A
-// terminal pinned with aims env still goes back to its pin.
-func stay(o Options, cfg *config.Config, from string, pick profiles.Pick) {
-	id, to := o.Tool.ID(), pick.Name
-	if !cfg.Failover.Stay || cfg.Tools[id].Active != from || slices.ContainsFunc(pick.Skipped, profiles.Evaluation.Busy) {
-		return
-	}
-	moved := false
-	if _, err := config.Update(func(c *config.Config) error {
-		if t := c.Tools[id]; t.Active == from && t.Profiles[to] != nil {
-			t.Active, moved = to, true
+// sessionEnv prepares a run as profile name: its links, its environment, and
+// the record that it was used last.
+func sessionEnv(o Options, cfg *config.Config, name string) []string {
+	a := o.Tool
+	for _, r := range profiles.Sync(cfg, a, name, false) {
+		if r.Action == links.Conflict && !r.Quiet {
+			o.say(Warn, "%s/%s: shared %q: %s (aims doctor)", a.ID(), name, r.Name, r.Detail)
 		}
-		return nil
-	}); err != nil || !moved {
-		return
 	}
-	cfg.Tools[id].Active = to
-	o.say(Info, "%s: %q is the active account now and stays so after %q works again", id, to, from)
-	o.say(Hint, "back to %s: aims use %s %s", from, id, from)
+	env, dropped := profiles.Env(cfg, a, name, os.Environ())
+	env = append(strip(env, o.StripEnv), o.ExtraEnv...)
+	if len(dropped) > 0 {
+		o.say(Info, "ignoring %s from your shell so the %q login is used", strings.Join(dropped, ", "), name)
+	}
+	usedAt := config.Now().UTC()
+	_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.LastUsedAt = usedAt })
+	return env
+}
+
+// choose picks the profile a session starts on and says why when it is not
+// the preferred one: the first usable profile in order, or, when every one is
+// limited, the one that works again first.
+func choose(ctx context.Context, o Options, cfg *config.Config, preferred string) string {
+	a := o.Tool
+	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
+	switch {
+	case pick.Name == preferred:
+		return preferred
+	case pick.Name != "":
+		o.say(Info, "%s: using %s while %s", a.ID(), pick.Name, describe(pick.Skipped))
+	case pick.Soonest != "":
+		o.say(Warn, "%s: every account is limited; using %s, the first back (in %s)", a.ID(), pick.Soonest, profiles.Duration(time.Until(pick.ReadyAt)))
+		return pick.Soonest
+	default:
+		o.say(Warn, "%s: no account looks usable (%s); trying %s anyway", a.ID(), describe(pick.Skipped), preferred)
+		return preferred
+	}
+	hints(o, pick.Skipped)
+	return pick.Name
+}
+
+// hints says how to bring back accounts that were passed over.
+func hints(o Options, skipped []profiles.Evaluation) {
+	for _, e := range skipped {
+		switch {
+		case e.State == nil || (e.Account.LoggedIn != nil && !*e.Account.LoggedIn):
+		case e.State.NeedsLogin:
+			o.say(Hint, "log %s in again: aims login %s %s", e.Name, o.Tool.ID(), e.Name)
+		case e.State.Until.After(config.Now()):
+			o.say(Hint, "%s works again? aims clear %s %s", e.Name, o.Tool.ID(), e.Name)
+		}
+	}
 }
 
 // failureText names a failure in a sentence: "hit its usage limit".
@@ -337,6 +318,8 @@ func strip(env, keys []string) []string {
 	return out
 }
 
+// describe says why profiles were passed over: "work is limited (5h at
+// 100% for 2h10m)".
 func describe(evs []profiles.Evaluation) string {
 	parts := make([]string, len(evs))
 	for i, e := range evs {
@@ -344,7 +327,7 @@ func describe(evs []profiles.Evaluation) string {
 		if e.State != nil && e.State.MarkedBy != "" {
 			why += ", marked by " + e.State.MarkedBy
 		}
-		parts[i] = fmt.Sprintf("%q (%s)", e.Name, why)
+		parts[i] = fmt.Sprintf("%s is out (%s)", e.Name, why)
 	}
 	return strings.Join(parts, ", ")
 }

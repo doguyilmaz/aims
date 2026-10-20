@@ -20,7 +20,7 @@ Sets up your accounts step by step: finds the tools and your current logins, nam
 | `--current` | `personal` | Name for the login you already have |
 | `--second` | `work` | Name for the other account |
 | `--share` | `all` | `all`, `settings` or `none`. See [What accounts share](../sharing). |
-| `--integrations` | `all` | `skill`, `mcp`, `statusline`, `shell` (comma-separated), `all` or `none` |
+| `--integrations` | `all` | `skill`, `mcp`, `statusline`, `shell`, `keepalive` (comma-separated), `all` or `none` |
 
 ### `aims login [tool] [profile] [-- tool flags]`
 
@@ -52,6 +52,8 @@ Makes a profile the active account for new sessions and puts it first in the fai
 
 Run the tool as the active account (or the next usable one). All arguments go to the tool. `aims claude@work` and `aims codex@work` pick the account.
 
+Without `@profile`, an interactive session is watched and moves to the next usable account by itself when its account hits a limit or its login dies; see [In an interactive session](../failover#in-an-interactive-session).
+
 ### `aims run <tool>[@profile] [args]`
 
 The same as the line above, spelled out.
@@ -80,7 +82,7 @@ Adds a profile without logging in. Without a profile, aims asks for the tool, a 
 
 ### `aims failover [tool]`
 
-Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one. With [`stay`](../failover#the-five-hour-limit) on, the next account becomes the active one instead.
+Marks the account you used last as limited. New sessions use the next usable account until the mark lifts, then return to the active one.
 
 Without a tool, aims uses the only tool with a second account, or asks. On a terminal it also asks which account hit its limit (starting on the one used last) and what happened, then offers to continue your last conversation on the next account.
 
@@ -92,6 +94,12 @@ Without a tool, aims uses the only tool with a second account, or asks. On a ter
 | `--reason` | `limit` (default) or `login`. A login mark lasts until `aims login`. |
 | `--resume` | Continue the last conversation on the new account |
 
+Run inside a session that [moves by itself](../failover#in-an-interactive-session), it also moves that session's conversation to the next account.
+
+### `aims move [profile]`
+
+Run inside a session started with `aims claude` or `aims codex` (no `@profile`), for example as `!aims move work` in Claude Code. aims restarts the session on that account and resumes the conversation: right away when the session is idle, once the current turn ends otherwise. The conversation then stays there while that account works, instead of going back to the first one. Without a profile, the next usable account takes it. The model can do the same with the `aims_move` MCP tool.
+
 ### `aims clear [tool] [profile]`
 
 Removes limit and login marks. Without arguments, aims lists the marked accounts, all picked, and clears the ones you keep picked. A script names the account, or passes `--all` to clear every mark.
@@ -100,14 +108,7 @@ Removes limit and login marks. Without arguments, aims lists the marked accounts
 
 Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
 
-Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts), which account comes first and what to do at its five-hour limit, shows the order and saves it once you confirm.
-
-| Flag | Default | |
-| --- | --- | --- |
-| `--five-hour` | `switch` | At an account's five-hour limit: `switch` to the next one or `wait` for the reset |
-| `--after-reset` | `back` | Once the first account works again: go `back` to it or `stay` on the one that took over |
-
-Both apply to every tool and work without an order too: `aims order --five-hour wait`. See [The five-hour limit](../failover#the-five-hour-limit).
+Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts), and which account comes first, shows the order and saves it once you confirm. What happens at a limit is fixed; see [What aims does](../failover#what-aims-does).
 
 ### `aims logout [tool] [profile]`
 
@@ -127,14 +128,17 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 
 ### `aims setup`
 
-Connects aims to the tools. See [AI integration](../ai-integration).
+Connects aims to the tools. On a terminal without flags it lists what aims can add (MCP server and skill, status line, shell integration, login keepalive), one line each on what it does, with what is set up now selected; it adds or removes what you change. Flags do the same in a script. See [AI integration](../ai-integration).
+
+When a new version of aims can add something you were never asked about, the next command you run says so once, and `aims setup` is where you choose.
 
 | Flag | |
 | --- | --- |
-| `--all` | Skill, MCP server, status line and shell integration |
+| `--all` | Skill, MCP server, status line, shell integration and keepalive |
 | `--no-skill`, `--no-mcp` | Skip one |
 | `--statusline` | Show the account and plan usage in Claude Code's status line |
 | `--shell [name]` | Add the shell integration to your shell's startup file |
+| `--keepalive` | Renew logins in the background; see [`aims keepalive`](#aims-keepalive-onoff) |
 | `--tools` | Only these tools |
 
 ### `aims sync [tool]`
@@ -153,11 +157,17 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 
 ### `aims doctor`
 
-Checks the tools, each profile's login and shared folders, and the integrations, and prints the command that fixes each problem. It repairs shared links as it goes; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
+Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
+
+### `aims keepalive [on|off]`
+
+Renews every login whose access token has run out or is within 10 minutes of it, through the tool itself. A fresh login costs nothing. Codex renews without a request to the model; Claude Code gets a one-word prompt to its smallest model, the same check as `aims status --live`.
+
+`on` runs it every hour in the background (launchd, a systemd user timer or the Windows Task Scheduler); `off` removes that. See [Keeping logins alive](../failover#keeping-logins-alive).
 
 ### `aims clean`
 
-Takes aims out of your tools (skill, MCP server, status line, shell line) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. Alias: `aims uninstall`. `-y` skips the question.
+Takes aims out of your tools (skill, MCP server, status line, shell line, keepalive) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. Alias: `aims uninstall`. `-y` skips the question.
 
 ### `aims wipe`
 

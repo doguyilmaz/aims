@@ -70,6 +70,89 @@ type StatusLiner interface {
 	// RemoveStatusLine restores previous if command is still the one set,
 	// and reports whether it changed anything.
 	RemoveStatusLine(home, command, previous string) (removed bool, err error)
+	// HasStatusLine reports whether aims is the status line under home.
+	HasStatusLine(home string) bool
+}
+
+// Supervisor lets aims move a running interactive session to another
+// account: aims stops the tool when the session's account hits a limit and
+// starts it again on another one, resuming the same conversation.
+type Supervisor interface {
+	// Supervises reports whether args start an interactive conversation
+	// (not a subcommand such as mcp or login).
+	Supervises(args []string) bool
+	// Watch returns the args to start the session with, and poll, which
+	// reports the turns that ended since it was last called.
+	Watch(w Watch) (args []string, poll func() []SessionEvent, err error)
+	// ResumeArgs turns args into ones that resume conversation id instead of
+	// starting one, and send prompt first when it is not "". With id "" they
+	// start a new conversation without args' prompt.
+	ResumeArgs(bin string, args []string, id, prompt string) ([]string, error)
+}
+
+// Watch describes a supervised run.
+type Watch struct {
+	Args []string
+	// Self is the path of aims, for hooks that report back to it.
+	Self string
+	// RunDir is the run's own directory, AIMS_RUN in the tool's environment.
+	RunDir string
+	Home   Home
+	// Dir is the working directory; "" is aims' own.
+	Dir string
+	// Since is when this run started.
+	Since time.Time
+	// Env is what the commands the session runs (a shell command, the aims
+	// MCP server) must see, so `aims move` finds its session.
+	Env map[string]string
+}
+
+// SessionEvent is what happened in a supervised session: it was opened, or
+// a turn began or ended.
+type SessionEvent struct {
+	// Session is the conversation id.
+	Session string `json:"session"`
+	// Opened: the conversation was opened (started, resumed or cleared),
+	// no turn yet. Started: a turn began (the user sent a prompt).
+	Opened  bool `json:"opened,omitempty"`
+	Started bool `json:"started,omitempty"`
+	// Transcript is the file the conversation is saved to, when the tool
+	// says; until it exists there is nothing to resume.
+	Transcript string `json:"transcript,omitempty"`
+	// Prompt is the prompt of a turn that began. HeldFor names the profile
+	// the hook kept it back for: it was not sent, the move takes it along.
+	Prompt  string `json:"prompt,omitempty"`
+	HeldFor string `json:"heldFor,omitempty"`
+	// Failure is why the turn failed, when another account can help; Text
+	// is the provider's message.
+	Failure Failure `json:"failure,omitempty"`
+	Text    string  `json:"text,omitempty"`
+}
+
+// Hooker reads what a tool passes to the hook `aims hook <tool>`.
+type Hooker interface {
+	// HookEvent returns the start or end of a turn; ok is false for anything
+	// else.
+	HookEvent(raw []byte) (ev SessionEvent, ok bool)
+	// HoldPrompt is what the hook prints to keep a prompt from being sent,
+	// telling the user why.
+	HoldPrompt(reason string) []byte
+}
+
+// HoldFile, in a run's directory, names the profile a move waits for: the
+// hook then holds the user's next prompt for it.
+const HoldFile = "hold"
+
+// Diagnoser reports settings of the tool that keep aims from doing its job,
+// for aims doctor.
+type Diagnoser interface {
+	Diagnose(h Home) []string
+}
+
+// Refresher renews a login through the tool's own refresh, without a paid
+// request, and reports on it like Probe.
+type Refresher interface {
+	Refresh(ctx context.Context, h Home) Probe
 }
 
 // Layout is where a tool keeps its state and which parts accounts can share.
@@ -174,6 +257,13 @@ type Account struct {
 	Email    string
 	Plan     string
 	Org      string
+	// Tenant identifies the organization or workspace the login belongs
+	// to. Two logins with the same Email and Tenant share one plan, and
+	// so its limits; one e-mail can have a personal plan and a team seat.
+	Tenant string
+	// Expires is when the login's access token runs out; the tool renews it
+	// on its next request after that. Zero when unknown.
+	Expires time.Time
 }
 
 // Known reports a definite login state.

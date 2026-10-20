@@ -93,13 +93,15 @@ With the shell integration on, plain `claude` and `codex` behave like `aims clau
 
 ## 4. When an account hits its limit
 
-Usually you do nothing: the next session you start skips the limited account. A running session keeps its account, though; Claude Code and Codex read the login when they start. To move a conversation in the middle of a task, end the session and run:
+Usually you do nothing. A session started with `aims claude` or `aims codex` (no `@profile`) moves by itself: aims restarts it on the next usable account, continues the same conversation, and moves it back once the first account works again. New sessions skip the limited account too.
+
+A session that aims does not watch (`aims claude@work`, plain `claude`) keeps its account. To move its conversation, end the session and run:
 
 ```bash
 aims failover claude --resume
 ```
 
-This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. `aims order` asks whether to stay on the next account instead, and whether to switch at all for the five-hour limit or wait for its reset; see [The five-hour limit](../failover#the-five-hour-limit). [Limits and failover](../failover) explains what aims does on its own.
+This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. [Limits and failover](../failover) explains what aims does on its own.
 
 ## Adding more accounts
 

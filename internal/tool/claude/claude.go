@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/tidwall/gjson"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -116,6 +117,7 @@ type oauth struct {
 	AccessToken      string `json:"accessToken"`
 	RefreshToken     string `json:"refreshToken"`
 	SubscriptionType string `json:"subscriptionType"`
+	ExpiresAt        int64  `json:"expiresAt"` // Unix milliseconds
 }
 
 func keychainAccount() string {
@@ -152,12 +154,13 @@ func readKeychain(envValue string) (found bool, o *oauth) {
 func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	var cj struct {
 		OAuthAccount struct {
-			Email string `json:"emailAddress"`
-			Org   string `json:"organizationName"`
+			Email   string `json:"emailAddress"`
+			Org     string `json:"organizationName"`
+			OrgUUID string `json:"organizationUuid"`
 		} `json:"oauthAccount"`
 	}
 	fsx.ReadJSONLenient(claudeJSON(h), &cj)
-	acct := tool.Account{Email: cj.OAuthAccount.Email, Org: cj.OAuthAccount.Org}
+	acct := tool.Account{Email: cj.OAuthAccount.Email, Org: cj.OAuthAccount.Org, Tenant: cj.OAuthAccount.OrgUUID}
 	for _, k := range []string{"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"} {
 		if h.ProfileEnv[k] != "" {
 			acct.LoggedIn, acct.Method = tool.Known(true), "token"
@@ -183,6 +186,9 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 		acct.Method = "claude.ai"
 		if o != nil {
 			acct.Plan = o.SubscriptionType
+			if o.ExpiresAt > 0 {
+				acct.Expires = time.UnixMilli(o.ExpiresAt)
+			}
 		}
 	}
 	return acct
@@ -190,12 +196,16 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 
 // Probe sends a one-word prompt to the smallest model. Claude Code has no
 // account API that works without refreshing the login, so this costs a few
-// tokens; it runs only when asked for (aims status --live).
+// tokens; it runs only when asked for (aims status --live, aims keepalive).
+// It starts no MCP server, runs no hook and offers no tool, which keeps it
+// cheap, quick and free of side effects.
 func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
 	if h.Bin == "" {
 		return tool.Probe{Status: tool.ProbeError, Detail: "claude is not installed"}
 	}
-	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku", "--", "Reply with just: OK"}
+	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku",
+		"--strict-mcp-config", "--settings", `{"disableAllHooks":true}`, "--tools", "", "--system-prompt", "Answer in one word.",
+		"--", "Reply with just: OK"}
 	out, code, err := proc.Output(h.Bin, args, h.Env, 2*time.Minute)
 	if err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
@@ -318,6 +328,11 @@ func (*Adapter) InstallStatusLine(home, command string) (string, error) {
 		return "", err
 	}
 	return prev, fsx.WriteFile(path, out, 0o644)
+}
+
+func (*Adapter) HasStatusLine(home string) bool {
+	b, err := os.ReadFile(filepath.Join(home, "settings.json"))
+	return err == nil && IsAimsStatusLine(gjson.GetBytes(b, "statusLine.command").String())
 }
 
 func (*Adapter) RemoveStatusLine(home, command, previous string) (bool, error) {

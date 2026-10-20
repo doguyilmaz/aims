@@ -79,18 +79,7 @@ type Failover struct {
 	CooldownMinutes int `json:"cooldownMinutes"`
 	// Threshold is the usage percentage treated as "limited".
 	Threshold float64 `json:"threshold"`
-	// FiveHour fails over when the five-hour window is used up. Off, only the
-	// weekly limit and login problems do: sessions wait for the five-hour
-	// reset on the same account.
-	FiveHour bool `json:"fiveHour"`
-	// Stay keeps the account that took over: failing over makes it the
-	// active one, so sessions stay on it after the other works again.
-	Stay bool `json:"stay"`
 }
-
-// Counts reports whether a limit of the window labelled label ("5h", "7d",
-// "" when unknown) is a reason to fail over.
-func (f Failover) Counts(label string) bool { return f.FiveHour || !tool.ShortWindow(label) }
 
 // Config is ~/.aims/config.json.
 type Config struct {
@@ -98,6 +87,9 @@ type Config struct {
 	Failover Failover          `json:"failover"`
 	Status   StatusLine        `json:"statusline,omitzero"`
 	Tools    map[tool.ID]*Tool `json:"tools"`
+	// Offered lists the integrations the user has been asked about, so one
+	// that a new version adds is pointed out once.
+	Offered []string `json:"offered,omitempty"`
 }
 
 // StatusLine holds the user's previous Claude status line, shown before aims'.
@@ -133,7 +125,7 @@ func ValidName(s string) bool { return nameRe.MatchString(s) }
 // Load reads the config and fills defaults. A config that does not parse is an
 // error, never an empty config: every command writes it back.
 func Load() (*Config, error) {
-	c := &Config{Version: 1, Failover: Failover{Auto: true, CooldownMinutes: 300, Threshold: 95, FiveHour: true}}
+	c := &Config{Version: 1, Failover: Failover{Auto: true, CooldownMinutes: 300, Threshold: 95}}
 	if _, err := fsx.ReadJSON(configPath(), c); err != nil {
 		return nil, err
 	}

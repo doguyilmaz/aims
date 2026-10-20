@@ -296,24 +296,6 @@ func SetOrder(a tool.Adapter, names []string) ([]string, error) {
 	return cfg.Tools[a.ID()].Order, nil
 }
 
-// SetFailover changes how failover treats the five-hour limit; nil leaves a
-// setting as it is.
-func SetFailover(fiveHour, stay *bool) (config.Failover, error) {
-	cfg, err := config.Update(func(c *config.Config) error {
-		if fiveHour != nil {
-			c.Failover.FiveHour = *fiveHour
-		}
-		if stay != nil {
-			c.Failover.Stay = *stay
-		}
-		return nil
-	})
-	if err != nil {
-		return config.Failover{}, err
-	}
-	return cfg.Failover, nil
-}
-
 // LastUsed is the profile aims launched most recently. It can differ from the
 // active one after an automatic skip, and it is the account a person means
 // by "the one I was just using".
@@ -347,9 +329,8 @@ var ErrNoTarget = errors.New("no other usable profile")
 
 // Failover marks a profile as limited (or logged out). New sessions skip it
 // while the mark lasts and use To, the next usable profile, then come back to
-// it on their own. With to, with automatic failover off, or with
-// failover.stay when From is the active profile, To becomes the active
-// profile instead, as with Use.
+// it on their own. With to, or with automatic failover off, To becomes the
+// active profile instead, as with Use.
 // It changes nothing when there is no profile to switch to.
 // by names who asked ("aims failover", "the dashboard"), for the mark.
 func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason, by string) (FailoverResult, error) {
@@ -380,14 +361,8 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		res.To, res.Switched = to, true
 	} else {
 		// The profile the next session gets: the preferred one, unless it is
-		// the one being marked or unusable itself. With failover.stay the
-		// next one in order takes the active one's place, whatever this
-		// terminal is pinned to.
-		stay := cfg.Failover.Auto && cfg.Failover.Stay && res.From == t.Active
+		// the one being marked or unusable itself.
 		preferred, _ := cfg.Preferred(id, "")
-		if stay {
-			preferred = t.Active
-		}
 		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, []string{res.From})
 		if pick.Name == "" {
 			var why []string
@@ -401,7 +376,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		}
 		res.To = pick.Name
 		// Without automatic failover nothing would skip the marked profile.
-		res.Switched = !cfg.Failover.Auto || stay
+		res.Switched = !cfg.Failover.Auto
 	}
 	switch reason {
 	case "", "limit":

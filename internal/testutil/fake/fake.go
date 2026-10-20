@@ -16,13 +16,18 @@ package fake
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
+	"time"
 )
 
 func home(envVar, def string) (dir, label string) {
@@ -158,9 +163,20 @@ func Claude() int {
 		return 0
 	}
 
+	if slices.Contains(args, "--help") {
+		fmt.Print(claudeHelp)
+		return 0
+	}
 	headless := slices.Contains(args, "-p") || slices.Contains(args, "--print")
 	if !headless {
+		settings := flag(args, "--settings")
+		if settings != "" {
+			args = slices.Delete(slices.Clone(args), slices.Index(args, "--settings"), slices.Index(args, "--settings")+2)
+		}
 		fmt.Printf("claude interactive as %s args=%q session=%s api_key=%q\n", label, args, os.Getenv("AIMS_SESSION_PROFILE"), os.Getenv("ANTHROPIC_API_KEY"))
+		if settings != "" {
+			interactiveTurn(settings, label, args, has)
+		}
 		if s := os.Getenv("FAKE_EXIT"); s != "" {
 			var code int
 			fmt.Sscan(s, &code)
@@ -213,6 +229,87 @@ func Claude() int {
 	return 0
 }
 
+// claudeHelp is the part of `claude --help` aims reads: which options take
+// a value.
+const claudeHelp = `Usage: claude [options] [command] [prompt]
+
+Options:
+  --add-dir <directories...>        Additional directories
+  -c, --continue                    Continue the most recent conversation
+  -d, --debug [filter]              Enable debug mode
+  --model <model>                   Model for the current session
+  -r, --resume [value]              Resume a conversation
+  --settings <file-or-json>         Additional settings
+`
+
+// interactiveTurn plays one turn of an interactive session started with
+// hooks in --settings: it runs $FAKE_BEFORE_TURN, then the StopFailure hooks
+// when the account is limited, logged out or rate limited, the Stop hooks
+// otherwise. Then it waits, as Claude Code does, for $FAKE_LINGER; stopped
+// meanwhile, it exits with 143.
+func interactiveTurn(settings, label string, args []string, has func(string) bool) {
+	if c := os.Getenv("FAKE_BEFORE_TURN"); c != "" {
+		_ = exec.Command("sh", "-c", c).Run()
+	}
+	session := "s-" + label
+	for _, f := range []string{"-r", "--resume"} {
+		if r := flag(args, f); r != "" {
+			session = r
+		}
+	}
+	event, payload := "Stop", map[string]any{}
+	switch {
+	case has("EXPIRED"):
+		event, payload = "StopFailure", map[string]any{"error": "authentication_failed", "last_assistant_message": "Please run /login"}
+	case has("LIMITED"):
+		event, payload = "StopFailure", map[string]any{"error": "rate_limit", "last_assistant_message": "You've hit your session limit · resets 5pm"}
+	case has("BUSY"):
+		event, payload = "StopFailure", map[string]any{"error": "rate_limit", "error_details": "429 Too Many Requests"}
+	}
+	payload["hook_event_name"], payload["session_id"] = event, session
+	in, _ := json.Marshal(payload)
+	var cfg struct {
+		Hooks map[string][]struct {
+			Hooks []struct{ Command string } `json:"hooks"`
+		} `json:"hooks"`
+	}
+	doc := []byte(settings)
+	if !strings.HasPrefix(settings, "{") {
+		doc, _ = os.ReadFile(settings)
+	}
+	_ = json.Unmarshal(doc, &cfg)
+	run := func(event string, in []byte) string {
+		var out bytes.Buffer
+		for _, g := range cfg.Hooks[event] {
+			for _, h := range g.Hooks {
+				cmd := exec.Command("sh", "-c", h.Command)
+				cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(in), &out, os.Stderr
+				_ = cmd.Run()
+			}
+		}
+		return out.String()
+	}
+	run(event, in)
+	// $FAKE_NEXT_PROMPT: a moment after the turn, the user sends another
+	// prompt, which a hook may hold back.
+	if p := os.Getenv("FAKE_NEXT_PROMPT"); p != "" && event == "Stop" {
+		time.Sleep(1500 * time.Millisecond)
+		next, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "session_id": session, "prompt": p})
+		if out := run("UserPromptSubmit", next); strings.Contains(out, `"decision":"block"`) {
+			fmt.Printf("claude held the prompt as %s\n", label)
+		}
+	}
+	linger, _ := time.ParseDuration(os.Getenv("FAKE_LINGER"))
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM)
+	select {
+	case <-sig:
+		fmt.Printf("claude stopped as %s\n", label)
+		os.Exit(143)
+	case <-time.After(linger):
+	}
+}
+
 // idToken builds an unsigned JWT carrying what aims reads from Codex logins.
 func idToken(email, plan string) string {
 	enc := base64.RawURLEncoding.EncodeToString
@@ -228,9 +325,20 @@ func Codex() int {
 	toml := filepath.Join(dir, "config.toml")
 	has := func(n string) bool { return exists(filepath.Join(dir, n)) }
 	loggedIn := exists(auth)
+	// aims runs a conversation it follows without the app-server daemon.
+	supervised := len(args) > 1 && args[0] == "-c" && args[1] == "features.daemon_auto_start=false"
+	if supervised {
+		args = args[2:]
+		for len(args) > 1 && args[0] == "-c" && strings.HasPrefix(args[1], "shell_environment_policy.set.") {
+			args = args[2:]
+		}
+	}
 
 	if len(args) == 0 {
 		fmt.Printf("codex interactive as %s session=%s\n", label, os.Getenv("AIMS_SESSION_PROFILE"))
+		if supervised {
+			codexTurn(dir, label, args, has)
+		}
 		return 0
 	}
 	switch args[0] {
@@ -320,7 +428,58 @@ func Codex() int {
 		return 0
 	}
 	fmt.Printf("codex interactive as %s args=%q\n", label, args)
+	if supervised {
+		codexTurn(dir, label, args, has)
+	}
 	return 0
+}
+
+// codexTurn plays one turn of a conversation aims follows: it runs
+// $FAKE_BEFORE_TURN, records the turn's end in the rollout as codex does
+// (failed when the account is limited or logged out), and waits $FAKE_LINGER;
+// stopped meanwhile, it exits with 143.
+func codexTurn(dir, label string, args []string, has func(string) bool) {
+	if c := os.Getenv("FAKE_BEFORE_TURN"); c != "" {
+		_ = exec.Command("sh", "-c", c).Run()
+	}
+	id := "c-" + label
+	if i := slices.Index(args, "resume"); i >= 0 && i+1 < len(args) {
+		id = args[i+1]
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	path := ""
+	if len(matches) > 0 {
+		path = matches[0]
+	} else {
+		now := time.Now()
+		path = filepath.Join(dir, "sessions", now.Format("2006/01/02"), "rollout-"+now.Format("2006-01-02T15-04-05")+"-"+id+".jsonl")
+		_ = os.MkdirAll(filepath.Dir(path), 0o755)
+		cwd, _ := os.Getwd()
+		line, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": cwd, "originator": "codex-tui", "thread_source": "user", "timestamp": now.UTC().Format(time.RFC3339Nano)}})
+		_ = os.WriteFile(path, append(line, '\n'), 0o644)
+	}
+	end := map[string]any{"type": "task_complete", "completed_at": time.Now().Unix()}
+	switch {
+	case has("EXPIRED"):
+		end["error"] = map[string]any{"message": "Your access token could not be refreshed", "codex_error_info": "unauthorized"}
+	case has("LIMITED"):
+		end["error"] = map[string]any{"message": "You've hit your usage limit. Try again at 5:00 PM.", "codex_error_info": "usage_limit_exceeded"}
+	}
+	line, _ := json.Marshal(map[string]any{"type": "event_msg", "payload": end})
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		_, _ = f.Write(append(line, '\n'))
+		f.Close()
+	}
+	linger, _ := time.ParseDuration(os.Getenv("FAKE_LINGER"))
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM)
+	select {
+	case <-sig:
+		fmt.Printf("codex stopped as %s\n", label)
+		os.Exit(143)
+	case <-time.After(linger):
+	}
 }
 
 // appServer answers the two JSON-RPC calls aims makes.

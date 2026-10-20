@@ -121,9 +121,9 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 		if auth.Tokens == nil {
 			return tool.Account{LoggedIn: tool.Known(false)}
 		}
-		email, plan := claims(auth.Tokens.IDToken)
+		email, plan, workspace := claims(auth.Tokens.IDToken)
 		ok := auth.Tokens.RefreshToken != "" || auth.Tokens.AccessToken != ""
-		return tool.Account{LoggedIn: tool.Known(ok), Method: "chatgpt", Email: email, Plan: plan}
+		return tool.Account{LoggedIn: tool.Known(ok), Method: "chatgpt", Email: email, Plan: plan, Tenant: workspace, Expires: expiry(auth.Tokens.AccessToken)}
 	}
 	// The login may live in the OS keyring (cli_auth_credentials_store).
 	if h.Bin == "" {
@@ -141,27 +141,41 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	return tool.Account{}
 }
 
+// expiry reads when an access token runs out, decoded like claims.
+func expiry(token string) time.Time {
+	var c struct {
+		Exp int64 `json:"exp"`
+	}
+	if !decode(token, &c) || c.Exp == 0 {
+		return time.Time{}
+	}
+	return time.Unix(c.Exp, 0)
+}
+
 // claims reads the e-mail and plan from the ID token. The token is only
 // decoded, never verified or sent anywhere: it is a label, not a credential check.
-func claims(idToken string) (email, plan string) {
-	parts := strings.Split(idToken, ".")
-	if len(parts) < 2 {
-		return "", ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
-	if err != nil {
-		return "", ""
-	}
+func claims(idToken string) (email, plan, workspace string) {
 	var c struct {
 		Email string `json:"email"`
 		Auth  struct {
-			Plan string `json:"chatgpt_plan_type"`
+			Plan    string `json:"chatgpt_plan_type"`
+			Account string `json:"chatgpt_account_id"`
 		} `json:"https://api.openai.com/auth"`
 	}
-	if json.Unmarshal(payload, &c) != nil {
-		return "", ""
+	if !decode(idToken, &c) {
+		return "", "", ""
 	}
-	return c.Email, c.Auth.Plan
+	return c.Email, c.Auth.Plan, c.Auth.Account
+}
+
+// decode reads a JWT's payload into v.
+func decode(token string, v any) bool {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	return err == nil && json.Unmarshal(payload, v) == nil
 }
 
 func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPShared }

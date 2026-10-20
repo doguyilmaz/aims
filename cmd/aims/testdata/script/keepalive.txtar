@@ -1,0 +1,50 @@
+# Setup: personal (existing login) and work.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+env FAKE_RECORD_ARGS=1
+
+# A login of unknown age is left alone; nothing is sent.
+exec aims keepalive
+stderr 'claude/personal: login age unknown, left alone'
+stderr 'aims keepalive on'
+! exists $WORK/side-effects
+
+# A fresh access token is left alone; one that ran out is renewed through
+# the tool, and only that one.
+cp FRESH $HOME/.claude/.credentials.json
+cp EXPIRED_TOKEN $HOME/.aims/profiles/claude/work/.credentials.json
+exec aims keepalive
+stderr 'claude/personal: fresh for'
+stderr 'claude/work: renewed'
+grep -count=1 'claude -p' $WORK/side-effects
+
+# A lapsed login is reported and marked.
+cp LIMITED $HOME/.aims/profiles/claude/work/EXPIRED
+exec aims keepalive
+stderr 'claude/work: the login has lapsed'
+stderr 'aims login claude work'
+exec aims status claude
+stdout 'work .*login expired'
+rm $HOME/.aims/profiles/claude/work/EXPIRED
+
+# on and off install and remove the background job.
+[darwin] exec aims keepalive on
+[darwin] stderr 'checked every hour'
+[darwin] exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+[darwin] grep '<string>keepalive</string>' $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+[darwin] grep '<key>PATH</key>' $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+[darwin] exec aims keepalive off
+[darwin] ! exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+[linux] exec aims keepalive on
+[linux] exists $HOME/.config/systemd/user/aims-keepalive.timer
+[linux] exec aims clean -y
+[linux] ! exists $HOME/.config/systemd/user/aims-keepalive.timer
+! exec aims keepalive sometimes
+stderr 'on or off'
+
+-- FRESH --
+{"claudeAiOauth":{"accessToken":"a","refreshToken":"r","subscriptionType":"max","expiresAt":4102444800000}}
+-- EXPIRED_TOKEN --
+{"claudeAiOauth":{"accessToken":"a","refreshToken":"r","subscriptionType":"max","expiresAt":1000}}
+-- LIMITED --

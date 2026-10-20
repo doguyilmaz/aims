@@ -21,16 +21,8 @@ func TestLoadDefaultsAndNormalize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A config from before fiveHour existed keeps failing over at the
-	// five-hour limit.
-	if c.Failover.Threshold != 95 || c.Failover.CooldownMinutes != 300 || !c.Failover.FiveHour || c.Failover.Stay {
+	if c.Failover.Threshold != 95 || c.Failover.CooldownMinutes != 300 {
 		t.Errorf("defaults: %+v", c.Failover)
-	}
-	if !c.Failover.Counts("5h") || !c.Failover.Counts("7d") || !c.Failover.Counts("") {
-		t.Errorf("every limit counts by default")
-	}
-	if f := (Failover{}); f.Counts("5h") || !f.Counts("7d") || !f.Counts("") {
-		t.Errorf("fiveHour off: only the five-hour window is waited out")
 	}
 	tl := c.Tools["claude"]
 	// An unknown active profile falls back to the first in order.

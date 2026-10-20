@@ -43,7 +43,7 @@ stdout '"pct": 12'
 
 cp usage $HOME/.aims/profiles/codex/work/USAGE
 exec aims status --live codex
-stdout 'work .*near limit'
+stdout 'work .*limited [0-9]'
 
 -- marker --
 -- config.toml --

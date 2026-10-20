@@ -10,7 +10,7 @@ import (
 
 func TestRender(t *testing.T) {
 	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	cfg := &config.Config{Failover: config.Failover{Threshold: 95, FiveHour: true}}
+	cfg := &config.Config{Failover: config.Failover{Threshold: 95}}
 	next := func() string { return "personal" }
 	w := func(label string, pct float64, resets time.Duration) tool.Window {
 		return tool.Window{Label: label, Percent: pct, ResetsAt: now.Add(resets)}
@@ -36,22 +36,4 @@ func TestRender(t *testing.T) {
 		t.Errorf("no other account: %q", got)
 	}
 
-	// With failover.fiveHour off, a five-hour limit is waited out: no arrow.
-	// The weekly limit, or a mark of unknown window, still points on.
-	cfg.Failover.FiveHour = false
-	waits := []struct {
-		windows []tool.Window
-		ps      *config.ProfileState
-		want    string
-	}{
-		{[]tool.Window{w("5h", 110, 200*time.Minute), w("7d", 44, 48*time.Hour)}, nil, "work ▰▰▰▰▰  110% ↻3h20m · 7d 44%"},
-		{[]tool.Window{w("5h", 110, time.Hour)}, &config.ProfileState{Until: now.Add(time.Hour), Reason: "limit", Window: "5h"}, "work waiting ↻1h ▰▰▰▰▰  110% ↻1h"},
-		{[]tool.Window{w("5h", 30, time.Hour), w("7d", 96, 50*time.Hour)}, nil, "work ▰▰▱▱▱  30% · 7d 96% ↻2d → personal"},
-		{nil, &config.ProfileState{Until: now.Add(time.Hour), Reason: "limit"}, "work limited ↻1h → personal"},
-	}
-	for _, c := range waits {
-		if got := render(cfg, "work", c.windows, c.ps, next, now, false); got != c.want {
-			t.Errorf("waiting: got  %q\nwant %q", got, c.want)
-		}
-	}
 }

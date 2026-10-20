@@ -132,3 +132,20 @@ func TestResetTime(t *testing.T) {
 		}
 	}
 }
+
+func TestFollowEvents(t *testing.T) {
+	dir := t.TempDir()
+	_ = RecordEvent(dir, SessionEvent{Session: "stale"})
+	poll := FollowEvents(dir)
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("a new run starts empty: %+v", evs)
+	}
+	_ = RecordEvent(dir, SessionEvent{Session: "one"})
+	_ = RecordEvent(dir, SessionEvent{Session: "two", Failure: FailLimit})
+	if evs := poll(); len(evs) != 2 || evs[1].Failure != FailLimit {
+		t.Fatalf("events: %+v", evs)
+	}
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("read twice: %+v", evs)
+	}
+}

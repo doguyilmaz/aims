@@ -21,9 +21,7 @@ Both JSON files are written atomically with owner-only permissions, under a lock
   "failover": {
     "auto": true,
     "cooldownMinutes": 300,
-    "threshold": 95,
-    "fiveHour": true,
-    "stay": false
+    "threshold": 95
   },
   "statusline": {
     "chain": "~/bin/my-status-line"
@@ -67,7 +65,7 @@ Both JSON files are written atomically with owner-only permissions, under a lock
 | --- | --- |
 | `hub` | The tool's normal folder, recorded the first time aims needs it. Shared entries link here. |
 | `hubEnv` | `CLAUDE_CONFIG_DIR` or `CODEX_HOME` as you had it set, if you did |
-| `active` | The profile new sessions get. aims keeps it first in `order`, and moves another one here when it takes over with [`failover.stay`](../failover#settings) on. |
+| `active` | The profile new sessions get. aims keeps it first in `order`,, and `aims use` and `aims order` change it. |
 | `order` | Which profiles stand in, in turn, while the active one is limited or logged out |
 
 `failover` is described in [Limits and failover](../failover#settings). `statusline.chain` is the status line command you had before `aims setup`, which aims runs first.

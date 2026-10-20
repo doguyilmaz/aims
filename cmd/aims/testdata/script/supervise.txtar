@@ -1,0 +1,88 @@
+[windows] skip 'stops the tool with SIGTERM and runs hooks with sh'
+# Setup: personal (existing login) and work, both logged in.
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+env FAKE_LINGER=5s
+
+# personal hits its limit mid-session: aims stops it and continues the same
+# conversation on work, keeping the options and dropping the first prompt.
+cp LIMITED $HOME/.claude/LIMITED
+exec aims claude --model opus --add-dir a b -- hello
+stdout 'claude interactive as default args=\["--model" "opus" "--add-dir" "a" "b" "--" "hello"\]'
+stdout 'claude stopped as default'
+stderr 'claude: personal hit its usage limit; continuing this conversation on work'
+stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
+! stdout 'stopped as work'
+exec aims status claude
+stdout 'personal .*limited .*marked by a session'
+
+# Once personal works again, the conversation goes back to it with the
+# user's next prompt, which the hook holds back so nothing is lost.
+env FAKE_BEFORE_TURN='aims clear claude personal'
+env FAKE_NEXT_PROMPT='next question'
+rm $HOME/.claude/LIMITED
+exec aims claude -r s-old
+stdout 'claude interactive as work args=\["-r" "s-old"\]'
+stdout 'claude held the prompt as work'
+stdout 'claude stopped as work'
+stderr 'claude: personal works again; this conversation goes back to it'
+stdout 'claude interactive as default args=\["--resume" "s-old" "--" "next question"\]'
+! stdout 'held the prompt as default'
+env FAKE_BEFORE_TURN=
+env FAKE_NEXT_PROMPT=
+
+# A dead login moves the conversation on too, and marks the account.
+cp LIMITED $HOME/.claude/EXPIRED
+exec aims claude
+stderr 'claude: personal hit a login error; continuing this conversation on work'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+exec aims status claude
+stdout 'personal .*login expired'
+rm $HOME/.claude/EXPIRED
+exec aims login claude personal
+
+# A pinned session keeps its account: nothing watches it.
+cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
+exec aims claude@work
+stdout 'claude interactive as work args=\[\]'
+! stdout 'stopped'
+
+# The user's own --settings keep working, with the hooks merged in.
+rm $HOME/.aims/profiles/claude/work/LIMITED
+cp LIMITED $HOME/.claude/LIMITED
+exec aims claude --settings '{"model":"haiku"}'
+stderr 'continuing this conversation on work'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+
+# aims move, run inside the session, moves the conversation once the turn
+# ends, and it stays there: the first account does not take it back.
+rm $HOME/.claude/LIMITED
+exec aims clear claude
+env FAKE_BEFORE_TURN='aims move work'
+exec aims claude
+stdout 'claude interactive as default args=\[\]'
+stderr 'claude: moving this conversation to work, as asked'
+stdout 'claude interactive as work args=\["--resume" "s-default"\]'
+! stdout 'stopped as work'
+exec aims status claude
+stdout '● personal'
+
+# aims failover inside the session marks the account and moves it too.
+env FAKE_BEFORE_TURN='aims failover claude --minutes 30'
+exec aims claude
+stderr 'moving this conversation to work, as asked'
+exec aims status claude
+stdout 'personal .*limited .*marked by aims failover'
+env FAKE_BEFORE_TURN=
+exec aims clear claude
+
+# Outside such a session there is nothing to move.
+! exec aims move work
+stderr 'was not started with `aims claude` or `aims codex`'
+env AIMS_SESSION_PROFILE=claude:personal
+env AIMS_RUN=$WORK
+! exec aims move work
+stderr 'cannot move it'
+
+-- LIMITED --

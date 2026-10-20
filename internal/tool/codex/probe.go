@@ -15,14 +15,19 @@ import (
 
 // Probe asks `codex app-server` (JSON-RPC over stdio) for the account and its
 // rate limits. Neither call spends tokens.
-func (*Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
+func (*Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe { return probe(ctx, h, false) }
+
+// Refresh is Probe that first makes codex renew the login.
+func (*Adapter) Refresh(ctx context.Context, h tool.Home) tool.Probe { return probe(ctx, h, true) }
+
+func probe(ctx context.Context, h tool.Home, refresh bool) tool.Probe {
 	if h.Bin == "" {
 		return tool.Probe{Status: tool.ProbeError, Detail: "codex is not installed"}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	res, err := rpc(ctx, h, []call{
-		{"account/read", map[string]any{}},
+		{"account/read", map[string]any{"refreshToken": refresh}},
 		{"account/rateLimits/read", map[string]any{"excludeResetCreditDetails": true}},
 	})
 	if err != nil && res["account/read"] == nil {

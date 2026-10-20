@@ -17,7 +17,7 @@ stdout 'personal .*limited [0-9hm]+ .*marked by a failed run'
 # The next run goes to work straight away.
 exec aims claude -p -- again
 stdout 'answer from work: again'
-stderr 'skipping "personal" \(5h limit for [0-9hm]+, marked by a failed run\), using "work"'
+stderr 'claude: using work while personal is out \(5h limit for [0-9hm]+, marked by a failed run\)'
 stderr 'personal works again\? aims clear claude personal'
 
 # A run that already called a tool is not repeated, even with a profile to spare.
@@ -97,7 +97,7 @@ stdout '● personal .*limited 1h30m'
 stdout 'work .*ready .*standing in for personal'
 exec aims claude
 stdout 'claude interactive as work'
-stderr 'skipping "personal" \(limit for 1h30m, marked by aims failover\), using "work"'
+stderr 'claude: using work while personal is out \(limit for 1h30m, marked by aims failover\)'
 exec aims clear claude personal
 exec aims claude
 stdout 'claude interactive as default'
@@ -129,57 +129,15 @@ exec aims clear claude personal
 exec aims status claude
 stdout 'personal .*ready'
 
-# With --five-hour wait, a five-hour limit is waited out on the same account:
-# the run is not repeated elsewhere, and new runs stay on it.
+# When every account is limited, a session goes to the one that is back
+# first, here work (30m) over personal (1h30m).
 exec aims clear claude
 exec aims use personal
-# The flags work with a tool and no order too, and say they are not per tool.
-exec aims order claude --five-hour wait
-stderr 'Failover at the 5-hour limit: wait for the reset; once the first account works again: back to it'
-stderr 'these apply to every tool, not only Claude Code'
-cp LIMITED $HOME/.claude/LIMITED
-! exec aims claude -p --output-format stream-json -- wait-it-out
-stdout 'hit your session limit'
-! stderr 'retrying'
-stderr 'claude/personal hit its 5-hour limit; new runs wait for the reset on it instead of failing over'
-exec aims status claude
-stdout '● personal .*waiting [0-9hm]+'
-! stdout 'standing in'
-! exec aims claude -p -- still-waiting
-stderr '"personal" waits for its 5-hour reset \(5h limit for [0-9hm]+\) instead of failing over'
-stderr 'another account now: aims claude@work'
-# An explicit run says the limit is waited out, not that new runs move on.
-! exec aims claude@personal -p --output-format stream-json -- explicit
-stderr 'claude/personal hit its 5-hour limit; aims waits for the reset instead of failing over'
-# A mark by hand still switches, also without --minutes: it replaces the
-# waited mark and keeps its end.
-exec aims failover claude --from personal
-stderr 'new Claude Code sessions use work until then'
-exec aims claude -p -- by-hand
-stdout 'answer from work: by-hand'
-stderr 'skipping "personal" \(limit for [0-9hm]+, marked by aims failover\), using "work"'
-
-# With --after-reset stay, the account that takes over becomes the active one
-# and keeps the place after the limit lifts.
+exec aims failover claude --from personal --minutes 90
+exec aims failover claude --from work --to personal --minutes 30
+exec aims claude
+stdout 'claude interactive as work'
+stderr 'claude: every account is limited; using work, the first back \(in 30m\)'
 exec aims clear claude
-exec aims order claude personal work --five-hour switch --after-reset stay
-stderr 'once personal works again: stay on the one that took over'
-exec aims claude -p --output-format stream-json -- take-over
-stdout 'answer from work: take-over'
-stderr '"work" is the active account now and stays so after "personal" works again'
-stderr 'back to personal: aims use claude personal'
-exec aims status claude
-stdout '● work'
-exec aims clear claude personal
-rm $HOME/.claude/LIMITED
-exec aims claude -p -- stays
-stdout 'answer from work: stays'
-# aims failover hands the place over too.
-exec aims failover claude --from work --minutes 30
-stderr 'Claude Code now uses personal; work rests'
-exec aims order --after-reset back
-exec aims clear claude
-! exec aims order --five-hour sometimes
-stderr '--five-hour must be switch or wait'
 
 -- LIMITED --
