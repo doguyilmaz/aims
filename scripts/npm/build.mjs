@@ -1,19 +1,27 @@
-// Builds the npm package from GoReleaser's output and optionally publishes it.
+// Builds the npm package and optionally publishes it.
 //
-//   node scripts/npm/build.mjs v1.2.3 [--publish]
+//   node scripts/npm/build.mjs v1.2.3 [--from <dir>] [--publish]
+//
+// --from takes the binaries from the release archives in <dir>: the signed and
+// notarized ones the tapster hub published. Without it they come from
+// GoReleaser's local output, which is fine for trying the package locally.
 //
 // @doguyilmaz/aims is one package: a small launcher and the binary for every
 // supported platform, in bin/<platform>-<arch>/. One name on npm, no install
 // scripts, and it works offline and with --ignore-scripts.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const [tag, flag] = process.argv.slice(2);
-if (!/^v\d+\.\d+\.\d+(-[\w.]+)?$/.test(tag ?? '')) {
-  console.error('usage: node scripts/npm/build.mjs vX.Y.Z [--publish]');
+const args = process.argv.slice(2);
+const tag = args[0];
+const from = args.includes('--from') ? args[args.indexOf('--from') + 1] : null;
+const flag = args.includes('--publish') ? '--publish' : null;
+if (!/^v\d+\.\d+\.\d+(-[\w.]+)?$/.test(tag ?? '') || (args.includes('--from') && !from)) {
+  console.error('usage: node scripts/npm/build.mjs vX.Y.Z [--from <dir>] [--publish]');
   process.exit(2);
 }
 const version = tag.slice(1);
@@ -24,9 +32,30 @@ const out = join(root, 'dist', 'npm', 'aims');
 const nodeOS = { darwin: 'darwin', linux: 'linux', windows: 'win32' };
 const nodeCPU = { amd64: 'x64', arm64: 'arm64' };
 
-const artifacts = JSON.parse(readFileSync(join(root, 'dist', 'artifacts.json'), 'utf8'));
-const binaries = artifacts.filter((a) => a.type === 'Binary' && a.extra?.ID === 'aims');
-if (binaries.length === 0) throw new Error('no binaries in dist/artifacts.json; run goreleaser first');
+// One { goos, goarch, path } per binary, from the release archives or GoReleaser's output.
+function fromArchives(dir) {
+  const work = mkdtempSync(join(tmpdir(), 'aims-npm-'));
+  const found = [];
+  for (const file of readdirSync(dir)) {
+    const m = /^aims_[\w.-]+_(darwin|linux|windows)_(amd64|arm64)\.(tar\.gz|zip)$/.exec(file);
+    if (!m) continue;
+    const [, goos, goarch, ext] = m;
+    const into = join(work, `${goos}-${goarch}`);
+    mkdirSync(into, { recursive: true });
+    const exe = goos === 'windows' ? 'aims.exe' : 'aims';
+    if (ext === 'zip') execFileSync('unzip', ['-q', '-o', join(dir, file), exe, '-d', into]);
+    else execFileSync('tar', ['-xzf', join(dir, file), '-C', into, exe]);
+    found.push({ goos, goarch, path: join(into, exe) });
+  }
+  return found;
+}
+
+const binaries = from
+  ? fromArchives(from)
+  : JSON.parse(readFileSync(join(root, 'dist', 'artifacts.json'), 'utf8'))
+      .filter((a) => a.type === 'Binary' && a.extra?.ID === 'aims')
+      .map((a) => ({ goos: a.goos, goarch: a.goarch, path: join(root, a.path) }));
+if (binaries.length === 0) throw new Error(from ? `no aims archives in ${from}` : 'no binaries in dist/artifacts.json; run goreleaser first');
 
 rmSync(join(root, 'dist', 'npm'), { recursive: true, force: true });
 const oses = new Set();
@@ -38,7 +67,7 @@ for (const b of binaries) {
   const exe = os === 'win32' ? 'aims.exe' : 'aims';
   const dir = join(out, 'bin', `${os}-${cpu}`);
   mkdirSync(dir, { recursive: true });
-  copyFileSync(join(root, b.path), join(dir, exe));
+  copyFileSync(b.path, join(dir, exe));
   chmodSync(join(dir, exe), 0o755);
   oses.add(os);
   cpus.add(cpu);
