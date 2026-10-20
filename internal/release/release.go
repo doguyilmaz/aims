@@ -81,6 +81,9 @@ func at(s []int, i int) int {
 	return 0
 }
 
+// Cask is aims' Homebrew cask, by its full name.
+const Cask = "doguyilmaz/tap/aims"
+
 // Method is how the running binary was installed.
 type Method int
 
@@ -90,14 +93,20 @@ const (
 	GoInstall
 	Npm
 	Scoop
+	// Script: where the install script puts aims; upgraded by running the
+	// script again, which checks the download against the release's
+	// checksums.
+	Script
 )
 
 // Detect classifies an install from the binary's resolved path. aims never
 // overwrites itself: a package manager that owns the file is asked to
 // upgrade it, so its records stay true.
-func Detect(exe, goBin string) Method {
+func Detect(exe, goBin, scriptDir string) Method {
 	slash := filepath.ToSlash(exe)
 	switch {
+	case scriptDir != "" && filepath.Dir(exe) == filepath.Clean(scriptDir):
+		return Script
 	case strings.Contains(slash, "/Caskroom/") || strings.Contains(slash, "/Cellar/") || strings.Contains(slash, "/linuxbrew/"):
 		return Homebrew
 	case strings.Contains(slash, "/node_modules/"):
@@ -110,13 +119,34 @@ func Detect(exe, goBin string) Method {
 	return Manual
 }
 
-// UpgradeCommand is the command that upgrades an install, as argv.
-func UpgradeCommand(m Method) [][]string {
+// ScriptDir is where the install script puts aims: AIMS_BIN_DIR, or its
+// default for goos.
+func ScriptDir(goos, home string) string {
+	if d := os.Getenv("AIMS_BIN_DIR"); d != "" {
+		return d
+	}
+	if goos == "windows" {
+		if d := os.Getenv("LOCALAPPDATA"); d != "" {
+			return filepath.Join(d, "Programs", "aims")
+		}
+		return ""
+	}
+	return filepath.Join(home, ".local", "bin")
+}
+
+// UpgradeCommand is the command that upgrades an install in dir, as argv.
+func UpgradeCommand(m Method, goos, dir string) [][]string {
 	switch m {
 	case Homebrew:
 		// `brew update` refreshes the tap clone; without it upgrade can report
-		// "already installed" for hours after a release.
-		return [][]string{{"brew", "update"}, {"brew", "upgrade", "--cask", "aims"}}
+		// "already installed" for hours after a release. The cask is named
+		// in full: another tap may have one called aims too.
+		return [][]string{{"brew", "update"}, {"brew", "upgrade", "--cask", Cask}}
+	case Script:
+		if goos == "windows" {
+			return [][]string{{"powershell", "-NoProfile", "-Command", "$env:AIMS_BIN_DIR='" + strings.ReplaceAll(dir, "'", "''") + "'; " + InstallLine(goos)}}
+		}
+		return [][]string{{"sh", "-c", strings.Replace(InstallLine(goos), "| sh", "| AIMS_BIN_DIR='"+strings.ReplaceAll(dir, "'", `'\''`)+"' sh", 1)}}
 	case GoInstall:
 		return [][]string{{"go", "install", ModulePath + "@latest"}}
 	case Npm:

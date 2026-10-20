@@ -15,7 +15,7 @@ macOS and Linux:
 brew install --cask doguyilmaz/tap/aims
 ```
 
-Shell completion for bash, zsh and fish comes with it. `aims upgrade` (or `brew upgrade --cask aims`) keeps it current.
+Shell completion for bash, zsh and fish comes with it. `aims upgrade` (or `brew upgrade --cask doguyilmaz/tap/aims`) keeps it current.
   {{< /tab >}}
   {{< tab name="Script" >}}
 macOS and Linux, no Homebrew and no sudo:
@@ -126,4 +126,4 @@ aims checks for a new release at most once a day, in the background, and mention
 aims wipe       # log out and delete the accounts aims created; ~/.claude and ~/.codex stay
 ```
 
-Then remove the binary the way you installed it (`brew uninstall --cask aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.
+Then remove the binary the way you installed it (`brew uninstall --cask doguyilmaz/tap/aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.
