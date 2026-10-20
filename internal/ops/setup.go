@@ -151,6 +151,32 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 	return steps, nil
 }
 
+// Installed says which integrations are set up now, in any tool.
+func Installed() Integrations {
+	var in Integrations
+	cfg, err := config.Load()
+	if err != nil {
+		return in
+	}
+	for _, a := range tools.All() {
+		hub := cfg.Tools[a.ID()].Hub
+		if hub == "" {
+			continue
+		}
+		if dir := a.Layout().SkillsDir; dir != "" && fsx.Stat(filepath.Join(hub, dir, "aims", "SKILL.md")) != nil {
+			in.Skill, in.MCP = true, true
+		}
+		if sl, ok := a.(tool.StatusLiner); ok && sl.HasStatusLine(hub) {
+			in.StatusLine = true
+		}
+	}
+	if sh := shell.Detect(); shell.Installed(sh) {
+		in.Shell = sh
+	}
+	_, in.KeepAlive = schedule.Installed(KeepAliveName)
+	return in
+}
+
 // Uninstall removes what Setup added. Profiles and logins stay.
 func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 	cfg, err := config.Load()

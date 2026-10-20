@@ -128,7 +128,9 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 
 ### `aims setup`
 
-Connects aims to the tools. See [AI integration](../ai-integration).
+Connects aims to the tools. On a terminal without flags it lists what aims can add (MCP server and skill, status line, shell integration, login keepalive), one line each on what it does, with what is set up now selected; it adds or removes what you change. Flags do the same in a script. See [AI integration](../ai-integration).
+
+When a new version of aims can add something you were never asked about, the next command you run says so once, and `aims setup` is where you choose.
 
 | Flag | |
 | --- | --- |

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/tidwall/gjson"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -327,6 +328,11 @@ func (*Adapter) InstallStatusLine(home, command string) (string, error) {
 		return "", err
 	}
 	return prev, fsx.WriteFile(path, out, 0o644)
+}
+
+func (*Adapter) HasStatusLine(home string) bool {
+	b, err := os.ReadFile(filepath.Join(home, "settings.json"))
+	return err == nil && IsAimsStatusLine(gjson.GetBytes(b, "statusLine.command").String())
 }
 
 func (*Adapter) RemoveStatusLine(home, command, previous string) (bool, error) {

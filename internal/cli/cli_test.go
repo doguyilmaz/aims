@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/ops"
+	"github.com/doguyilmaz/aims/internal/tool"
 )
 
 func TestRewrite(t *testing.T) {
@@ -90,5 +92,25 @@ func TestDefaultInitIsValid(t *testing.T) {
 	}
 	if _, err := parseIntegrations(o.integrations); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnoffered(t *testing.T) {
+	cfg := &config.Config{Tools: map[tool.ID]*config.Tool{"claude": {Hub: "/h"}, "codex": {}}}
+	got := unoffered(cfg, ops.Integrations{MCP: true, Skill: true}, true)
+	if len(got) != 3 || !strings.Contains(got[2], "logins kept alive") {
+		t.Fatalf("all but what is set up: %q", got)
+	}
+	cfg.Offered = []string{"mcp", "statusline", "shell"}
+	if got := unoffered(cfg, ops.Integrations{}, false); len(got) != 1 || !strings.Contains(got[0], "logins kept alive") {
+		t.Fatalf("only what was never offered: %q", got)
+	}
+	cfg.Offered = append(cfg.Offered, "keepalive")
+	if got := unoffered(cfg, ops.Integrations{}, true); len(got) != 0 {
+		t.Fatalf("offered once: %q", got)
+	}
+	cfg = &config.Config{Tools: map[tool.ID]*config.Tool{"claude": {}}}
+	if got := unoffered(cfg, ops.Integrations{}, false); len(got) != 2 {
+		t.Fatalf("no status line without Claude Code, no shell without an rc file: %q", got)
 	}
 }

@@ -323,7 +323,7 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 		return cancelled(r, err)
 	}
 
-	in, err := askIntegrations(r, inst)
+	in, err := askIntegrations(r, inst, nil)
 	if err != nil {
 		return cancelled(r, err)
 	}
@@ -360,37 +360,72 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 	return nil
 }
 
-func askIntegrations(r *ui.Rail, inst []found) (ops.Integrations, error) {
+// askIntegrations asks which integrations to have, one line each on what it
+// does. current, when not nil, is what is set up now and starts selected;
+// otherwise everything does.
+func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.Integrations, error) {
 	sh := shell.Detect()
 	var titles, bins []string
 	for _, f := range inst {
 		titles = append(titles, f.a.Title())
 		bins = append(bins, "`"+f.a.Layout().Bin+"`")
 	}
-	opts := []ui.Option{{Label: "Let " + strings.Join(titles, " and ") + " switch accounts themselves", Value: "mcp", Hint: "MCP server and skill", Short: "MCP server and skill"}}
+	opts := []ui.Option{{Label: "Let " + strings.Join(titles, " and ") + " check and switch accounts themselves", Value: "mcp",
+		Hint: "an MCP server and a skill: ask \"which account am I on?\" or \"move to work\"", Short: "MCP server and skill"}}
 	for _, f := range inst {
 		if _, ok := f.a.(tool.StatusLiner); ok {
-			opts = append(opts, ui.Option{Label: "Show the account and plan usage in " + f.a.Title(), Value: "statusline", Hint: "status line", Short: "status line"})
+			opts = append(opts, ui.Option{Label: "Show the account and its plan usage in " + f.a.Title(), Value: "statusline",
+				Hint: "in the status line, under the prompt", Short: "status line"})
 			break
 		}
 	}
 	rc := shell.RCFile(sh)
 	if rc != "" {
-		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " follow the active account", Value: "shell", Hint: fsx.Tildify(rc), Short: "shell integration"})
+		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " use the active account and move on at a limit", Value: "shell",
+			Hint: "a line in " + fsx.Tildify(rc), Short: "shell integration"})
 	}
-	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive", Hint: "an hourly check renews a login only when it runs out", Short: "login keepalive"})
-	picked := make([]string, len(opts))
-	for i, o := range opts {
-		picked[i] = o.Value
+	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive",
+		Hint: "an hourly check renews a login only when it runs out (Claude Code: a one-word prompt)", Short: "login keepalive"})
+	var picked []string
+	for _, o := range opts {
+		on := current == nil
+		if current != nil {
+			switch o.Value {
+			case "mcp":
+				on = current.MCP || current.Skill
+			case "statusline":
+				on = current.StatusLine
+			case "shell":
+				on = current.Shell != ""
+			case "keepalive":
+				on = current.KeepAlive
+			}
+		}
+		if on {
+			picked = append(picked, o.Value)
+		}
 	}
-	if err := r.MultiSelect("Connect aims to your tools", "Space toggles, Enter confirms.", opts, &picked); err != nil {
+	if err := r.MultiSelect("Connect aims to your tools", "Space toggles, Enter confirms. You can change this later with aims setup.", opts, &picked); err != nil {
 		return ops.Integrations{}, err
 	}
+	markOffered()
 	in := ops.Integrations{Skill: slices.Contains(picked, "mcp"), MCP: slices.Contains(picked, "mcp"), StatusLine: slices.Contains(picked, "statusline"), KeepAlive: slices.Contains(picked, "keepalive")}
 	if slices.Contains(picked, "shell") {
 		in.Shell = sh
 	}
 	return in, nil
+}
+
+// unwanted is what is set up now but was not picked.
+func unwanted(current, picked ops.Integrations) ops.Integrations {
+	out := ops.Integrations{
+		Skill: current.Skill && !picked.Skill, MCP: current.MCP && !picked.MCP,
+		StatusLine: current.StatusLine && !picked.StatusLine, KeepAlive: current.KeepAlive && !picked.KeepAlive,
+	}
+	if current.Shell != "" && picked.Shell == "" {
+		out.Shell = current.Shell
+	}
+	return out
 }
 
 func applyIntegrations(ctx context.Context, r *ui.Rail, in ops.Integrations) {
@@ -508,7 +543,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	choice := "add"
 	opts := []ui.Option{
 		{Label: "Add an account", Value: "add"},
-		{Label: "Connect the tools again", Value: "connect", Hint: "skill, MCP server, status line, shell"},
+		{Label: "Change what aims connects", Value: "connect", Hint: "MCP server and skill, status line, shell, login keepalive"},
 		{Label: "Nothing, show my accounts", Value: "status"},
 	}
 	if err := r.Select("What would you like to do?", "", opts, &choice); err != nil {
@@ -516,13 +551,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	}
 	switch choice {
 	case "connect":
-		in, err := askIntegrations(r, inst)
-		if err != nil {
-			return cancelled(r, err)
-		}
-		applyIntegrations(ctx, r, in)
-		r.Outro(ui.Out.OK.Render("Done."))
-		return nil
+		return reconnect(ctx, r, inst)
 	case "status":
 		r.Outro("")
 		report, err := ops.Status(ctx, nil)
@@ -547,6 +576,7 @@ func initQuiet(ctx context.Context, cfg *config.Config, inst []found, o initOpti
 	if err != nil {
 		return err
 	}
+	markOffered() // --integrations is the answer
 	var hints []string
 	for _, f := range inst {
 		a := f.a
@@ -610,4 +640,31 @@ func parseIntegrations(list string) (ops.Integrations, error) {
 		}
 	}
 	return in, nil
+}
+
+// reconnect asks which integrations to have, starting from what is set up,
+// and adds or removes the difference.
+func reconnect(ctx context.Context, r *ui.Rail, inst []found) error {
+	current := ops.Installed()
+	in, err := askIntegrations(r, inst, &current)
+	if err != nil {
+		return cancelled(r, err)
+	}
+	if drop := unwanted(current, in); drop != (ops.Integrations{}) {
+		steps, err := ops.Uninstall(ctx, drop)
+		if err != nil {
+			r.Fail(err.Error())
+			return err
+		}
+		for _, s := range steps {
+			if s.Err != nil {
+				r.Fail(fmt.Sprintf("%s %s: %v", s.What, ui.Out.Dim.Render(s.Target), s.Err))
+			} else {
+				r.OK("removed " + s.What)
+			}
+		}
+	}
+	applyIntegrations(ctx, r, in)
+	r.Outro(ui.Out.OK.Render("Done.") + ui.Out.Dim.Render(" Running sessions pick this up when they start again."))
+	return nil
 }

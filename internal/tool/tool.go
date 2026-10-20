@@ -70,6 +70,8 @@ type StatusLiner interface {
 	// RemoveStatusLine restores previous if command is still the one set,
 	// and reports whether it changed anything.
 	RemoveStatusLine(home, command, previous string) (removed bool, err error)
+	// HasStatusLine reports whether aims is the status line under home.
+	HasStatusLine(home string) bool
 }
 
 // Supervisor lets aims move a running interactive session to another

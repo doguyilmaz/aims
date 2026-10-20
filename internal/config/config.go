@@ -87,6 +87,9 @@ type Config struct {
 	Failover Failover          `json:"failover"`
 	Status   StatusLine        `json:"statusline,omitzero"`
 	Tools    map[tool.ID]*Tool `json:"tools"`
+	// Offered lists the integrations the user has been asked about, so one
+	// that a new version adds is pointed out once.
+	Offered []string `json:"offered,omitempty"`
 }
 
 // StatusLine holds the user's previous Claude status line, shown before aims'.

@@ -28,7 +28,9 @@ func newSetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Connect aims to Claude Code and Codex (skill, MCP server, status line, shell, keepalive)",
-		Long: "Installs the aims skill and MCP server so Claude Code and Codex can check and\n" +
+		Long: "On a terminal without flags, it lists what aims can add, with what is set\n" +
+			"up now selected, and adds or removes what you change.\n\n" +
+			"With flags: the aims skill and MCP server let Claude Code and Codex check and\n" +
 			"switch accounts themselves. --statusline shows the account and plan usage in\n" +
 			"Claude Code; --shell makes plain `claude` and `codex` follow the active account;\n" +
 			"--keepalive renews logins before they lapse unused (see aims keepalive).",
@@ -37,6 +39,19 @@ aims setup --statusline --shell zsh
 aims setup --tools codex --no-skill`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().NFlag() == 0 && ui.Interactive() {
+				cfg, err := config.Load()
+				if err != nil {
+					return err
+				}
+				inst := installed(detect(cmd.Context(), cfg, nil))
+				if len(inst) == 0 {
+					return errNoTools
+				}
+				r := ui.NewRail()
+				r.Intro("aims setup", "what aims adds to Claude Code and Codex")
+				return reconnect(cmd.Context(), r, inst)
+			}
 			ids, err := parseTools(only)
 			if err != nil {
 				return err
@@ -56,6 +71,7 @@ aims setup --tools codex --no-skill`,
 			if err != nil {
 				return err
 			}
+			markOffered()
 			return reportSteps(steps, "restart running sessions to pick these up")
 		},
 	}

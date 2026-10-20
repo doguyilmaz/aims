@@ -54,6 +54,7 @@ func Execute(version string) int {
 		}
 	}
 	notice.finish(version)
+	offerNew(args)
 	return code
 }
 
