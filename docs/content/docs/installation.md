@@ -15,7 +15,7 @@ macOS and Linux:
 brew install --cask doguyilmaz/tap/aims
 ```
 
-Shell completion for bash, zsh and fish comes with it. `aims upgrade` (or `brew upgrade --cask aims`) keeps it current.
+Shell completion for bash, zsh and fish comes with it. `aims upgrade` (or `brew upgrade --cask doguyilmaz/tap/aims`) keeps it current.
   {{< /tab >}}
   {{< tab name="Script" >}}
 macOS and Linux, no Homebrew and no sudo:
@@ -116,7 +116,7 @@ Completion knows your tools and profile names, so `aims use <Tab>` lists your ac
 aims upgrade
 ```
 
-aims never replaces its own binary. It works out how it was installed (Homebrew, Scoop, npm or `go install`) and runs that tool's upgrade. A copy from the install script gets the command that installs the newest release. `aims upgrade --check` only prints what it would run.
+aims works out how it was installed (Homebrew, Scoop, npm or `go install`) and runs that tool's upgrade. A copy where the install script puts it (`AIMS_BIN_DIR`, by default `~/.local/bin`) is upgraded by running the script again, which checks the download against the release's checksums. A copy anywhere else gets the command that installs the newest release. `aims upgrade --check` only prints what it would run.
 
 aims checks for a new release at most once a day, in the background, and mentions it after a command finishes. It asks GitHub where its "latest release" page points and sends nothing about you. Set `AIMS_NO_UPDATE_CHECK=1` to turn this off.
 
@@ -126,4 +126,4 @@ aims checks for a new release at most once a day, in the background, and mention
 aims wipe       # log out and delete the accounts aims created; ~/.claude and ~/.codex stay
 ```
 
-Then remove the binary the way you installed it (`brew uninstall --cask aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.
+Then remove the binary the way you installed it (`brew uninstall --cask doguyilmaz/tap/aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.

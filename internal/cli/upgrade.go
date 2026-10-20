@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/release"
 	"github.com/doguyilmaz/aims/internal/ui"
 )
@@ -39,8 +40,8 @@ func newUpgradeCmd(version string) *cobra.Command {
 			}
 			exe, _ := os.Executable()
 			exe, _ = filepath.EvalSymlinks(exe)
-			method := release.Detect(exe, goBin())
-			steps := release.UpgradeCommand(method)
+			method := release.Detect(exe, goBin(), fsx.Real(release.ScriptDir(runtime.GOOS, fsx.Home())))
+			steps := release.UpgradeCommand(method, runtime.GOOS, filepath.Dir(exe))
 			if len(steps) == 0 {
 				ui.Info("this copy was installed by hand; get the new one with:")
 				fmt.Println("  " + ui.Kbd(ui.Out, release.InstallLine(runtime.GOOS)))
@@ -53,6 +54,20 @@ func newUpgradeCmd(version string) *cobra.Command {
 			if check {
 				fmt.Println("  " + ui.Kbd(ui.Out, strings.Join(lines, " && ")))
 				return nil
+			}
+			if method == release.Script && runtime.GOOS == "windows" {
+				// Windows does not let a running program be overwritten, but
+				// it can be renamed out of the script's way.
+				old := exe + ".old"
+				_ = os.Remove(old)
+				if err := os.Rename(exe, old); err != nil {
+					return err
+				}
+				defer func() {
+					if fsx.Stat(exe) == nil {
+						_ = os.Rename(old, exe)
+					}
+				}()
 			}
 			for i, s := range steps {
 				ui.Info("%s", strings.Join(s, " "))
