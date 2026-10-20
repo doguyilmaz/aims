@@ -232,25 +232,24 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 			}
 		}
 	}
-	email := acct.Email
-	if email == "" && ps.Account != nil {
-		email = ps.Account.Email
-	} else if email != "" && (ps.Account == nil || ps.Account.Email != email) {
+	id := identity(acct, ps)
+	if id.Email != "" && id.Tenant != "" && (ps.Account == nil || ps.Account.Email != id.Email || ps.Account.Tenant != id.Tenant) {
 		_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) {
 			if ps.Account == nil {
 				ps.Account = &config.Account{}
 			}
-			ps.Account.Email = email
+			ps.Account.Email, ps.Account.Tenant = id.Email, id.Tenant
 		})
 	}
-	if email != "" {
+	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
-			if r, until := sameAccount(cfg, st.Get(a.ID(), n), now); n != name && r != "" && strings.EqualFold(accountEmail(st.Get(a.ID(), n)), email) {
+			other := st.Get(a.ID(), n)
+			if n == name || other.Account == nil || !strings.EqualFold(other.Account.Email, id.Email) || other.Account.Tenant != id.Tenant {
+				continue
+			}
+			if r, until := sameAccount(cfg, other, now); r != "" {
 				ev.Reasons = append(ev.Reasons, "same account as "+n+", "+r)
 				ev.ReadyAt = later(ev.ReadyAt, until)
-				if until.IsZero() {
-					open = true
-				}
 			}
 		}
 	}
@@ -261,11 +260,14 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	return ev
 }
 
-func accountEmail(ps *config.ProfileState) string {
-	if ps.Account == nil {
-		return ""
+// identity is who a login is: its e-mail and tenant, from the login itself
+// or else from what aims last saw of it.
+func identity(acct tool.Account, ps *config.ProfileState) config.Account {
+	id := config.Account{Email: acct.Email, Tenant: acct.Tenant}
+	if ps.Account != nil && id.Email == "" {
+		id.Email, id.Tenant = ps.Account.Email, ps.Account.Tenant
 	}
-	return ps.Account.Email
+	return id
 }
 
 // sameAccount says what limits a profile, as far as it counts for another

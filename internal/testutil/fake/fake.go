@@ -437,7 +437,7 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 		path = filepath.Join(dir, "sessions", now.Format("2006/01/02"), "rollout-"+now.Format("2006-01-02T15-04-05")+"-"+id+".jsonl")
 		_ = os.MkdirAll(filepath.Dir(path), 0o755)
 		cwd, _ := os.Getwd()
-		line, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": cwd, "timestamp": now.UTC().Format(time.RFC3339Nano)}})
+		line, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": cwd, "originator": "codex-tui", "thread_source": "user", "timestamp": now.UTC().Format(time.RFC3339Nano)}})
 		_ = os.WriteFile(path, append(line, '\n'), 0o644)
 	}
 	end := map[string]any{"type": "task_complete", "completed_at": time.Now().Unix()}

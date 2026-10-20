@@ -276,9 +276,14 @@ func TestBusyMarkIsShort(t *testing.T) {
 // out too, but a rate limit or a dead login is the login's own.
 func TestSameAccount(t *testing.T) {
 	cfg, a := setup(t)
-	_ = RecordAccount("codex", "a", "me@corp.com", "plus")
-	_ = RecordAccount("codex", "b", "ME@corp.com", "plus")
-	_ = RecordAccount("codex", "c", "other@corp.com", "plus")
+	account := func(n, email, tenant string) {
+		_ = config.UpdateState("codex", n, func(ps *config.ProfileState) {
+			ps.Account = &config.Account{Email: email, Tenant: tenant}
+		})
+	}
+	account("a", "me@corp.com", "ws-1")
+	account("b", "ME@corp.com", "ws-1")
+	account("c", "me@corp.com", "ws-2") // a personal plan and a team seat
 	_ = MarkLimited(cfg, "codex", "a", Limit{ResetsAt: now.Add(2 * time.Hour)})
 	p := Choose(t.Context(), cfg, config.LoadState(), a, "a", nil)
 	if p.Name != "c" || len(p.Skipped) != 2 || !slices.Contains(p.Skipped[1].Reasons, "same account as a, limited for 2h") || !p.Skipped[1].ReadyAt.Equal(now.Add(2*time.Hour)) {

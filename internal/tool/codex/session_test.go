@@ -87,7 +87,7 @@ func TestFollow(t *testing.T) {
 		return p
 	}
 	meta := func(id, cwd string, at time.Time) string {
-		return `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"` + cwd + `","timestamp":"` + at.UTC().Format(time.RFC3339Nano) + `"}}` + "\n"
+		return `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"` + cwd + `","originator":"codex-tui","thread_source":"user","timestamp":"` + at.UTC().Format(time.RFC3339Nano) + `"}}` + "\n"
 	}
 	limit := `{"type":"event_msg","payload":{"type":"task_complete","error":{"message":"limit","codex_error_info":"usage_limit_exceeded"}}}` + "\n"
 	done := `{"type":"event_msg","payload":{"type":"task_complete"}}` + "\n"
@@ -132,14 +132,15 @@ func TestFollow(t *testing.T) {
 	}
 }
 
-// A new conversation started in the run (/new) is followed instead; a fork's
-// copy of its parent's turns is not read as new ones.
-func TestFollowNext(t *testing.T) {
+// A fork's copy of its parent's turns is not read as new ones; exec runs and
+// subagents in the same directory are not the run's conversation; and two
+// conversations that both could be it leave the run unfollowed.
+func TestFollowOnly(t *testing.T) {
 	home := t.TempDir()
 	now := time.Now().Truncate(time.Second)
 	day := filepath.Join(home, "sessions", now.Format("2006/01/02"))
-	line := func(id string, at time.Time, extra string) string {
-		return `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"/work","timestamp":"` + at.UTC().Format(time.RFC3339Nano) + `"}}` + "\n" + extra
+	meta := func(id, originator, source string, at time.Time) string {
+		return `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"/work","originator":"` + originator + `","thread_source":"` + source + `","timestamp":"` + at.UTC().Format(time.RFC3339Nano) + `"}}` + "\n"
 	}
 	done := func(at time.Time) string {
 		return `{"type":"event_msg","payload":{"type":"task_complete","completed_at":` + strconv.FormatInt(at.Unix(), 10) + `}}` + "\n"
@@ -147,26 +148,23 @@ func TestFollowNext(t *testing.T) {
 	limit := func(at time.Time) string {
 		return `{"type":"event_msg","payload":{"type":"task_complete","completed_at":` + strconv.FormatInt(at.Unix(), 10) + `,"error":{"message":"x","codex_error_info":"usage_limit_exceeded"}}}` + "\n"
 	}
-	_, poll, _ := New().Watch(tool.Watch{Args: []string{"fork", "--last"}, Home: tool.Home{Dir: home}, Dir: "/work", Since: now})
-	first := filepath.Join(day, "rollout-1-fork.jsonl")
-	testutil.Write(t, first, line("fork", now, limit(now.Add(-time.Hour))+done(now.Add(time.Second))))
+	watch := func(args ...string) func() []tool.SessionEvent {
+		_, poll, _ := New().Watch(tool.Watch{Args: args, Home: tool.Home{Dir: home}, Dir: "/work", Since: now})
+		return poll
+	}
+
+	poll := watch("fork", "S")
+	testutil.Write(t, filepath.Join(day, "rollout-1-exec.jsonl"), meta("exec", "codex_exec", "user", now)+limit(now))
+	testutil.Write(t, filepath.Join(day, "rollout-2-sub.jsonl"), meta("sub", "codex-tui", "subagent", now)+limit(now))
+	testutil.Write(t, filepath.Join(day, "rollout-3-fork.jsonl"), meta("fork", "codex-tui", "user", now)+limit(now.Add(-time.Hour))+done(now.Add(time.Second)))
 	if evs := poll(); len(evs) != 1 || evs[0].Failure != tool.FailNone || evs[0].Session != "fork" {
 		t.Fatalf("fork: %+v", evs)
 	}
-	// Another codex in the same directory, while this conversation goes on,
-	// is not followed.
-	other := filepath.Join(day, "rollout-3-other.jsonl")
-	testutil.Write(t, other, line("other", now.Add(2*time.Second), limit(now.Add(3*time.Second))))
-	_ = os.Chtimes(other, now.Add(3*time.Second), now.Add(3*time.Second))
-	_ = os.Chtimes(first, now.Add(4*time.Second), now.Add(4*time.Second))
+
+	poll = watch()
+	testutil.Write(t, filepath.Join(day, "rollout-4-other.jsonl"), meta("other", "codex-tui", "user", now)+limit(now))
 	if evs := poll(); len(evs) != 0 {
-		t.Fatalf("another codex's conversation: %+v", evs)
-	}
-	second := filepath.Join(day, "rollout-2-next.jsonl")
-	testutil.Write(t, second, line("next", now.Add(5*time.Second), limit(now.Add(6*time.Second))))
-	_ = os.Chtimes(second, now.Add(time.Minute), now.Add(time.Minute))
-	if evs := poll(); len(evs) != 1 || evs[0].Session != "next" || evs[0].Failure != tool.FailLimit {
-		t.Fatalf("next conversation: %+v", evs)
+		t.Fatalf("two candidates: %+v", evs)
 	}
 }
 
@@ -175,7 +173,7 @@ func TestFollowLinkedSessions(t *testing.T) {
 	hub, home := t.TempDir(), t.TempDir()
 	now := time.Now()
 	old := filepath.Join(hub, "sessions", "2020", "01", "02", "rollout-x-old.jsonl")
-	testutil.Write(t, old, `{"type":"session_meta","payload":{"id":"old","cwd":"/work","timestamp":"2020-01-02T00:00:00Z"}}`+"\n")
+	testutil.Write(t, old, `{"type":"session_meta","payload":{"id":"old","cwd":"/work","originator":"codex-tui","thread_source":"user","timestamp":"2020-01-02T00:00:00Z"}}`+"\n")
 	if err := os.Symlink(filepath.Join(hub, "sessions"), filepath.Join(home, "sessions")); err != nil {
 		t.Skip(err)
 	}

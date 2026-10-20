@@ -153,12 +153,13 @@ func readKeychain(envValue string) (found bool, o *oauth) {
 func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	var cj struct {
 		OAuthAccount struct {
-			Email string `json:"emailAddress"`
-			Org   string `json:"organizationName"`
+			Email   string `json:"emailAddress"`
+			Org     string `json:"organizationName"`
+			OrgUUID string `json:"organizationUuid"`
 		} `json:"oauthAccount"`
 	}
 	fsx.ReadJSONLenient(claudeJSON(h), &cj)
-	acct := tool.Account{Email: cj.OAuthAccount.Email, Org: cj.OAuthAccount.Org}
+	acct := tool.Account{Email: cj.OAuthAccount.Email, Org: cj.OAuthAccount.Org, Tenant: cj.OAuthAccount.OrgUUID}
 	for _, k := range []string{"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"} {
 		if h.ProfileEnv[k] != "" {
 			acct.LoggedIn, acct.Method = tool.Known(true), "token"

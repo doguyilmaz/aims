@@ -18,6 +18,9 @@ type Usage struct {
 type Account struct {
 	Email string `json:"email,omitempty"`
 	Plan  string `json:"plan,omitempty"`
+	// Tenant is the organization or workspace of the login, as
+	// tool.Account.Tenant.
+	Tenant string `json:"tenant,omitempty"`
 }
 
 // ProfileState is what aims learned about one profile.

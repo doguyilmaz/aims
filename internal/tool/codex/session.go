@@ -151,11 +151,15 @@ type follower struct {
 	id     string
 	offset int64
 	metas  map[string]rollout
+	walked time.Time
 }
 
 type rollout struct {
 	id, cwd string
 	started time.Time
+	// user: a conversation the user started in the terminal, not a codex
+	// exec run, a subagent or a review.
+	user bool
 }
 
 // find follows the rollout of conversation id, from its current end.
@@ -170,7 +174,7 @@ func (f *follower) find(id string) {
 }
 
 func (f *follower) poll() []tool.SessionEvent {
-	if !f.byID {
+	if f.path == "" {
 		f.discover()
 	}
 	if f.path == "" {
@@ -189,24 +193,23 @@ func (f *follower) poll() []tool.SessionEvent {
 	return out
 }
 
-// discover finds the rollout this run writes, and the next one when the
-// user starts another conversation in it (/new): the newest rollout of a
-// conversation in the run's working directory that started since the run
-// did, and after the current one was last written. A run that opens an old conversation without naming it takes the
-// newest one written to since, until a newer conversation starts.
+// discover finds the rollout this run writes: the one conversation the user
+// started in the run's working directory since the run did. A run that
+// opens an old conversation without naming it takes the one written to
+// since. When two conversations qualify, the other may be another codex's:
+// the run is not followed rather than followed into the wrong one.
 func (f *follower) discover() {
-	type candidate struct {
-		path string
-		mod  time.Time
-	}
-	var found []candidate
+	var found []string
 	consider := func(path string) {
-		if fi, err := os.Stat(path); err == nil && !fi.ModTime().Before(f.since) && !slices.ContainsFunc(found, func(c candidate) bool { return c.path == path }) {
-			found = append(found, candidate{path, fi.ModTime()})
+		if fi, err := os.Stat(path); err == nil && !fi.ModTime().Before(f.since) && !slices.Contains(found, path) {
+			found = append(found, path)
 		}
 	}
-	old := f.anyDay && f.path == ""
-	if old {
+	if f.anyDay {
+		if time.Since(f.walked) < 10*time.Second {
+			return
+		}
+		f.walked = time.Now()
 		_ = filepath.WalkDir(f.sessions, func(p string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() && strings.HasPrefix(d.Name(), "rollout-") && strings.HasSuffix(d.Name(), ".jsonl") {
 				consider(p)
@@ -221,36 +224,35 @@ func (f *follower) discover() {
 			}
 		}
 	}
-	slices.SortFunc(found, func(a, b candidate) int { return b.mod.Compare(a.mod) })
-	for _, c := range found {
-		if c.path == f.path {
+	var pick string
+	var meta rollout
+	for _, path := range found {
+		r, ok := f.metas[path]
+		if !ok {
+			r = readMeta(path)
+			f.metas[path] = r
+		}
+		if r.id == "" || !r.user || fsx.Real(r.cwd) != f.cwd || (r.started.Before(f.since) && !f.anyDay) {
+			continue
+		}
+		if pick != "" {
 			return
 		}
-		r, ok := f.metas[c.path]
-		if !ok {
-			r = meta(c.path)
-			f.metas[c.path] = r
-		}
-		if r.id == "" || fsx.Real(r.cwd) != f.cwd || (r.started.Before(f.since) && !old) {
-			continue
-		}
-		// A conversation still written to after the newer one started is
-		// not one the user left: the newer one is another codex's.
-		if fi, err := os.Stat(f.path); f.path != "" && err == nil && fi.ModTime().After(r.started.Add(time.Second)) {
-			continue
-		}
-		f.path, f.id, f.offset = c.path, r.id, 0
-		if r.started.Before(f.since) {
-			if fi, err := os.Stat(c.path); err == nil {
-				f.offset = fi.Size()
-			}
-		}
+		pick, meta = path, r
+	}
+	if pick == "" {
 		return
+	}
+	f.path, f.id, f.offset = pick, meta.id, 0
+	if meta.started.Before(f.since) {
+		if fi, err := os.Stat(pick); err == nil {
+			f.offset = fi.Size()
+		}
 	}
 }
 
-// meta reads a rollout's first line, its session_meta.
-func meta(path string) rollout {
+// readMeta reads a rollout's first line, its session_meta.
+func readMeta(path string) rollout {
 	file, err := os.Open(path)
 	if err != nil {
 		return rollout{}
@@ -262,11 +264,13 @@ func meta(path string) rollout {
 	}
 	p := gjson.Get(line, "payload")
 	started, _ := time.Parse(time.RFC3339Nano, p.Get("timestamp").String())
-	return rollout{id: p.Get("id").String(), cwd: p.Get("cwd").String(), started: started}
+	user := p.Get("originator").String() == "codex-tui" && p.Get("thread_source").String() == "user"
+	return rollout{id: p.Get("id").String(), cwd: p.Get("cwd").String(), started: started, user: user}
 }
 
-// turn reads a task_started or task_complete line, and when it happened: a
-// turn that began, went well, or failed in a way another account can fix.
+// turn reads a task_started, turn_aborted or task_complete line, and when it
+// happened: a turn that began, ended (stopped or went well), or failed in a
+// way another account can fix.
 func turn(line []byte) (tool.SessionEvent, time.Time, bool) {
 	j := gjson.ParseBytes(line)
 	if j.Get("type").String() != "event_msg" {
@@ -276,6 +280,8 @@ func turn(line []byte) (tool.SessionEvent, time.Time, bool) {
 	switch p.Get("type").String() {
 	case "task_started":
 		return tool.SessionEvent{Started: true}, unix(p.Get("started_at")), true
+	case "turn_aborted":
+		return tool.SessionEvent{}, unix(p.Get("completed_at")), true
 	case "task_complete":
 	default:
 		return tool.SessionEvent{}, time.Time{}, false

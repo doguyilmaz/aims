@@ -121,9 +121,9 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 		if auth.Tokens == nil {
 			return tool.Account{LoggedIn: tool.Known(false)}
 		}
-		email, plan := claims(auth.Tokens.IDToken)
+		email, plan, workspace := claims(auth.Tokens.IDToken)
 		ok := auth.Tokens.RefreshToken != "" || auth.Tokens.AccessToken != ""
-		return tool.Account{LoggedIn: tool.Known(ok), Method: "chatgpt", Email: email, Plan: plan, Expires: expiry(auth.Tokens.AccessToken)}
+		return tool.Account{LoggedIn: tool.Known(ok), Method: "chatgpt", Email: email, Plan: plan, Tenant: workspace, Expires: expiry(auth.Tokens.AccessToken)}
 	}
 	// The login may live in the OS keyring (cli_auth_credentials_store).
 	if h.Bin == "" {
@@ -154,17 +154,18 @@ func expiry(token string) time.Time {
 
 // claims reads the e-mail and plan from the ID token. The token is only
 // decoded, never verified or sent anywhere: it is a label, not a credential check.
-func claims(idToken string) (email, plan string) {
+func claims(idToken string) (email, plan, workspace string) {
 	var c struct {
 		Email string `json:"email"`
 		Auth  struct {
-			Plan string `json:"chatgpt_plan_type"`
+			Plan    string `json:"chatgpt_plan_type"`
+			Account string `json:"chatgpt_account_id"`
 		} `json:"https://api.openai.com/auth"`
 	}
 	if !decode(idToken, &c) {
-		return "", ""
+		return "", "", ""
 	}
-	return c.Email, c.Auth.Plan
+	return c.Email, c.Auth.Plan, c.Auth.Account
 }
 
 // decode reads a JWT's payload into v.

@@ -86,7 +86,7 @@ func TestAccount(t *testing.T) {
 	if acct := a.Account(t.Context(), h); acct.LoggedIn == nil || *acct.LoggedIn {
 		t.Fatalf("logged out: %+v", acct)
 	}
-	if e, p := claims("not-a-jwt"); e != "" || p != "" {
+	if e, p, w := claims("not-a-jwt"); e != "" || p != "" || w != "" {
 		t.Fatal("garbage token")
 	}
 }
