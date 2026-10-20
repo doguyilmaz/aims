@@ -3,7 +3,7 @@
 exec codex login
 exec aims init --yes --tools codex --integrations none
 exec aims login codex work
-env FAKE_LINGER=2500ms
+env FAKE_LINGER=5s
 
 # personal hits its usage limit mid-session: aims stops codex and resumes the
 # same conversation on work, keeping the options.

@@ -3,7 +3,7 @@
 exec claude auth login --email me@gmail.com
 exec aims init --yes --tools claude --integrations none
 exec aims login claude work
-env FAKE_LINGER=2500ms
+env FAKE_LINGER=5s
 
 # personal hits its limit mid-session: aims stops it and continues the same
 # conversation on work, keeping the options and dropping the first prompt.
