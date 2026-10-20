@@ -69,15 +69,17 @@ When the account of a supervised session hits a usage limit or its login dies, a
 › claude: personal works again; this conversation goes back to it
 ```
 
-- **Going back.** Once a turn ends and the first account works again, aims moves the conversation back to it. No prompt is sent, and a turn you have already started is never cut short for it.
-- **Before the limit.** If the account is at the threshold (95% by default) when a turn ends, the conversation moves on before the hard limit.
+- **Going back.** Once the first account works again, the conversation goes back to it, without cutting anything short. In Claude Code the move waits for your next message: the hook holds it back (Claude Code shows "blocked by hook: aims: moving this conversation to …"), aims restarts the session on the first account and sends that message there, so nothing you typed is lost (an image you pasted is; paste it again). Codex has no such hook, so it moves once the session has sat idle for two minutes.
+- **Before the limit.** If the account is at the threshold (95% by default), the conversation moves on before the hard limit, the same way.
 - **Every account limited.** aims waits for the first reset, a minute after it so the tool's own automatic continue wins, and continues on that account.
 
-How aims knows: for Claude Code it passes `--settings` with UserPromptSubmit, Stop and StopFailure hooks to each session (your settings files are not changed, and a `--settings` you pass is merged). For Codex it follows the conversation's rollout file under `sessions/`, and starts `codex` with `-c features.daemon_auto_start=false` so the conversation lives in the process aims stops.
+What a restart does not keep is what lives only in the session: a model or permission mode switched inside it, background shells. The options you started it with are kept.
 
-To move a supervised conversation yourself, run `aims move work` inside it (`!aims move work` in Claude Code), or ask the model, which calls `aims_move`. It stays on that account while it works.
+How aims knows: for Claude Code it passes `--settings` with SessionStart, UserPromptSubmit, Stop and StopFailure hooks to each session, in a file readable only by you under `~/.aims/runs` (your settings files are not changed, and a `--settings` you pass is merged). For Codex it follows the conversation's rollout file under `sessions/`, and starts `codex` with `-c features.daemon_auto_start=false` so the conversation lives in the process aims stops. It follows only a conversation you started in that terminal's directory; when two could be it (two Codex sessions in one folder), or after `/new`, the session is not followed rather than followed into the wrong one.
 
-Two logins of the same account share its limits: when one is limited, aims does not move the conversation to the other.
+To move a supervised conversation yourself, run `aims move work` inside it (`!aims move work` in Claude Code or Codex), or ask the model, which calls `aims_move` (your client asks you to approve it). It stays on that account while it works.
+
+Two logins of the same account (the same e-mail and the same organization or workspace) share its limits: when one is limited, aims does not move the conversation to the other. A personal plan and a team seat on one e-mail are two accounts.
 
 For the sessions that do not move, end the session (`esc`, then `/exit` or `ctrl+c` twice) and run:
 
