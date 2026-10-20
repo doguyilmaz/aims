@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" width="96" height="96" alt="aims logo: two linked rings">
+  <img src="assets/logo.svg" width="96" height="96" alt="aims logo: a prompt whose cursor is coral and ivory">
 </p>
 
 <h1 align="center">aims</h1>

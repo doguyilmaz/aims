@@ -1,14 +1,14 @@
-/* Brand colours, from the logo's violet: #5b43e6 on light, #9d8cff on dark. */
+/* Brand colours, from the logo's coral: #b9593a on light (readable on white), #d97757 on dark. */
 :root {
-  --primary-hue: 249deg;
-  --primary-saturation: 77%;
-  --primary-lightness: 58%;
+  --primary-hue: 15deg;
+  --primary-saturation: 52%;
+  --primary-lightness: 48%;
 }
 
 .dark {
-  --primary-hue: 249deg;
-  --primary-saturation: 100%;
-  --primary-lightness: 77%;
+  --primary-hue: 15deg;
+  --primary-saturation: 63%;
+  --primary-lightness: 60%;
 }
 
 /* Commands in the feature cards read better unbroken. */
