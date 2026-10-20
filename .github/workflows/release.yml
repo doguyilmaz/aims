@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write # npm provenance
+  id-token: write
 
 jobs:
   release:
@@ -31,20 +31,3 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      # Trusted publishing (OIDC, set up on npmjs.com for @doguyilmaz/aims) needs
-      # no secret; an NPM_TOKEN secret is used instead when there is one.
-      - name: Publish to npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # npm rejects provenance from a private repository.
-          NPM_CONFIG_PROVENANCE: ${{ !github.event.repository.private }}
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest >/dev/null
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
-          fi
-          node scripts/npm/build.mjs "$GITHUB_REF_NAME" --publish

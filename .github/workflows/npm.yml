@@ -1,0 +1,46 @@
+name: npm
+
+# The tapster hub publishes each release after it signs and notarizes the macOS
+# binaries; the package is built from those published archives.
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download the published archives and check them
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'aims_*' --pattern checksums.txt --dir "$RUNNER_TEMP/archives"
+          cd "$RUNNER_TEMP/archives" && sha256sum --ignore-missing -c checksums.txt
+      # Trusted publishing (OIDC, set up on npmjs.com for @doguyilmaz/aims with
+      # this workflow) needs no secret; an NPM_TOKEN secret is used instead when there is one.
+      - name: Publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: ${{ !github.event.repository.private }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest >/dev/null
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          fi
+          node scripts/npm/build.mjs "$TAG" --from "$RUNNER_TEMP/archives" --publish
