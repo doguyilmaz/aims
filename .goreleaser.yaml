@@ -36,24 +36,6 @@ archives:
       - README.md
       - completions/*
 
-# Developer ID signature with the hardened runtime, then notarization, so
-# Gatekeeper opens the macOS binaries without a prompt. Releases fail without
-# the secrets; snapshots skip it.
-notarize:
-  macos:
-    - enabled: "{{ not .IsSnapshot }}"
-      ids: [aims]
-      sign:
-        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
-        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
-      notarize:
-        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
-        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
-        key: "{{ .Env.MACOS_NOTARY_KEY }}"
-        # The cask points at the archives right away; Gatekeeper must find the ticket.
-        wait: true
-        timeout: 20m
-
 checksum:
   name_template: checksums.txt
 
@@ -65,40 +47,6 @@ changelog:
       - "^test:"
       - "^ci:"
 
-homebrew_casks:
-  - name: aims
-    repository:
-      owner: doguyilmaz
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Casks
-    homepage: https://doguyilmaz.github.io/aims/
-    description: Several Claude Code and Codex accounts on one machine
-    license: MIT
-    commit_author:
-      name: aims release bot
-      email: noreply@github.com
-    commit_msg_template: "aims {{ .Tag }}"
-    completions:
-      bash: completions/aims.bash
-      zsh: completions/aims.zsh
-      fish: completions/aims.fish
-
-scoops:
-  - name: aims
-    repository:
-      owner: doguyilmaz
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: bucket
-    homepage: https://doguyilmaz.github.io/aims/
-    description: Several Claude Code and Codex accounts on one machine
-    license: MIT
-    commit_author:
-      name: aims release bot
-      email: noreply@github.com
-    commit_msg_template: "aims {{ .Tag }} (scoop)"
-
 release:
   github:
     owner: doguyilmaz
@@ -107,3 +55,4 @@ release:
     Install: `brew install doguyilmaz/tap/aims`, `npm install -g @doguyilmaz/aims`,
     `go install github.com/doguyilmaz/aims/cmd/aims@{{ .Tag }}`, or
     `curl -fsSL https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.sh | sh`.
+  draft: true
