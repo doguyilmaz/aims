@@ -31,6 +31,11 @@ const NestedVar = "AIMS_RUN_NESTED"
 // hooks record turns there, and `aims move` leaves its request there.
 const RunVar = "AIMS_RUN"
 
+// RunsDir holds the directories of supervised runs. It is under aims' own
+// directory, not the system's temporary one, which a sandboxed tool may
+// write to.
+func RunsDir() string { return filepath.Join(config.Home(), "runs") }
+
 // Session reads SessionVar: the tool and profile this process runs under.
 func Session() (id tool.ID, name string, ok bool) {
 	t, n, ok := strings.Cut(os.Getenv(SessionVar), ":")

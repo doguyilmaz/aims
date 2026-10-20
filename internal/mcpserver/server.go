@@ -63,8 +63,9 @@ func New(version string) *mcp.Server {
 		Name: "aims_move",
 		Description: "Move THIS conversation to another account of the same tool: once the current turn ends, aims restarts the session on that account " +
 			"and resumes the conversation, which then stays there while it works. Works only in a session started with `aims claude` or `aims codex` " +
-			"without @profile (env " + profiles.RunVar + " is set). profile: default the next usable account. End your turn after calling it.",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(false), OpenWorldHint: ptr(false)},
+			"without @profile (env " + profiles.RunVar + " is set). profile: default the next usable account. End your turn after calling it. " +
+			"The conversation, with everything in it, goes to that account's provider: only move between work and personal accounts when the user asks.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, moveTool)
 
 	mcp.AddTool(s, &mcp.Tool{

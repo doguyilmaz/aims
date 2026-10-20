@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,11 +39,16 @@ const (
 // profile is limited, on to whichever resets first once it does.
 func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name string) (Result, error) {
 	a := o.Tool
-	dir, err := os.MkdirTemp("", "aims-run-")
+	runs := profiles.RunsDir()
+	if err := os.MkdirAll(runs, 0o700); err != nil {
+		return Result{Code: 1, Profile: name}, err
+	}
+	sweep(runs)
+	root, err := os.MkdirTemp(runs, "run-")
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(root)
 	self, err := selfPath()
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
@@ -52,9 +58,15 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	// asked is the profile `aims move` asked for; held is the one it moved
 	// to, which the conversation stays on while it works.
 	var asked, held string
-	for {
+	for launch := 1; ; launch++ {
 		cfg, err := config.Load()
 		if err != nil {
+			return Result{Code: 1, Profile: name}, err
+		}
+		// Each start of the tool has its own directory, so a hook of the
+		// one stopped cannot speak for the next.
+		dir := filepath.Join(root, strconv.Itoa(launch))
+		if err := os.Mkdir(dir, 0o700); err != nil {
 			return Result{Code: 1, Profile: name}, err
 		}
 		watched, poll, err := sv.Watch(tool.Watch{
@@ -86,7 +98,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				return Result{Code: child.Code(), Profile: name}, nil
 			case <-ticker.C:
 			}
-			if to := takeMove(dir); to != "" {
+			if to := takeMove(dir); to != "" && validMove(a.ID(), name, to) {
 				asked = to
 			}
 			evs := append(carry, poll()...)
@@ -135,6 +147,9 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				if carry = poll(); len(carry) > 0 {
 					continue
 				}
+			}
+			if !tool.ValidSessionID(session) {
+				continue // not one aims would put in a command line
 			}
 			// A conversation with nothing saved yet cannot be resumed: start
 			// a new one instead.
@@ -254,4 +269,23 @@ func selfPath() (string, error) {
 		return p, nil
 	}
 	return self, nil
+}
+
+// validMove reports whether the conversation on name can move to to: a
+// profile that exists and shares its history. The request comes from a
+// file, so it is checked again here.
+func validMove(id tool.ID, name, to string) bool {
+	cfg, err := config.Load()
+	return err == nil && config.ValidName(to) && cfg.Tools[id].Profiles[to] != nil && !slices.Contains(profiles.Apart(cfg, id, name), to)
+}
+
+// sweep removes the directories of runs that ended without cleaning up
+// (aims was killed) long ago.
+func sweep(runs string) {
+	entries, _ := os.ReadDir(runs)
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > 30*24*time.Hour {
+			_ = os.RemoveAll(filepath.Join(runs, e.Name()))
+		}
+	}
 }

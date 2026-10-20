@@ -78,33 +78,44 @@ func TestSupervises(t *testing.T) {
 }
 
 func TestWithSettings(t *testing.T) {
-	got, err := withSettings([]string{"--model", "opus"}, shellQuote("/opt/it's/aims")+" hook claude")
-	if err != nil || got[0] != "--settings" || got[2] != "--model" {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "merged.json")
+	read := func() gjson.Result {
+		b, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return gjson.ParseBytes(b)
+	}
+	got, err := withSettings([]string{"--model", "opus"}, shellQuote("/opt/it's/aims")+" hook claude", out)
+	if err != nil || !slices.Equal(got, []string{"--settings", out, "--model", "opus"}) {
 		t.Fatalf("prepended: %q %v", got, err)
 	}
 	want := `'/opt/it'\''s/aims' hook claude`
 	if runtime.GOOS == "windows" {
 		want = `"/opt/it's/aims" hook claude`
 	}
-	if cmd := gjson.Get(got[1], "hooks.StopFailure.0.hooks.0.command").String(); cmd != want {
+	if cmd := read().Get("hooks.StopFailure.0.hooks.0.command").String(); cmd != want {
 		t.Fatalf("command: %s", cmd)
 	}
+	if fi, _ := os.Stat(out); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		t.Fatalf("settings readable by others: %v", fi.Mode())
+	}
 
-	file := filepath.Join(t.TempDir(), "s.json")
-	testutil.Write(t, file, `{"model":"haiku","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}]}}`)
-	got, err = withSettings([]string{"--settings", file, "hi"}, "'aims' hook claude")
-	if err != nil || len(got) != 3 {
+	user := filepath.Join(dir, "s.json")
+	testutil.Write(t, user, `{"model":"haiku","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}]}}`)
+	got, err = withSettings([]string{"--settings", user, "hi"}, "'aims' hook claude", out)
+	if err != nil || !slices.Equal(got, []string{"--settings", out, "hi"}) {
 		t.Fatalf("merged: %q %v", got, err)
 	}
-	j := gjson.Parse(got[1])
-	if j.Get("model").String() != "haiku" || j.Get("hooks.Stop.0.hooks.0.command").String() != "mine" || j.Get("hooks.Stop.1.hooks.0.command").String() != "'aims' hook claude" {
-		t.Fatalf("user settings lost: %s", got[1])
+	if j := read(); j.Get("model").String() != "haiku" || j.Get("hooks.Stop.0.hooks.0.command").String() != "mine" || j.Get("hooks.Stop.1.hooks.0.command").String() != "'aims' hook claude" {
+		t.Fatalf("user settings lost: %s", j.Raw)
 	}
-	got, _ = withSettings([]string{`--settings={"x":1}`}, "'aims' hook claude")
-	if j := gjson.Parse(got[0][len("--settings="):]); j.Get("x").Int() != 1 || !j.Get("hooks.Stop").Exists() {
-		t.Fatalf("inline: %q", got)
+	got, _ = withSettings([]string{`--settings={"x":1}`}, "'aims' hook claude", out)
+	if j := read(); got[0] != "--settings="+out || j.Get("x").Int() != 1 || !j.Get("hooks.Stop").Exists() {
+		t.Fatalf("inline: %q %s", got, j.Raw)
 	}
-	if _, err := withSettings([]string{"--settings", "/missing.json"}, "aims"); err == nil {
+	if _, err := withSettings([]string{"--settings", "/missing.json"}, "aims", out); err == nil {
 		t.Fatal("a missing settings file must fail")
 	}
 }

@@ -6,7 +6,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 )
+
+var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// ValidSessionID reports whether id looks like a conversation id, safe to
+// pass as an argument: not empty, not an option.
+func ValidSessionID(id string) bool { return sessionIDRe.MatchString(id) }
 
 // EventsFile is where hooks record the turns of a supervised run, in its
 // RunDir.

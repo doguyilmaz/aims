@@ -36,7 +36,7 @@ type MoveResult struct {
 func Move(ctx context.Context, to string) (MoveResult, error) {
 	dir := os.Getenv(profiles.RunVar)
 	id, from, ok := profiles.Session()
-	if dir == "" || !ok || os.Getenv(profiles.NestedVar) != "" || !strings.HasPrefix(filepath.Base(dir), "aims-run-") || fsx.Stat(dir) == nil {
+	if dir == "" || !ok || os.Getenv(profiles.NestedVar) != "" || fsx.Stat(dir) == nil || !strings.HasPrefix(fsx.Real(dir), fsx.Real(profiles.RunsDir())+string(filepath.Separator)) {
 		return MoveResult{}, ErrNotMoving
 	}
 	a, known := tools.Parse(string(id))

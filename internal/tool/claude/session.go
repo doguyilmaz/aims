@@ -14,6 +14,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
@@ -52,17 +53,28 @@ var hookEvents = []string{"SessionStart", "UserPromptSubmit", "Stop", "StopFailu
 
 // Watch passes Claude Code the hooks with --settings, merged into the
 // user's own --settings when there is one, so the user's settings files stay
-// untouched and a session started without aims reports nothing. The hooks
-// record the turns in the run's directory.
+// untouched and a session started without aims reports nothing. The merged
+// settings go in a file of the run, readable by the user only, rather than
+// on the command line, where other users can read it. The hooks record the
+// turns in the run's directory.
 func (*Adapter) Watch(w tool.Watch) ([]string, func() []tool.SessionEvent, error) {
-	args, err := withSettings(w.Args, shellQuote(w.Self)+" hook claude")
+	args, err := withSettings(w.Args, shellQuote(w.Self)+" hook claude", filepath.Join(w.RunDir, "settings.json"))
 	if err != nil {
 		return nil, nil, err
 	}
 	return args, tool.FollowEvents(w.RunDir), nil
 }
 
-func withSettings(args []string, command string) ([]string, error) {
+// withSettings writes the user's --settings (or none) with the hooks added
+// to file, and points args at it.
+func withSettings(args []string, command, file string) ([]string, error) {
+	write := func(settings string) (string, error) {
+		merged, err := withHooks(settings, command)
+		if err != nil {
+			return "", err
+		}
+		return file, fsx.WriteFile(file, []byte(merged), 0o600)
+	}
 	for i, a := range args {
 		if a == "--" {
 			break
@@ -73,20 +85,23 @@ func withSettings(args []string, command string) ([]string, error) {
 		} else if !inline {
 			continue
 		}
-		merged, err := withHooks(value, command)
+		path, err := write(value)
 		if err != nil {
 			return nil, err
 		}
 		out := slices.Clone(args)
 		if inline {
-			out[i] = "--settings=" + merged
+			out[i] = "--settings=" + path
 		} else {
-			out[i+1] = merged
+			out[i+1] = path
 		}
 		return out, nil
 	}
-	merged, _ := withHooks("{}", command)
-	return append([]string{"--settings", merged}, args...), nil
+	path, err := write("{}")
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{"--settings", path}, args...), nil
 }
 
 // withHooks adds command as a hook for hookEvents to settings, given as JSON

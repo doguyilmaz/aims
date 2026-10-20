@@ -273,7 +273,11 @@ func interactiveTurn(settings, label string, args []string, has func(string) boo
 			Hooks []struct{ Command string } `json:"hooks"`
 		} `json:"hooks"`
 	}
-	_ = json.Unmarshal([]byte(settings), &cfg)
+	doc := []byte(settings)
+	if !strings.HasPrefix(settings, "{") {
+		doc, _ = os.ReadFile(settings)
+	}
+	_ = json.Unmarshal(doc, &cfg)
 	for _, g := range cfg.Hooks[event] {
 		for _, h := range g.Hooks {
 			cmd := exec.Command("sh", "-c", h.Command)
