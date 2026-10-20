@@ -2,6 +2,7 @@ package claude
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,13 @@ var (
 	_ tool.Hooker     = (*Adapter)(nil)
 	_ tool.Diagnoser  = (*Adapter)(nil)
 )
+
+// HoldPrompt blocks the prompt of a UserPromptSubmit hook; Claude Code shows
+// the reason.
+func (*Adapter) HoldPrompt(reason string) []byte {
+	b, _ := json.Marshal(map[string]string{"decision": "block", "reason": reason})
+	return append(b, '\n')
+}
 
 // subcommands are Claude Code's commands that are not a conversation.
 var subcommands = []string{
@@ -151,7 +159,7 @@ func (*Adapter) HookEvent(raw []byte) (tool.SessionEvent, bool) {
 		ev.Opened = true
 		return ev, true
 	case "UserPromptSubmit":
-		ev.Started = true
+		ev.Started, ev.Prompt = true, j.Get("prompt").String()
 		return ev, true
 	case "Stop":
 		return ev, true

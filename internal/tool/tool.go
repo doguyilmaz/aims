@@ -117,6 +117,10 @@ type SessionEvent struct {
 	// Transcript is the file the conversation is saved to, when the tool
 	// says; until it exists there is nothing to resume.
 	Transcript string `json:"transcript,omitempty"`
+	// Prompt is the prompt of a turn that began. HeldFor names the profile
+	// the hook kept it back for: it was not sent, the move takes it along.
+	Prompt  string `json:"prompt,omitempty"`
+	HeldFor string `json:"heldFor,omitempty"`
 	// Failure is why the turn failed, when another account can help; Text
 	// is the provider's message.
 	Failure Failure `json:"failure,omitempty"`
@@ -128,7 +132,14 @@ type Hooker interface {
 	// HookEvent returns the start or end of a turn; ok is false for anything
 	// else.
 	HookEvent(raw []byte) (ev SessionEvent, ok bool)
+	// HoldPrompt is what the hook prints to keep a prompt from being sent,
+	// telling the user why.
+	HoldPrompt(reason string) []byte
 }
+
+// HoldFile, in a run's directory, names the profile a move waits for: the
+// hook then holds the user's next prompt for it.
+const HoldFile = "hold"
 
 // Diagnoser reports settings of the tool that keep aims from doing its job,
 // for aims doctor.

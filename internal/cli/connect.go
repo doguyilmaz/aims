@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -304,9 +305,18 @@ func newHookCmd() *cobra.Command {
 				return
 			}
 			raw, _ := launch.ReadStdin(2*time.Second, false)
-			if ev, ok := h.HookEvent(raw); ok {
-				_ = tool.RecordEvent(dir, ev)
+			ev, ok := h.HookEvent(raw)
+			if !ok {
+				return
 			}
+			if b, err := os.ReadFile(filepath.Join(dir, tool.HoldFile)); err == nil && ev.Started {
+				ev.HeldFor = strings.TrimSpace(string(b))
+				if err := tool.RecordEvent(dir, ev); err == nil {
+					_, _ = os.Stdout.Write(h.HoldPrompt("aims: moving this conversation to " + ev.HeldFor + "; your message goes along"))
+				}
+				return
+			}
+			_ = tool.RecordEvent(dir, ev)
 		},
 	}
 }

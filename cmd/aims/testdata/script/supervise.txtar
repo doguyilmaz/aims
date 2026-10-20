@@ -17,15 +17,20 @@ stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "
 exec aims status claude
 stdout 'personal .*limited .*marked by a session'
 
-# Once personal works again, the conversation goes back to it after a turn.
+# Once personal works again, the conversation goes back to it with the
+# user's next prompt, which the hook holds back so nothing is lost.
 env FAKE_BEFORE_TURN='aims clear claude personal'
+env FAKE_NEXT_PROMPT='next question'
 rm $HOME/.claude/LIMITED
 exec aims claude -r s-old
 stdout 'claude interactive as work args=\["-r" "s-old"\]'
+stdout 'claude held the prompt as work'
 stdout 'claude stopped as work'
 stderr 'claude: personal works again; this conversation goes back to it'
-stdout 'claude interactive as default args=\["--resume" "s-old"\]'
+stdout 'claude interactive as default args=\["--resume" "s-old" "--" "next question"\]'
+! stdout 'held the prompt as default'
 env FAKE_BEFORE_TURN=
+env FAKE_NEXT_PROMPT=
 
 # A dead login moves the conversation on too, and marks the account.
 cp LIMITED $HOME/.claude/EXPIRED

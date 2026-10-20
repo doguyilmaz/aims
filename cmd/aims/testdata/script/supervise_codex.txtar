@@ -17,13 +17,14 @@ stdout 'codex interactive as work args=\["-m" "gpt-5" "-s" "workspace-write" "re
 exec aims status codex
 stdout 'personal .*limited .*marked by a session'
 
-# Once personal works again, the conversation goes back to it after a turn.
+# Once personal works again, Codex, which has no hook to hold the next
+# prompt, is not restarted right after a turn: only once it sits idle.
 env FAKE_BEFORE_TURN='aims clear codex personal'
 rm $HOME/.codex/LIMITED
 exec aims codex resume c-default
 stdout 'codex interactive as work args=\["resume" "c-default"\]'
-stderr 'codex: personal works again; this conversation goes back to it'
-stdout 'codex interactive as default args=\["resume" "c-default"\]'
+! stdout 'stopped as work'
+! stderr 'goes back'
 env FAKE_BEFORE_TURN=
 
 # A dead login moves it on too.

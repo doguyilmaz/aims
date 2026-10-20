@@ -278,11 +278,25 @@ func interactiveTurn(settings, label string, args []string, has func(string) boo
 		doc, _ = os.ReadFile(settings)
 	}
 	_ = json.Unmarshal(doc, &cfg)
-	for _, g := range cfg.Hooks[event] {
-		for _, h := range g.Hooks {
-			cmd := exec.Command("sh", "-c", h.Command)
-			cmd.Stdin, cmd.Stderr = bytes.NewReader(in), os.Stderr
-			_ = cmd.Run()
+	run := func(event string, in []byte) string {
+		var out bytes.Buffer
+		for _, g := range cfg.Hooks[event] {
+			for _, h := range g.Hooks {
+				cmd := exec.Command("sh", "-c", h.Command)
+				cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(in), &out, os.Stderr
+				_ = cmd.Run()
+			}
+		}
+		return out.String()
+	}
+	run(event, in)
+	// $FAKE_NEXT_PROMPT: a moment after the turn, the user sends another
+	// prompt, which a hook may hold back.
+	if p := os.Getenv("FAKE_NEXT_PROMPT"); p != "" && event == "Stop" {
+		time.Sleep(1500 * time.Millisecond)
+		next, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "session_id": session, "prompt": p})
+		if out := run("UserPromptSubmit", next); strings.Contains(out, `"decision":"block"`) {
+			fmt.Printf("claude held the prompt as %s\n", label)
 		}
 	}
 	linger, _ := time.ParseDuration(os.Getenv("FAKE_LINGER"))

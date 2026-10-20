@@ -31,6 +31,11 @@ const (
 	// busyAgain is how long an account rests after a second rate limit
 	// within that time.
 	busyAgain = 15 * time.Minute
+	// settle is how long a session must sit idle before a move aims chose
+	// restarts it, when no hook can hold the user's next prompt instead.
+	settle = 2 * time.Minute
+	// recheck is how often an idle session looks whether it should move.
+	recheck = 30 * time.Second
 )
 
 // supervise runs an interactive session that moves between profiles: to the
@@ -87,6 +92,13 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		var wake *profiles.Pick
 		var carry []tool.SessionEvent
 		running := false // a turn is under way: no move that is not forced
+		lastEvent := time.Now()
+		// chosen is where aims would like the conversation to go without
+		// being forced (back to the first account, or on before a limit):
+		// it waits for a moment that loses nothing.
+		var chosen, chosenWhy string
+		var checked time.Time
+		_, gated := sv.(tool.Hooker)
 		ticker := time.NewTicker(pollEvery)
 		var next, prompt, why string
 		var resume []string
@@ -102,8 +114,10 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				asked = to
 			}
 			evs := append(carry, poll()...)
-			carry, next, prompt = nil, "", ""
+			carry, next, prompt, why = nil, "", "", ""
+			var heldFor, heldPrompt string
 			for _, ev := range evs {
+				lastEvent = time.Now()
 				if ev.Session != "" {
 					session = ev.Session
 				}
@@ -112,38 +126,60 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				}
 				switch {
 				case ev.Opened:
+				case ev.Started && ev.HeldFor != "":
+					heldFor, heldPrompt = ev.HeldFor, ev.Prompt
 				case ev.Started:
-					running, wake, next = true, nil, ""
+					running, wake = true, nil
 				case ev.Failure != tool.FailNone:
-					running, held = false, ""
+					running, held, chosen = false, "", ""
 					next, prompt, why, wake = onFailure(ctx, o, name, ev)
 				default:
 					running, wake = false, nil
-					next, why = onStop(ctx, o, name, held)
-					prompt = ""
+					chosen, chosenWhy = onStop(ctx, o, name, held)
+					checked = time.Now()
 				}
 			}
-			// A move asked for wins over one aims chose, but not over a turn
-			// cut short, which must go on.
-			if asked != "" && !running && session != "" && prompt == "" {
-				next, why = "", ""
+			// While the session sits idle, accounts can come back (a reset,
+			// aims clear): look again now and then.
+			if !running && session != "" && wake == nil && next == "" && time.Since(checked) >= recheck {
+				chosen, chosenWhy = onStop(ctx, o, name, held)
+				checked = time.Now()
+			}
+			switch {
+			case next != "":
+				// A turn cut short goes on elsewhere right away.
+			case heldFor != "":
+				// The hook kept the user's prompt from being sent: it goes
+				// with the conversation, or stays here if that move is off.
+				next, prompt, why = heldFor, heldPrompt, chosenWhy
+				if !validMove(a.ID(), name, heldFor) {
+					next, why = name, "sending your message"
+				}
+				if why == "" {
+					why = "this conversation moves to " + heldFor
+				}
+			case asked != "" && !running && session != "":
 				if asked != name {
 					next, why = asked, "moving this conversation to "+asked+", as asked"
 				}
-				held, asked = asked, ""
-			}
-			if wake != nil && !config.Now().Before(wake.ReadyAt.Add(wakeAfter)) {
+				held, asked, chosen = asked, "", ""
+			case wake != nil && !config.Now().Before(wake.ReadyAt.Add(wakeAfter)):
 				next, prompt = wake.Soonest, continuePrompt
 				why = wake.Soonest + "'s limit has reset; continuing this conversation"
 				if next != name {
 					why += " on it"
 				}
+			case chosen != "" && !running && !gated && time.Since(lastEvent) >= settle:
+				next, why = chosen, chosenWhy
 			}
-			if next == "" || session == "" || (running && prompt == "") {
+			// With hooks, a move aims chose waits for the user's next
+			// prompt, which the hook holds and the move takes along.
+			hold(dir, gated && chosen != "" && !running && next == "", chosen)
+			if next == "" || session == "" || (next == name && prompt == "") {
 				continue
 			}
-			if prompt == "" {
-				// The user may have sent the next prompt since the turn ended.
+			if prompt == "" && heldFor == "" {
+				// The user may have sent the next prompt meanwhile.
 				if carry = poll(); len(carry) > 0 {
 					continue
 				}
@@ -155,7 +191,10 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			// a new one instead.
 			id := session
 			if transcript != "" && fsx.Stat(transcript) == nil {
-				id, prompt = "", ""
+				id = ""
+				if heldFor == "" {
+					prompt = ""
+				}
 			}
 			var err error
 			if resume, err = sv.ResumeArgs(bin, o.Args, id, prompt); err != nil {
@@ -288,4 +327,15 @@ func sweep(runs string) {
 			_ = os.RemoveAll(filepath.Join(runs, e.Name()))
 		}
 	}
+}
+
+// hold leaves (on) or removes the request that makes the session's hook
+// keep the user's next prompt for a move to profile.
+func hold(dir string, on bool, profile string) {
+	path := filepath.Join(dir, tool.HoldFile)
+	if on {
+		_ = fsx.WriteFile(path, []byte(profile+"\n"), 0o600)
+		return
+	}
+	_ = os.Remove(path)
 }
