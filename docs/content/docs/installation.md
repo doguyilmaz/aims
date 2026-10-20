@@ -116,7 +116,7 @@ Completion knows your tools and profile names, so `aims use <Tab>` lists your ac
 aims upgrade
 ```
 
-aims never replaces its own binary. It works out how it was installed (Homebrew, Scoop, npm or `go install`) and runs that tool's upgrade. A copy from the install script gets the command that installs the newest release. `aims upgrade --check` only prints what it would run.
+aims works out how it was installed (Homebrew, Scoop, npm or `go install`) and runs that tool's upgrade. A copy where the install script puts it (`AIMS_BIN_DIR`, by default `~/.local/bin`) is upgraded by running the script again, which checks the download against the release's checksums. A copy anywhere else gets the command that installs the newest release. `aims upgrade --check` only prints what it would run.
 
 aims checks for a new release at most once a day, in the background, and mentions it after a command finishes. It asks GitHub where its "latest release" page points and sends nothing about you. Set `AIMS_NO_UPDATE_CHECK=1` to turn this off.
 
