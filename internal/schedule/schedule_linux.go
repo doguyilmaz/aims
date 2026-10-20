@@ -44,10 +44,18 @@ func install(j Job) (string, error) {
 	if testing.Testing() {
 		return base + ".timer", nil
 	}
-	if err := systemctl("daemon-reload"); err != nil {
-		return base + ".timer", err
+	err := systemctl("daemon-reload")
+	if err == nil {
+		err = systemctl("enable", "--now", unit(j)+".timer")
 	}
-	return base + ".timer", systemctl("enable", "--now", unit(j)+".timer")
+	if err != nil {
+		// Without a user systemd (WSL, a container) the files would only
+		// pretend the job is on.
+		_ = os.Remove(base + ".timer")
+		_ = os.Remove(base + ".service")
+		return base + ".timer", fmt.Errorf("%w (no systemd user session? run `aims keepalive` from cron instead)", err)
+	}
+	return base + ".timer", nil
 }
 
 func uninstall(j Job) (string, bool, error) {
@@ -68,8 +76,10 @@ func uninstall(j Job) (string, bool, error) {
 
 func installed(j Job) (string, bool) {
 	path := filepath.Join(unitDir(), unit(j)+".timer")
-	_, err := os.Stat(path)
-	return path, err == nil
+	if _, err := os.Stat(path); err != nil {
+		return path, false
+	}
+	return path, testing.Testing() || systemctl("is-enabled", "--quiet", unit(j)+".timer") == nil
 }
 
 func systemctl(args ...string) error {

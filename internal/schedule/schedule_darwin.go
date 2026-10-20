@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/proc"
@@ -65,7 +66,17 @@ func install(j Job) (string, error) {
 	if testing.Testing() {
 		return path, nil
 	}
-	return path, launchctl("bootstrap", domain(), path)
+	// launchd finishes removing the old job in the background: a bootstrap
+	// right after it can fail for a moment.
+	var err error
+	for range 20 {
+		if err = launchctl("bootstrap", domain(), path); err == nil {
+			return path, nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	_ = os.Remove(path)
+	return path, err
 }
 
 func uninstall(j Job) (string, bool, error) {
@@ -79,10 +90,14 @@ func uninstall(j Job) (string, bool, error) {
 	return path, true, os.Remove(path)
 }
 
+// installed asks launchd, not the file: a job whose bootstrap failed is not
+// on.
 func installed(j Job) (string, bool) {
 	path := plistPath(j)
-	_, err := os.Stat(path)
-	return path, err == nil
+	if _, err := os.Stat(path); err != nil {
+		return path, false
+	}
+	return path, testing.Testing() || launchctl("print", domain()+"/"+j.label()) == nil
 }
 
 func xmlText(s string) string {
