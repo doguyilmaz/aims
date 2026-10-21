@@ -10,6 +10,7 @@ env FAKE_LINGER=5s
 cp LIMITED $HOME/.claude/LIMITED
 exec aims claude --model opus --add-dir a b -- hello
 stdout 'claude interactive as default args=\["--model" "opus" "--add-dir" "a" "b" "--" "hello"\]'
+stderr 'claude: personal \(auto → work\)'
 stdout 'claude stopped as default'
 stderr 'claude: personal hit its usage limit; continuing this conversation on work'
 stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
@@ -46,6 +47,7 @@ exec aims login claude personal
 cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
 exec aims claude@work
 stdout 'claude interactive as work args=\[\]'
+stderr 'claude: work \(pinned\)'
 ! stdout 'stopped'
 
 # The user's own --settings keep working, with the hooks merged in.
@@ -76,6 +78,22 @@ exec aims status claude
 stdout 'personal .*limited .*marked by aims failover'
 env FAKE_BEFORE_TURN=
 exec aims clear claude
+
+# aims failover --resume continues the conversation in a session aims
+# watches: once personal works again, it goes back.
+env FAKE_BEFORE_TURN='aims clear claude personal'
+env FAKE_NEXT_PROMPT='next question'
+exec aims failover claude --from personal --resume
+stdout 'claude interactive as work args=\["--continue"\]'
+stderr 'personal works again; this conversation goes back to it'
+stdout 'claude interactive as default args=\["--resume" "s-work" "--" "next question"\]'
+env FAKE_BEFORE_TURN=
+env FAKE_NEXT_PROMPT=
+exec aims clear claude
+
+# A command that is not a session is neither explained nor listed.
+exec aims claude --version
+! stderr 'claude: personal'
 
 # Outside such a session there is nothing to move.
 ! exec aims move work

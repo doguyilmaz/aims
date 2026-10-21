@@ -44,7 +44,7 @@ func renderHelp(w io.Writer, cmd *cobra.Command) {
 	switch {
 	case !cmd.HasParent():
 		b.WriteString("\n" + head("Usage") + "\n")
-		b.WriteString("  " + s.Cmd.Render("aims") + s.Dim.Render("                    the dashboard (the status when output is piped)") + "\n")
+		b.WriteString("  " + s.Cmd.Render("aims") + s.Dim.Render("                    status and next steps") + "\n")
 		b.WriteString("  " + s.Cmd.Render("aims <command> [flags]") + "\n")
 	case cmd.Runnable():
 		b.WriteString("\n" + head("Usage") + "\n  " + s.Cmd.Render(cmd.UseLine()) + "\n")

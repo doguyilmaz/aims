@@ -60,7 +60,7 @@ Errors are read only from the tool's own error output and final status, never fr
 
 ## In an interactive session
 
-A session started with `aims claude` or `aims codex` without `@profile` is supervised and moves by itself. Plain `claude`, `aims claude@work`, a Claude Code session in a worktree (`-w`) or tmux (`--tmux`), and tools started without aims are not: they keep the login they started with, because Claude Code and Codex read it once, when they start. A conversation only moves to accounts that share its history (the default); one with its own history stays put.
+A session started with `aims claude` or `aims codex` without `@profile` (or with plain `claude` and `codex` once the shell integration is on) is supervised and moves by itself. It says so when it starts, Claude Code's status line shows `auto`, and `aims` lists it as "moves at a limit". `aims claude@work` (status line: `pinned`), `claude` without the shell integration (`not via aims`), a Claude Code session in a worktree (`-w`) or tmux (`--tmux`), and tools started without aims are not: they keep the login they started with, because Claude Code and Codex read it once, when they start. A conversation only moves to accounts that share its history (the default); one with its own history stays put.
 
 When the account of a supervised session hits a usage limit or its login dies, aims stops the tool and starts it again on the next usable account. It resumes the same conversation (`--resume <id>` for Claude Code, `codex resume <id>` for Codex) with the prompt "continue". Every option you passed is kept; your original prompt is not sent again. aims says what it did:
 

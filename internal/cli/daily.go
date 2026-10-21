@@ -26,7 +26,7 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "status [tool]",
 		Aliases: []string{"ls"},
-		Short:   "Show every account: login, plan usage, cooldowns",
+		Short:   "Show accounts, open sessions and next steps",
 		Example: `aims status
 aims status codex --live
 aims status --json`,
@@ -106,17 +106,14 @@ func printStatus(ctx context.Context, cmd *cobra.Command, ids []tool.ID, asJSON 
 		return err
 	}
 	s := ui.NewStyles(out)
-	fmt.Fprint(out, ui.RenderStatus(s, report, cfg.Failover.Threshold))
-	if !cfg.HasProfiles() {
-		fmt.Fprintln(out, "\n"+s.Dim.Render("Set up your accounts with ")+ui.Kbd(s, "aims init"))
-	}
+	fmt.Fprint(out, ui.RenderStatus(s, report, cfg))
 	return nil
 }
 
 func newUseCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "use [tool] <profile>",
-		Short: "Make a profile the active account for new sessions",
+		Short: "Choose the account new sessions start on",
 		Long:  "Without a tool, every tool that has a profile with that name switches.",
 		Example: `aims use work            # Claude Code and Codex
 aims use claude personal`,
@@ -236,7 +233,7 @@ func pickProfile(ctx context.Context) (tool.Adapter, string, error) {
 func newToolCmd(a tool.Adapter) *cobra.Command {
 	return &cobra.Command{
 		Use:                string(a.ID()) + " [args...]",
-		Short:              "Run " + a.Title() + " as the active profile (or " + string(a.ID()) + "@<profile>)",
+		Short:              "Start " + a.Title() + " (" + string(a.ID()) + "@<profile> pins it)",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTool(cmd.Context(), a, "", args)

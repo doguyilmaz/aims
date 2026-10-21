@@ -126,8 +126,27 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	for {
 		tried = append(tried, name)
 		if !headless {
-			if sv, ok := a.(tool.Supervisor); ok && auto && sv.Supervises(o.Args) {
+			// A session, not `claude mcp list` or `codex login`: only a
+			// session is explained and listed.
+			sv, ok := a.(tool.Supervisor)
+			session := ok && sv.Supervises(o.Args)
+			mode := profiles.Unwatched
+			switch {
+			case o.Profile != "":
+				mode = profiles.Pinned
+			case session && auto:
+				mode = profiles.Watched
+			}
+			o.ExtraEnv = append(o.ExtraEnv, profiles.ModeVar+"="+string(mode))
+			if session {
+				explain(o, cfg, preferred, name, mode)
+				defer profiles.Untrack()
+			}
+			if mode == profiles.Watched {
 				return supervise(ctx, o, sv, bin, name)
+			}
+			if session {
+				profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: mode, Dir: workDir(o), Started: time.Now()})
 			}
 			code, err := proc.RunAttached(bin, o.Args, sessionEnv(o, cfg, name), o.Dir)
 			return Result{Code: code, Profile: name}, err
@@ -260,6 +279,41 @@ func hints(o Options, skipped []profiles.Evaluation) {
 			o.say(Hint, "%s works again? aims clear %s %s", e.Name, o.Tool.ID(), e.Name)
 		}
 	}
+}
+
+// explain says, as a session starts, its account and what happens at a
+// limit, in the status line's words: "claude: personal (auto → work)".
+func explain(o Options, cfg *config.Config, preferred, name string, mode profiles.Mode) {
+	tag := "auto"
+	switch mode {
+	case profiles.Pinned:
+		tag = "pinned"
+	case profiles.Unwatched:
+		tag = "auto off"
+	default:
+		var others []string
+		for _, n := range cfg.Tools[o.Tool.ID()].Order {
+			if n != name && n != preferred {
+				others = append(others, n)
+			}
+		}
+		switch {
+		case name != preferred:
+			tag += ", back to " + preferred
+		case len(others) > 0:
+			tag += " → " + strings.Join(others, ", ")
+		}
+	}
+	o.say(Info, "%s: %s (%s)", o.Tool.ID(), name, tag)
+}
+
+// workDir is where the session runs.
+func workDir(o Options) string {
+	if o.Dir != "" {
+		return o.Dir
+	}
+	dir, _ := os.Getwd()
+	return dir
 }
 
 // failureText names a failure in a sentence: "hit its usage limit".

@@ -117,13 +117,13 @@ func newRoot(version string) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "aims",
 		Short: "Several Claude Code and Codex accounts on one machine",
-		Long: "aims (AI multi-session) keeps one login per account for Claude Code and Codex,\n" +
-			"switches between them instantly, shares history and settings across them, and\n" +
-			"moves to the next account when one hits its usage limit or needs a new login.",
-		Example: `aims init
-aims claude@work
-aims use work
-aims status --live`,
+		Long: "aims (AI multi-session) keeps one login per account for Claude Code and Codex\n" +
+			"and shares history between them. A session starts on your first account,\n" +
+			"moves to the next at a limit, and comes back.",
+		Example: `aims init          # once
+aims claude        # or plain claude after aims setup
+aims claude@work   # pinned: stays on work
+aims               # status and next steps`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -140,7 +140,7 @@ aims status --live`,
 		&cobra.Group{ID: "start", Title: "Get started"},
 		&cobra.Group{ID: "daily", Title: "Every day"},
 		&cobra.Group{ID: "accounts", Title: "Accounts"},
-		&cobra.Group{ID: "connect", Title: "Integrations"},
+		&cobra.Group{ID: "manual", Title: "By hand (aims does these on its own)"},
 		&cobra.Group{ID: "maintain", Title: "Maintenance"},
 	)
 	add := func(group string, cmds ...*cobra.Command) {
@@ -149,14 +149,14 @@ aims status --live`,
 			root.AddCommand(c)
 		}
 	}
-	add("start", newInitCmd(version), newLoginCmd())
-	add("daily", newStatusCmd(), newUseCmd(), newRunCmd(), newEnvCmd())
+	add("start", newInitCmd(version), newSetupCmd(), newLoginCmd())
 	for _, a := range tools.All() {
 		add("daily", newToolCmd(a))
 	}
-	add("accounts", newAddCmd(), newFailoverCmd(), newMoveCmd(), newClearCmd(), newOrderCmd(), newLogoutCmd(), newRemoveCmd())
-	add("connect", newSetupCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version))
-	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
+	add("daily", newStatusCmd())
+	add("accounts", newOrderCmd(), newUseCmd(), newAddCmd(), newLogoutCmd(), newRemoveCmd())
+	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd())
+	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
@@ -200,7 +200,7 @@ func home(ctx context.Context, cmd *cobra.Command, version string) error {
 	if err != nil || req == nil {
 		return err
 	}
-	res, err := launch.Run(ctx, launch.Options{Tool: tools.Get(req.Tool), Profile: req.Profile, Notify: notify})
+	res, err := launch.Run(ctx, launch.Options{Tool: tools.Get(req.Tool), Notify: notify})
 	if err != nil {
 		return err
 	}

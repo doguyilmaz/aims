@@ -8,16 +8,16 @@ weight: 4
 `aims claude` and `aims codex` start the real tools with an account's login. Everything after the tool name goes to the tool unchanged:
 
 ```bash
-aims claude                         # the active account
+aims claude                         # your first account; moves on at a limit
 aims claude --model opus -c         # flags pass straight through
-aims claude@work                    # this account, this session only
+aims claude@work                    # pinned to work: stays there, also at a limit
 aims codex@personal exec "fix the failing test"
 aims run claude@work -p "explain"   # the same as aims claude@work -p ...
 ```
 
 Which account a session gets, in order:
 
-1. `@profile` on the command line. This also turns automatic failover off for that run.
+1. `@profile` on the command line. This pins the session: it stays on that account, also at a limit, and says so when it starts.
 2. The terminal's pin, if you set one with `aims env` (below).
 3. The active account (`aims use`).
 4. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again. aims says so when it skips one:

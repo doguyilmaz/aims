@@ -3,7 +3,7 @@ title: Dashboard
 weight: 8
 ---
 
-`aims` with no arguments opens a full-screen view of every account. It runs in your terminal; nothing is served or opened in a browser.
+`aims` with no arguments opens a full-screen view of every account, the sessions open now and what is left to set up. It runs in your terminal; nothing is served or opened in a browser.
 
 ```text
  aims  accounts for Claude Code and Codex                                                  v0.1.3
@@ -15,6 +15,16 @@ weight: 8
  Codex                                                                                   ~/.codex
    ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
      work       me@company.com   team   ready           5h [......]    –   7d [......]    –
+     new sessions: personal (auto → work)
+
+ Open sessions
+     Claude Code  personal  auto    ~/src/app · 2h
+     Codex        work      pinned  ~/src/api · 20m
+
+ Next
+   → codex in ~/src/api is pinned to work; for auto, restart it with  aims codex resume --last
+
+ start: claude, codex or press s
 
  ╭──────────────────────────────────────────────────────────────────────────────╮
  │ claude / personal  active · default login                                    │
@@ -28,7 +38,7 @@ weight: 8
  │ last used 4m ago                                                             │
  ╰──────────────────────────────────────────────────────────────────────────────╯
 
- enter make active • s start • l log in • f fail over • r check live • ? more • q quit
+ s start a session • enter make first • l log in • a add account • ? more • q quit
 ```
 
 ## Keys
@@ -36,9 +46,9 @@ weight: 8
 | Key | Does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | Move between accounts |
-| `enter` or `u` | Make the selected account active for new sessions (it moves to the top) |
+| `s` | Close the dashboard and start a session of the selected tool. aims picks the account and moves the session at a limit |
+| `enter` or `u` | Make the selected account the one sessions start on |
 | `shift+↑` `shift+↓` or `K` `J` | Move the selected account up or down the [failover order](../failover#order); the top one is active |
-| `s` | Close the dashboard and start the tool as the selected account |
 | `l` | Log the selected account in (the browser opens; the dashboard comes back after) |
 | `f` | Mark the selected account as limited, so new sessions use the next one (asks first) |
 | `c` | Clear the selected account's marks |
@@ -46,6 +56,8 @@ weight: 8
 | `a` | Add an account (runs the setup) |
 | `?` | Show all keys |
 | `q`, `esc` | Quit |
+
+**Open sessions** are the sessions aims started that still run, with `auto` (moves at a limit) or `pinned` (stays). **Next** lists what is still missing for sessions to move on their own (a second account, a login, plain `claude` going through aims), each with the command that does it.
 
 The bars turn yellow at 70% and red at the failover threshold. The card under the list shows the selected account's folder, usage windows with their reset times, and when aims last heard from it.
 
