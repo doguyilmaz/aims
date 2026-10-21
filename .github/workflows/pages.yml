@@ -3,7 +3,9 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/pages.yml"]
+    paths: &docs ["docs/**", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: *docs
   workflow_dispatch:
 
 permissions:
@@ -12,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -31,13 +33,16 @@ jobs:
           hugo-version: "0.162.1"
           extended: true
       - id: pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
-      - run: hugo --source docs --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
-      - uses: actions/upload-pages-artifact@v3
+      - run: hugo --source docs --gc --minify ${{ steps.pages.outputs.base_url && format('--baseURL "{0}/"', steps.pages.outputs.base_url) }}
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: docs/public
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

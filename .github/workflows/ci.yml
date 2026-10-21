@@ -3,7 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: &docs ["docs/**", ".github/workflows/pages.yml"]
   pull_request:
+    paths-ignore: *docs
   workflow_dispatch:
 
 permissions:
@@ -51,17 +53,3 @@ jobs:
           args: build --snapshot --clean
       - name: npm packages
         run: node scripts/npm/build.mjs v0.0.0-snapshot
-
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: docs/go.mod
-          cache: false
-      - uses: peaceiris/actions-hugo@v3
-        with:
-          hugo-version: "0.162.1"
-          extended: true
-      - run: hugo --source docs --gc --minify
