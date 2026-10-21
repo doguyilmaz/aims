@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -20,7 +21,8 @@ func plistPath(j Job) string {
 	return filepath.Join(fsx.Home(), "Library", "LaunchAgents", j.label()+".plist")
 }
 
-func install(j Job) (string, error) {
+// plist is the launchd job for j.
+func plist(j Job) string {
 	var args strings.Builder
 	for _, a := range j.Command {
 		args.WriteString("\t\t<string>")
@@ -35,13 +37,17 @@ func install(j Job) (string, error) {
 		_ = xml.EscapeText(&env, []byte(j.Env[k]))
 		env.WriteString("</string>\n")
 	}
-	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	var app string
+	if j.App != "" {
+		app = "\t<key>AssociatedBundleIdentifiers</key>\n\t<array>\n\t\t<string>" + xmlText(j.App) + "</string>\n\t</array>\n"
+	}
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
 	<string>%[1]s</string>
-	<key>ProgramArguments</key>
+%[6]s	<key>ProgramArguments</key>
 	<array>
 %[2]s	</array>
 	<key>EnvironmentVariables</key>
@@ -57,15 +63,20 @@ func install(j Job) (string, error) {
 	<string>%[5]s</string>
 </dict>
 </plist>
-`, j.label(), args.String(), env.String(), int(j.Every.Seconds()), xmlText(cmp.Or(j.Log, "/dev/null")))
+`, j.label(), args.String(), env.String(), int(j.Every.Seconds()), xmlText(cmp.Or(j.Log, "/dev/null")), app)
+}
+
+func install(j Job) (string, error) {
 	path := plistPath(j)
 	_, _, _ = uninstall(j)
-	if err := fsx.WriteFile(path, []byte(plist), 0o644); err != nil {
+	if err := fsx.WriteFile(path, []byte(plist(j)), 0o644); err != nil {
 		return path, err
 	}
 	if testing.Testing() {
 		return path, nil
 	}
+	// Turning it on by hand turns it on, also after Login Items turned it off.
+	_ = launchctl("enable", domain()+"/"+j.label())
 	// launchd finishes removing the old job in the background: a bootstrap
 	// right after it can fail for a moment.
 	var err error
@@ -98,6 +109,34 @@ func installed(j Job) (string, bool) {
 		return path, false
 	}
 	return path, testing.Testing() || launchctl("print", domain()+"/"+j.label()) == nil
+}
+
+// envBlock is a plist's environment, which differs from shell to shell
+// (PATH) without the job needing to change.
+var envBlock = regexp.MustCompile(`(?s)\t<key>EnvironmentVariables</key>\n\t<dict>\n.*?\t</dict>\n`)
+
+func heal(j Job) (bool, error) {
+	b, err := os.ReadFile(plistPath(j))
+	if err == nil && envBlock.ReplaceAllString(string(b), "") == envBlock.ReplaceAllString(plist(j), "") || disabled(j) {
+		return false, nil
+	}
+	_, err = install(j)
+	return err == nil, err
+}
+
+// disabled reports whether the person turned the job off in Login Items,
+// which launchd records as disabled ("true" on older macOS). It outlives the
+// plist.
+func disabled(j Job) bool {
+	if testing.Testing() {
+		return false
+	}
+	out, _, err := proc.Output("launchctl", []string{"print-disabled", domain()}, nil, defaultTimeout)
+	if err != nil {
+		return false
+	}
+	re := regexp.MustCompile(`(?m)^\s*"` + regexp.QuoteMeta(j.label()) + `"\s*=>\s*(disabled|true)\s*$`)
+	return re.MatchString(out)
 }
 
 func xmlText(s string) string {

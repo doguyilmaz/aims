@@ -12,3 +12,5 @@ var errUnsupported = errors.New("no scheduler aims knows on " + runtime.GOOS + "
 func install(Job) (string, error)         { return "", errUnsupported }
 func uninstall(Job) (string, bool, error) { return "", false, nil }
 func installed(Job) (string, bool)        { return "", false }
+
+func heal(Job) (bool, error) { return false, nil }
