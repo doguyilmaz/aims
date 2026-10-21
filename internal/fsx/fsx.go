@@ -50,6 +50,16 @@ func Tildify(p string) string {
 	return p
 }
 
+// Brief names a directory in a few characters: the tildified path, or its
+// last two parts when that is long.
+func Brief(p string) string {
+	t := Tildify(p)
+	if len(t) <= 32 {
+		return t
+	}
+	return "…" + string(filepath.Separator) + filepath.Join(filepath.Base(filepath.Dir(p)), filepath.Base(p))
+}
+
 // Abs resolves p to an absolute, cleaned path after expanding "~".
 func Abs(p string) string {
 	a, err := filepath.Abs(ExpandHome(p))

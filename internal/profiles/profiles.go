@@ -31,6 +31,10 @@ const NestedVar = "AIMS_RUN_NESTED"
 // hooks record turns there, and `aims move` leaves its request there.
 const RunVar = "AIMS_RUN"
 
+// ModeVar tells a running tool, and its status line, whether aims moves
+// the session between accounts (a Mode).
+const ModeVar = "AIMS_SESSION_MODE"
+
 // RunsDir holds the directories of supervised runs. It is under aims' own
 // directory, not the system's temporary one, which a sandboxed tool may
 // write to.

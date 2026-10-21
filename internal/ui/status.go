@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/profiles"
@@ -158,23 +159,16 @@ func (l Layout) Row(s *Styles, p ops.ProfileStatus, name, state string, threshol
 
 // Next is the command that fixes a profile's problem, or "".
 func Next(id tool.ID, p ops.ProfileStatus) string {
-	if (p.LoggedIn != nil && !*p.LoggedIn) || hasLoginReason(p) {
+	if p.NeedsLogin() {
 		return "aims login " + string(id) + " " + p.Name
 	}
 	return ""
 }
 
-func hasLoginReason(p ops.ProfileStatus) bool {
-	for _, r := range p.Reasons {
-		if strings.HasPrefix(r, "login") {
-			return true
-		}
-	}
-	return false
-}
-
-// RenderStatus is the output of `aims status`.
-func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string {
+// RenderStatus is the output of `aims status`: the accounts, what a new
+// session does with them, the sessions open now, and what is left to set up.
+func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string {
+	threshold := cfg.Failover.Threshold
 	var b strings.Builder
 	l := NewLayout(s, report)
 	for i, t := range report {
@@ -224,12 +218,60 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, threshold float64) string 
 				line += "  " + s.Dim.Render(strings.Join(tags, ", "))
 			}
 			b.WriteString(strings.TrimRight(line, " ") + "\n")
-			if next := Next(t.ID, p); next != "" {
-				b.WriteString(strings.Repeat(" ", 7+l.name) + s.Dim.Render("→ ") + Kbd(s, next) + "\n")
-			}
+		}
+		if plan := t.Plan(cfg.Failover.Auto); plan != "" {
+			b.WriteString("  " + s.Dim.Render(plan) + "\n")
+		}
+	}
+	if lines := Sessions(s, report); len(lines) > 0 {
+		b.WriteString("\n" + s.Bold.Render("Open sessions") + "\n")
+		for _, l := range lines {
+			b.WriteString("  " + l + "\n")
+		}
+	}
+	if tips := ops.Tips(cfg, report); len(tips) > 0 {
+		b.WriteString("\n" + s.Bold.Render("Next") + "\n")
+		for _, t := range tips {
+			b.WriteString("  " + Tip(s, t) + "\n")
 		}
 	}
 	return b.String()
+}
+
+// Sessions describes the sessions aims started that still run, one line
+// each: which account, whether it moves at a limit, where, since when.
+func Sessions(s *Styles, report []ops.ToolStatus) []string {
+	var rows [][4]string
+	for _, t := range report {
+		for _, o := range t.Sessions {
+			var mode string
+			switch o.Mode {
+			case profiles.Watched:
+				mode = s.OK.Render("moves at a limit")
+			case profiles.Pinned:
+				mode = s.Warn.Render("pinned, stays on " + o.Profile)
+			default:
+				mode = s.Warn.Render("stays on " + o.Profile)
+			}
+			rows = append(rows, [4]string{t.Title, o.Profile, mode, s.Dim.Render(fsx.Brief(o.Dir) + " · " + ago(o.Started))})
+		}
+	}
+	var w [3]int
+	for _, r := range rows {
+		for i := range w {
+			w[i] = max(w[i], lipgloss.Width(r[i]))
+		}
+	}
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = Pad(r[0], w[0]) + "  " + Pad(r[1], w[1]) + "  " + Pad(r[2], w[2]) + "  " + r[3]
+	}
+	return out
+}
+
+// Tip renders a next step: what to do, then the command that does it.
+func Tip(s *Styles, t ops.Tip) string {
+	return s.Accent.Render("→ ") + t.Text + "  " + Kbd(s, t.Command)
 }
 
 // PlainStatus is the status without colour, for the MCP server.

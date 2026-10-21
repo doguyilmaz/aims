@@ -51,6 +51,8 @@ type ToolStatus struct {
 	Active    string          `json:"active,omitempty"`
 	Pinned    string          `json:"pinned,omitempty"`
 	Profiles  []ProfileStatus `json:"profiles"`
+	// Sessions are the interactive sessions aims started that still run.
+	Sessions []profiles.OpenSession `json:"sessions,omitempty"`
 }
 
 // Status reports every profile of the given tools (all when empty).
@@ -63,6 +65,7 @@ func Status(ctx context.Context, ids []tool.ID) ([]ToolStatus, error) {
 		ids = tools.IDs()
 	}
 	st := config.LoadState()
+	open := profiles.OpenSessions()
 	out := make([]ToolStatus, len(ids))
 	var wg sync.WaitGroup
 	for i, id := range ids {
@@ -70,6 +73,11 @@ func Status(ctx context.Context, ids []tool.ID) ([]ToolStatus, error) {
 		go func() {
 			defer wg.Done()
 			out[i] = toolStatus(ctx, cfg, st, tools.Get(id))
+			for _, s := range open {
+				if s.Tool == id {
+					out[i].Sessions = append(out[i].Sessions, s)
+				}
+			}
 		}()
 	}
 	wg.Wait()

@@ -13,7 +13,7 @@ exists $HOME/.aims/profiles/claude/work/projects
 exec aims status claude
 stdout '● personal +me@gmail.com +max +ready .*default login'
 stdout 'work +no login +not logged in'
-stdout '→ aims login claude work'
+stdout '→ Log work in to Claude Code  aims login claude work'
 
 # Logging in records the account and warns about a duplicate.
 exec aims login claude work

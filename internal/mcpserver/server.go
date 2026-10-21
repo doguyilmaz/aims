@@ -335,7 +335,7 @@ func runTool(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallTo
 		Dir:      in.Cwd,
 		Timeout:  timeout,
 		// The child is not nested in, or attached to the IDE of, this session.
-		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT", profiles.RunVar},
+		StripEnv: []string{"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT", profiles.RunVar, profiles.ModeVar},
 		ExtraEnv: []string{profiles.NestedVar + "=1"},
 	})
 	if err != nil {

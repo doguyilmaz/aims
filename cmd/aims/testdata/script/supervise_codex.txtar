@@ -24,7 +24,7 @@ rm $HOME/.codex/LIMITED
 exec aims codex resume c-default
 stdout 'codex interactive as work args=\["resume" "c-default"\]'
 ! stdout 'stopped as work'
-! stderr 'goes back'
+! stderr 'this conversation goes back'
 env FAKE_BEFORE_TURN=
 
 # A dead login moves it on too.

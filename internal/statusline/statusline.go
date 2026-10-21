@@ -82,20 +82,40 @@ const (
 )
 
 // segment is aims' part of the line, as short as it can be while still
-// answering "which account, how much is left, what next":
+// answering "which account, how much is left, what happens at the limit":
 //
-//	work ▰▱▱▱▱  11% · 7d 47%
-//	work ▰▰▰▰▱  82% ↻1h20m · 7d 61%
+//	work ▰▱▱▱▱  11% · 7d 47% · auto → personal
+//	work ▰▰▰▰▱  82% ↻1h20m · 7d 61% · auto → personal
 //	work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal
+//	work ▰▱▱▱▱  11% · 7d 47% · pinned
 //
-// The arrow names the account the session moves to.
+// The arrow names the account the session moves to; a pinned session, or
+// one Claude Code was started for without aims, stays where it is.
 func segment(ctx context.Context, cfg *config.Config, name string, windows []tool.Window) string {
-	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), func() string {
+	other := ""
+	for _, n := range cfg.Tools[claude.ID].Order {
+		if n != name {
+			other = n
+			break
+		}
+	}
+	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), sessionMode(), other, func() string {
 		return profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}).Name
 	}, config.Now(), os.Getenv("NO_COLOR") == "")
 }
 
-func render(cfg *config.Config, name string, windows []tool.Window, ps *config.ProfileState, next func() string, now time.Time, color bool) string {
+// sessionMode is how aims started the session; "" when it did not.
+func sessionMode() profiles.Mode {
+	if m := os.Getenv(profiles.ModeVar); m != "" {
+		return profiles.Mode(m)
+	}
+	if os.Getenv(profiles.RunVar) != "" {
+		return profiles.Watched // an aims from before ModeVar
+	}
+	return ""
+}
+
+func render(cfg *config.Config, name string, windows []tool.Window, ps *config.ProfileState, mode profiles.Mode, other string, next func() string, now time.Time, color bool) string {
 	paint := func(c, s string) string {
 		if !color {
 			return s
@@ -144,12 +164,26 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	if len(tail) > 0 {
 		out += paint(dim, " · ") + strings.Join(tail, paint(dim, " · "))
 	}
-	if limited {
-		if n := next(); n != "" {
-			out += paint(yellow, " → "+n)
+	tag := ""
+	switch mode {
+	case profiles.Watched:
+		if limited {
+			if n := next(); n != "" {
+				return out + paint(yellow, " → "+n)
+			}
 		}
+		tag = "auto"
+		if other != "" {
+			tag += " → " + other
+		}
+	case profiles.Pinned:
+		tag = "pinned"
+	case profiles.Unwatched:
+		tag = "stays on " + name
+	default:
+		tag = "not via aims"
 	}
-	return out
+	return out + paint(dim, " · "+tag)
 }
 
 // runChain runs the user's previous status line command with the same input.

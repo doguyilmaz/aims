@@ -25,8 +25,7 @@ import (
 
 // Launch is what the dashboard asks the caller to do after it closes.
 type Launch struct {
-	Tool    tool.ID
-	Profile string
+	Tool tool.ID
 }
 
 type keymap struct {
@@ -34,11 +33,11 @@ type keymap struct {
 }
 
 func (k keymap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Use, k.Start, k.Login, k.Failover, k.Refresh, k.Help, k.Quit}
+	return []key.Binding{k.Start, k.Use, k.Login, k.Add, k.Help, k.Quit}
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Use, k.Start, k.Add}, {k.Login, k.Failover, k.Clear}, {k.Refresh, k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Failover, k.Clear, k.Refresh}, {k.Help, k.Quit}}
 }
 
 var keys = keymap{
@@ -46,8 +45,8 @@ var keys = keymap{
 	Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 	MoveUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up (top = active)")),
 	MoveDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
-	Use:      key.NewBinding(key.WithKeys("enter", "u"), key.WithHelp("enter", "make active")),
-	Start:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start")),
+	Use:      key.NewBinding(key.WithKeys("enter", "u"), key.WithHelp("enter", "make first")),
+	Start:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start a session")),
 	Login:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "log in")),
 	Failover: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fail over")),
 	Clear:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear marks")),
@@ -81,6 +80,10 @@ type dashboard struct {
 	self      string
 	// confirm is the account `f` would mark, waiting for y.
 	confirm *selection
+	auto    bool
+	tips    []ops.Tip
+	// start says how to start a session aims moves at a limit.
+	start string
 }
 
 type reportMsg struct {
@@ -132,6 +135,14 @@ func (m *dashboard) setReport(r []ops.ToolStatus) {
 		sel = string(p.toolID) + "/" + p.name
 	}
 	m.report = r
+	if cfg, err := config.Load(); err == nil {
+		m.auto, m.tips = cfg.Failover.Auto, ops.Tips(cfg, r)
+	}
+	m.start = "Start a session with " + Out.Cmd.Render("aims claude") + " or " + Out.Cmd.Render("aims codex") + ", or press " + Out.Cmd.Render("s")
+	if ops.Installed().Shell != "" {
+		m.start = "Start a session with " + Out.Cmd.Render("claude") + " or " + Out.Cmd.Render("codex") + " in a terminal, or press " + Out.Cmd.Render("s")
+	}
+	m.start += Out.Dim.Render(": aims picks the account and moves the session at a limit")
 	m.rows = m.rows[:0]
 	for ti, t := range r {
 		for pi := range t.Profiles {
@@ -248,7 +259,8 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return flashMsg{fmt.Sprintf("New %s sessions use %s", tools.Get(sel.toolID).Title(), sel.name), false}
 		}
 	case key.Matches(msg, keys.Start):
-		m.launch = &Launch{Tool: sel.toolID, Profile: sel.name}
+		// Not pinned to the row: aims picks the account and watches it.
+		m.launch = &Launch{Tool: sel.toolID}
 		return m, tea.Quit
 	case key.Matches(msg, keys.Login):
 		return m, m.exec("login", string(sel.toolID), sel.name)
@@ -371,8 +383,26 @@ func (m *dashboard) View() string {
 			b.WriteString(cursor + mark + l.Row(s, p, name, state, m.threshold) + "\n")
 			i++
 		}
+		if plan := t.Plan(m.auto); plan != "" {
+			b.WriteString("     " + s.Dim.Render(plan) + "\n")
+		}
 		b.WriteString("\n")
 	}
+	if lines := Sessions(s, m.report); len(lines) > 0 {
+		b.WriteString(" " + s.Bold.Render("Open sessions") + "\n")
+		for _, l := range lines {
+			b.WriteString("     " + l + "\n")
+		}
+		b.WriteString("\n")
+	}
+	if len(m.tips) > 0 {
+		b.WriteString(" " + s.Bold.Render("Next") + "\n")
+		for _, t := range m.tips {
+			b.WriteString("   " + Tip(s, t) + "\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(" " + m.start + "\n\n")
 
 	if sel, ok := m.selected(); ok {
 		card := m.card(sel, min(w-2, 78))

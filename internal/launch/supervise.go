@@ -59,6 +59,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		return Result{Code: 1, Profile: name}, err
 	}
 
+	started := time.Now()
 	args := o.Args
 	// asked is the profile `aims move` asked for; held is the one it moved
 	// to, which the conversation stays on while it works.
@@ -81,6 +82,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		if err != nil {
 			return Result{Code: 2, Profile: name}, err
 		}
+		profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: profiles.Watched, Dir: workDir(o), Started: started})
 		env := sessionEnv(o, cfg, name)
 		env = append(env, profiles.RunVar+"="+dir)
 		child, err := proc.StartAttached(bin, watched, env, o.Dir)

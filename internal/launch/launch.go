@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
@@ -126,8 +128,27 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	for {
 		tried = append(tried, name)
 		if !headless {
-			if sv, ok := a.(tool.Supervisor); ok && auto && sv.Supervises(o.Args) {
+			// A session, not `claude mcp list` or `codex login`: only a
+			// session is explained and listed.
+			sv, ok := a.(tool.Supervisor)
+			session := ok && sv.Supervises(o.Args)
+			mode := profiles.Unwatched
+			switch {
+			case o.Profile != "":
+				mode = profiles.Pinned
+			case session && auto:
+				mode = profiles.Watched
+			}
+			o.ExtraEnv = append(o.ExtraEnv, profiles.ModeVar+"="+string(mode))
+			if session {
+				explain(o, cfg, preferred, name, mode)
+				defer profiles.Untrack()
+			}
+			if mode == profiles.Watched {
 				return supervise(ctx, o, sv, bin, name)
+			}
+			if session {
+				profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: mode, Dir: workDir(o), Started: time.Now()})
 			}
 			code, err := proc.RunAttached(bin, o.Args, sessionEnv(o, cfg, name), o.Dir)
 			return Result{Code: code, Profile: name}, err
@@ -260,6 +281,42 @@ func hints(o Options, skipped []profiles.Evaluation) {
 			o.say(Hint, "%s works again? aims clear %s %s", e.Name, o.Tool.ID(), e.Name)
 		}
 	}
+}
+
+// explain says, as a session starts, what aims does with it at a limit.
+func explain(o Options, cfg *config.Config, preferred, name string, mode profiles.Mode) {
+	a := o.Tool
+	switch mode {
+	case profiles.Pinned:
+		o.say(Info, "%s pinned to %s: this session stays on %s, also at a limit (start it without @%s to let aims move it)", a.Title(), name, name, name)
+		return
+	case profiles.Unwatched:
+		o.say(Info, "%s on %s: automatic moves are off (failover.auto in %s), so it stays on %s", a.Title(), name, fsx.Tildify(filepath.Join(config.Home(), "config.json")), name)
+		return
+	}
+	var others []string
+	for _, n := range cfg.Tools[a.ID()].Order {
+		if n != name && n != preferred {
+			others = append(others, n)
+		}
+	}
+	switch {
+	case name != preferred:
+		o.say(Info, "%s on %s: this session goes back to %s once it works again", a.Title(), name, preferred)
+	case len(others) == 0:
+		o.say(Info, "%s on %s, the only account: at a limit this session waits for the reset and goes on", a.Title(), name)
+	default:
+		o.say(Info, "%s on %s: at a limit this session moves to %s, and back once %s works again", a.Title(), name, strings.Join(others, " or "), name)
+	}
+}
+
+// workDir is where the session runs.
+func workDir(o Options) string {
+	if o.Dir != "" {
+		return o.Dir
+	}
+	dir, _ := os.Getwd()
+	return dir
 }
 
 // failureText names a failure in a sentence: "hit its usage limit".

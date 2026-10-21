@@ -26,11 +26,14 @@ The setup walks you through a few questions and does the work as it goes:
 ◇  Name your other account
 │  work
 │
+◇  Which account should sessions start on?
+│  personal
+│
 ◇  What should personal and work share?
 │  Everything
 │
 ◇  Connect aims to your tools
-│  MCP server and skill, status line, shell integration
+│  MCP server and skill, status line, plain `claude` and `codex` through aims
 │
 │  ✓ claude/personal  your current login, me@gmail.com
 │  ✓ claude/work  ~/.aims/profiles/claude/work
@@ -49,11 +52,25 @@ The setup walks you through a few questions and does the work as it goes:
 │                    Yes     No
 ```
 
+It ends with what to type from now on:
+
+```text
+│  ╭──────────────────────────────────────────────────────────────────────────────╮
+│  │ How it works                                                                 │
+│  │                                                                              │
+│  │ claude or codex         starts a session on personal (in a new terminal)     │
+│  │ at a limit              it moves to work, and back once personal works again │
+│  │ aims                    your accounts, open sessions and what is left to set up │
+│  │ aims claude@work        a pinned session: stays on work, also at a limit     │
+│  ╰──────────────────────────────────────────────────────────────────────────────╯
+└  Ready.
+```
+
 What happened:
 
 - **Your current login became a profile.** aims did not copy or move it. The profile called `personal` simply means "Claude Code with its normal folder", so nothing changes for sessions you start the old way.
 - **The second account got its own folder**, with links back to your shared history and settings.
-- **The integrations** let Claude Code and Codex see and switch accounts themselves, show the account and its usage in Claude Code's status line, and make plain `claude` and `codex` follow the active account. Each is optional; see [AI integration](../ai-integration).
+- **The integrations** let Claude Code and Codex see and switch accounts themselves, show the account and its usage in Claude Code's status line, and make plain `claude` and `codex` go through aims, which is what lets a session move on at a limit. Each is optional; see [AI integration](../ai-integration).
 - **Logins** happen in your browser, one per account. If the browser is already signed in to your personal account, use a private window for the work one.
 
 {{< callout type="info" >}}
@@ -74,28 +91,43 @@ Claude Code  ~/.claude
 Codex  ~/.codex
   ● personal   me@gmail.com     plus   ready           5h [......]    –   7d [......]    –
     work       no login                not logged in   5h [......]    –   7d [......]    –
-               → aims login codex work
+  sessions start on personal; at a limit they move to work, and back once personal works again
+
+Next
+  → Log work in to Codex  aims login codex work
 ```
 
-`●` marks the active account: the one new sessions get. Anything that needs you comes with the command that fixes it.
+`●` marks the account sessions start on. Under each tool, one line says what a new session does. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up.
 
 ## 3. Use it
 
-```bash
-aims claude              # Claude Code as the active account
-aims claude@work         # as work, for this session only
-aims codex@work exec "summarize the diff"
-aims use work            # from now on, new sessions of both tools use work
-aims                     # the dashboard
+Start sessions the way you always do: `claude` and `codex`. With the shell integration, they go through aims in new terminals; without it, type `aims claude` and `aims codex`.
+
+Each session says, as it starts, what aims will do with it:
+
+```text
+› Claude Code on personal: at a limit this session moves to work, and back once personal works again
 ```
 
-With the shell integration on, plain `claude` and `codex` behave like `aims claude` and `aims codex` in new terminals.
+and Claude Code's status line keeps saying it while the session runs:
+
+```text
+personal ▰▱▱▱▱  12% · 7d 31% · auto → work
+```
+
+| Start a session with | It starts on | At a limit | Status line |
+| --- | --- | --- | --- |
+| `claude`, `aims claude` | your first account | moves to the next one, and back once the first works again | `auto → work` |
+| `aims claude@work` | work | stays on work | `pinned` |
+| `claude` without the shell integration | whatever `~/.claude` is logged in as | stays | `not via aims` |
+
+`aims` alone shows your accounts, the sessions open now (and which of them will not move), and what is left to set up. `aims order` changes which account comes first.
 
 ## 4. When an account hits its limit
 
-Usually you do nothing. A session started with `aims claude` or `aims codex` (no `@profile`) moves by itself: aims restarts it on the next usable account, continues the same conversation, and moves it back once the first account works again. New sessions skip the limited account too.
+Usually you do nothing. A session aims watches moves by itself: aims restarts it on the next usable account, continues the same conversation, and moves it back once the first account works again. When every account is limited, it waits for the first reset and goes on. New sessions skip the limited account too.
 
-A session that aims does not watch (`aims claude@work`, plain `claude`) keeps its account. To move its conversation, end the session and run:
+A pinned session (`aims claude@work`) or one started without aims keeps its account. To move its conversation, end the session and run:
 
 ```bash
 aims failover claude --resume

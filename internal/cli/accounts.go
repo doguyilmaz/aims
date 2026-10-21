@@ -395,7 +395,9 @@ aims failover codex --to work --minutes 90`,
 				}
 				r.Outro(ui.Out.Dim.Render("continuing on " + res.To))
 			}
-			lr, err := launch.Run(ctx, launch.Options{Tool: a, Profile: res.To, Args: a.Commands().Resume, Notify: notify})
+			// Not pinned to res.To, which new sessions use now anyway: aims keeps
+			// watching the conversation and brings it back once the limit resets.
+			lr, err := launch.Run(ctx, launch.Options{Tool: a, Args: a.Commands().Resume, Notify: notify})
 			if err != nil {
 				return err
 			}

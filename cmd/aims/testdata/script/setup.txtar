@@ -73,9 +73,15 @@ stdout 'Codex skill'
 chmod 755 $HOME/my-line.sh
 env NO_COLOR=1
 env CLAUDE_CONFIG_DIR=$HOME/.aims/profiles/claude/work
+env AIMS_SESSION_MODE=watched
 stdin statusline.json
 exec aims statusline
 stdout '^mine  work ▰▰▰▰▰  97% ↻[0-9dhm]+ · 7d 20% → personal$'
+# A session aims did not start says so: it does not move on.
+env AIMS_SESSION_MODE=
+stdin statusline.json
+exec aims statusline
+stdout '^mine  work ▰▰▰▰▰  97% ↻[0-9dhm]+ · 7d 20% · not via aims$'
 env CLAUDE_CONFIG_DIR=
 exec aims status claude
 stdout 'work .*limited [0-9]'

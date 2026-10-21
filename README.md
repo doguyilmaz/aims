@@ -20,9 +20,8 @@
 **aims** stands for **AI multi-session**. It lets you use a personal and a work account (or more) for Claude Code and Codex on one computer, without logging out and in to switch.
 
 - **Log in once per account.** Each account keeps its own login in its own folder. Nothing is copied.
-- **Switch instantly.** `aims use work` changes the account for new sessions; `aims claude@work` starts one right away.
-- **One history.** Conversations, settings, skills and MCP servers are shared, so `aims claude --continue` picks up a conversation the other account started. Or keep an account's history separate.
-- **Failover.** When an account is out of quota or its login died, the next session goes to the next account. Headless runs retry on their own when the failed attempt changed nothing.
+- **Sessions move on their own.** A session starts on your first account. At a usage limit it moves to the next one and continues the conversation, and it moves back once the first works again.
+- **One history.** Conversations, settings, skills and MCP servers are shared, so a conversation started on one account continues on the other. Or keep an account's history separate.
 - **Your AI can use it.** An MCP server and a skill let Claude Code and Codex check accounts, fail over, and hand a task to another account.
 
 ```text
@@ -53,16 +52,25 @@ On Windows: `irm https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/
 aims init
 ```
 
-The setup finds Claude Code and Codex, turns the login you already have into your first account, creates the second, and connects the tools to aims. Then:
+The setup finds Claude Code and Codex, turns the login you already have into your first account, creates the second, asks which one sessions start on, and connects the tools to aims. Then start sessions the way you always do:
 
 ```bash
-aims                       # dashboard
-aims claude                # Claude Code as the active account
-aims claude@work           # as work, for this session
-aims use work              # new sessions use work
-aims failover claude --resume   # this account is out: switch and continue the conversation
-aims doctor                # check everything
+claude                     # or codex: aims picks the account and watches the session
 ```
+
+With the shell integration (`aims setup` offers it), plain `claude` and `codex` go through aims. Without it, type `aims claude` and `aims codex`. Each session says what aims does with it when it starts, and Claude Code's status line shows it while it runs:
+
+```text
+› Claude Code on personal: at a limit this session moves to work, and back once personal works again
+personal ▰▱▱▱▱  12% · 7d 31% · auto → work
+```
+
+| Start a session with | It starts on | At a limit |
+| --- | --- | --- |
+| `claude`, `aims claude` | your first account | moves to the next account, and back once the first works again |
+| `aims claude@work` | work | stays on work (pinned) |
+
+`aims` alone shows your accounts, the sessions open now and anything left to set up. `aims order` changes which account comes first, and `aims doctor` checks everything.
 
 ## How it works
 

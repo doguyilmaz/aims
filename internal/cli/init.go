@@ -293,6 +293,11 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 	if err := r.Input("Name your other account", "", second, &second, nameRule(current)); err != nil {
 		return cancelled(r, err)
 	}
+	first := current
+	firstOpts := []ui.Option{{Label: current, Value: current}, {Label: second, Value: second}}
+	if err := r.Select("Which account should sessions start on?", "The other stands in when it hits a limit; aims moves the session back once the first works again.", firstOpts, &first); err != nil {
+		return cancelled(r, err)
+	}
 
 	for _, f := range inst {
 		p := plan{f: f}
@@ -346,6 +351,11 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 			})
 		}
 	}
+	if first != current {
+		for _, p := range plans {
+			_, _ = ops.SetOrder(p.f.a, []string{first})
+		}
+	}
 	applyIntegrations(ctx, r, in)
 	r.Gap()
 
@@ -356,7 +366,8 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 			}
 		}
 	}
-	outro(r, in, current, second)
+	howItWorks(r, in.Shell != "")
+	r.Outro(ui.Out.OK.Render("Ready."))
 	return nil
 }
 
@@ -381,8 +392,8 @@ func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.I
 	}
 	rc := shell.RCFile(sh)
 	if rc != "" {
-		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " use the active account and move on at a limit", Value: "shell",
-			Hint: "a line in " + fsx.Tildify(rc), Short: "shell integration"})
+		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " go through aims, so sessions move on at a limit", Value: "shell",
+			Hint: "recommended: a line in " + fsx.Tildify(rc) + "; without it, start sessions with aims " + strings.Trim(bins[0], "`"), Short: "plain " + strings.Join(bins, " and ") + " through aims"})
 	}
 	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive",
 		Hint: "an hourly check renews a login only when it runs out (Claude Code: a one-word prompt)", Short: "login keepalive"})
@@ -508,20 +519,58 @@ func loginStep(ctx context.Context, r *ui.Rail, a tool.Adapter, name string) err
 	return nil
 }
 
-func outro(r *ui.Rail, in ops.Integrations, first, second string) {
+// howItWorks closes init and setup: what to type from now on, and what aims
+// then does on its own. newShell: the shell integration was just added, so
+// it works in terminals opened from now on.
+func howItWorks(r *ui.Rail, newShell bool) {
 	s := ui.Out
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	var bins []string
+	var lead tool.Adapter
+	for _, a := range tools.All() {
+		if len(cfg.Tools[a.ID()].Profiles) > 0 && profiles.Bin(a) != "" {
+			bins = append(bins, a.Layout().Bin)
+			if lead == nil {
+				lead = a
+			}
+		}
+	}
+	if lead == nil {
+		return
+	}
+	t := cfg.Tools[lead.ID()]
+	first, other := t.Active, ""
+	for _, n := range t.Order {
+		if n != first {
+			other = n
+			break
+		}
+	}
+	start := strings.Join(bins, " or ")
+	where := ""
+	if ops.Installed().Shell == "" {
+		start = "aims " + strings.Join(bins, " or aims ")
+	} else if newShell {
+		where = " (in a new terminal)"
+	}
+	const w = 24
 	lines := []string{
-		ui.Pad(ui.Kbd(s, "aims"), 22) + s.Dim.Render("your accounts, usage and quick actions"),
-		ui.Pad(ui.Kbd(s, "aims use "+second), 22) + s.Dim.Render("new sessions use "+second),
+		s.Bold.Render("How it works"), "",
+		ui.Pad(ui.Kbd(s, start), w) + s.Dim.Render("starts a session on "+first+where),
 	}
-	if in.Shell != "" {
-		lines = append(lines, ui.Pad(ui.Kbd(s, "claude"), 22)+s.Dim.Render("runs as the active account (in a new terminal)"))
+	if other != "" {
+		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("it moves to "+other+", and back once "+first+" works again"))
 	} else {
-		lines = append(lines, ui.Pad(ui.Kbd(s, "aims claude"), 22)+s.Dim.Render("runs Claude Code as the active account"))
+		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("it waits for the reset; add an account to move on instead"))
 	}
-	lines = append(lines, ui.Pad(ui.Kbd(s, "aims failover claude"), 22)+s.Dim.Render("hit a limit? continue on "+first+" or "+second))
+	lines = append(lines, ui.Pad(ui.Kbd(s, "aims"), w)+s.Dim.Render("your accounts, open sessions and what is left to set up"))
+	if other != "" {
+		lines = append(lines, ui.Pad(ui.Kbd(s, "aims "+lead.Layout().Bin+"@"+other), w)+s.Dim.Render("a pinned session: stays on "+other+", also at a limit"))
+	}
 	r.Box(lines...)
-	r.Outro(s.OK.Render("Ready."))
 }
 
 func cancelled(r *ui.Rail, err error) error {
@@ -558,7 +607,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 		if err != nil {
 			return err
 		}
-		fmt.Print(ui.RenderStatus(ui.Out, report, cfg.Failover.Threshold))
+		fmt.Print(ui.RenderStatus(ui.Out, report, cfg))
 		return nil
 	}
 
@@ -665,6 +714,7 @@ func reconnect(ctx context.Context, r *ui.Rail, inst []found) error {
 		}
 	}
 	applyIntegrations(ctx, r, in)
+	howItWorks(r, in.Shell != "" && current.Shell == "")
 	r.Outro(ui.Out.OK.Render("Done.") + ui.Out.Dim.Render(" Running sessions pick this up when they start again."))
 	return nil
 }
