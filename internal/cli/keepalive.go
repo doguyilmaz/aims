@@ -54,13 +54,13 @@ aims keepalive`,
 func switchKeepAlive(arg string) error {
 	switch arg {
 	case "on":
-		path, err := schedule.Install(ops.KeepAliveJob())
+		path, err := ops.InstallKeepAlive()
 		if err != nil {
 			return err
 		}
 		ui.Done("Logins are checked every hour and renewed when they run out (%s)", fsx.Tildify(path))
 	case "off":
-		path, found, err := schedule.Uninstall(ops.KeepAliveName)
+		path, found, err := ops.UninstallKeepAlive()
 		switch {
 		case err != nil:
 			return err

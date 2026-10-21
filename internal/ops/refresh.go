@@ -14,19 +14,21 @@ import (
 )
 
 // Refresh brings the integrations already installed for a tool up to this
-// version of aims: the skill's text, and the settings of the MCP server
-// entry. It runs before a session starts, so an upgrade needs no setup
-// again. Only the aims on PATH does it, so two copies of different versions
-// do not rewrite each other's files back and forth.
-func Refresh(ctx context.Context, a tool.Adapter) {
+// version of aims: the keepalive job, the skill's text, and the settings of
+// the MCP server entry. It runs before a session starts, so an upgrade needs
+// no setup again. Only the aims on PATH does it, so two copies of different
+// versions do not rewrite each other's files back and forth. The error is a
+// keepalive that could not be set up again, told once.
+func Refresh(ctx context.Context, a tool.Adapter) error {
 	onPath, err := exec.LookPath("aims")
 	self, err2 := os.Executable()
 	if err != nil || err2 != nil || fsx.Real(onPath) != fsx.Real(self) {
-		return
+		return nil
 	}
+	healErr := HealKeepAlive()
 	cfg, err := config.Load()
 	if err != nil || cfg.Tools[a.ID()].Hub == "" {
-		return
+		return healErr
 	}
 	for _, h := range homes(cfg, a) {
 		if dir := a.Layout().SkillsDir; dir != "" {
@@ -44,4 +46,5 @@ func Refresh(ctx context.Context, a tool.Adapter) {
 			}
 		}
 	}
+	return healErr
 }

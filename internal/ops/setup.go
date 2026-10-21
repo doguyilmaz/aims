@@ -145,7 +145,7 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		steps = append(steps, Step{What: "shell integration", Target: fsx.Tildify(path), Err: err})
 	}
 	if in.KeepAlive {
-		path, err := schedule.Install(KeepAliveJob())
+		path, err := InstallKeepAlive()
 		steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 	}
 	return steps, nil
@@ -220,7 +220,7 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 		}
 	}
 	if in.KeepAlive {
-		if path, found, err := schedule.Uninstall(KeepAliveName); found || err != nil {
+		if path, found, err := UninstallKeepAlive(); found || err != nil {
 			steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 		}
 	}

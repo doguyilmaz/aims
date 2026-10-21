@@ -99,7 +99,8 @@ const (
 	Script
 )
 
-// Detect classifies an install from the binary's resolved path. aims never
+// Detect classifies an install from the binary's resolved path; only the
+// cask installs aims.app. aims never
 // overwrites itself: a package manager that owns the file is asked to
 // upgrade it, so its records stay true.
 func Detect(exe, goBin, scriptDir string) Method {
@@ -107,7 +108,7 @@ func Detect(exe, goBin, scriptDir string) Method {
 	switch {
 	case scriptDir != "" && filepath.Dir(exe) == filepath.Clean(scriptDir):
 		return Script
-	case strings.Contains(slash, "/Caskroom/") || strings.Contains(slash, "/Cellar/") || strings.Contains(slash, "/linuxbrew/"):
+	case strings.Contains(slash, "/Caskroom/") || strings.Contains(slash, "/Cellar/") || strings.Contains(slash, "/linuxbrew/") || strings.HasSuffix(slash, "/aims.app/Contents/MacOS/aims"):
 		return Homebrew
 	case strings.Contains(slash, "/node_modules/"):
 		return Npm

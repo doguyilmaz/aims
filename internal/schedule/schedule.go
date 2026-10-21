@@ -20,6 +20,9 @@ type Job struct {
 	// Log receives the job's output where the scheduler does not keep it
 	// itself (launchd); "" discards it.
 	Log string
+	// App is the bundle identifier of the macOS app Command[0] lives in:
+	// Login Items then shows the job under the app's name and icon.
+	App string
 }
 
 // label names the job in the scheduler.
@@ -34,6 +37,12 @@ func Uninstall(name string) (target string, found bool, err error) { return unin
 
 // Installed reports whether the job is set up, and where.
 func Installed(name string) (string, bool) { return installed(Job{Name: name}) }
+
+// Heal sets a job up again when it is gone or differs from what this aims
+// would write: Homebrew removes it on every upgrade of the cask, and an
+// upgrade may move aims into its app. A job the person turned off stays off.
+// It reports whether it did.
+func Heal(j Job) (bool, error) { return heal(j) }
 
 // quote makes s one word of a systemd ExecStart line, where % starts a
 // specifier.

@@ -44,3 +44,5 @@ func schtasks(args ...string) error {
 	}
 	return err
 }
+
+func heal(Job) (bool, error) { return false, nil }

@@ -23,6 +23,9 @@ builds:
     ldflags:
       - -s -w -X main.version={{ .Tag }}
     mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        - ./scripts/macapp.sh {{ .Os }} {{ .Version }} {{ .Path }} dist/app/{{ .Os }}_{{ .Arch }}
 
 archives:
   - id: aims
@@ -35,6 +38,8 @@ archives:
       - LICENSE
       - README.md
       - completions/*
+      - src: '{{ if eq .Os "darwin" }}dist/app/{{ .Os }}_{{ .Arch }}/aims.app{{ end }}'
+        dst: aims.app
 
 checksum:
   name_template: checksums.txt
