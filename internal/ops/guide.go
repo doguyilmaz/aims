@@ -99,15 +99,15 @@ func (t ToolStatus) Plan(auto bool) string {
 			others = append(others, p.Name)
 		}
 	}
-	return "new sessions: " + t.Active + " (auto → " + strings.Join(others, ", ") + ")"
+	return "new sessions: " + t.Active + " (auto → " + profiles.Names(others, ", ") + ")"
 }
 
 // Explain says in words what aims does with a new session, and what keeps
 // an account out right now: the end of `aims status`.
 func Explain(cfg *config.Config, report []ToolStatus) []string {
 	type group struct {
-		bins          []string
-		first, others string
+		bins                 []string
+		first, others, names string
 	}
 	var groups []*group
 	var now []string
@@ -126,7 +126,7 @@ func Explain(cfg *config.Config, report []ToolStatus) []string {
 				usable = append(usable, p.Name)
 			}
 		}
-		g := &group{first: t.Active, others: strings.Join(others, ", then ")}
+		g := &group{first: t.Active, others: strings.Join(others, ","), names: profiles.Names(others, ", then ")}
 		if i := slices.IndexFunc(groups, func(o *group) bool { return o.first == g.first && o.others == g.others }); i >= 0 {
 			g = groups[i]
 		} else {
@@ -165,7 +165,7 @@ func Explain(cfg *config.Config, report []ToolStatus) []string {
 		case !cfg.Failover.Auto:
 			out = append(out, fmt.Sprintf("%s %s on %s and stays there; auto moves are off.", who, starts, g.first))
 		default:
-			out = append(out, fmt.Sprintf("%s %s on %s. At a limit or a dead login the conversation continues on %s, and goes back to %s once it works again.", who, starts, g.first, g.others, g.first))
+			out = append(out, fmt.Sprintf("%s %s on %s. At a limit or a dead login the conversation continues on %s, and goes back to %s once it works again.", who, starts, g.first, g.names, g.first))
 		}
 	}
 	out = append(out, now...)

@@ -299,7 +299,7 @@ func explain(o Options, cfg *config.Config, preferred, name string, mode profile
 	case name != preferred:
 		tag += ", back to " + preferred
 	case len(others) > 0:
-		tag += " → " + strings.Join(others, ", ")
+		tag += " → " + profiles.Names(others, ", ")
 	}
 	o.say(Info, "%s: %s (%s)", o.Tool.ID(), name, tag)
 	// The first session after an upgrade says once what the tag means.
