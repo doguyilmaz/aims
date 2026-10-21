@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ func KeepAliveJob() schedule.Job {
 	// Run from aims.app itself, not a link to it, so Login Items shows the
 	// app's name and icon.
 	app := ""
-	if real, err := filepath.EvalSymlinks(self); err == nil && strings.Contains(real, ".app/Contents/MacOS/") {
+	if real, err := filepath.EvalSymlinks(self); err == nil && strings.HasSuffix(filepath.ToSlash(real), "/aims.app/Contents/MacOS/aims") {
 		self, app = real, AppID
 	}
 	env := map[string]string{}
@@ -84,9 +85,13 @@ func UninstallKeepAlive() (path string, found bool, err error) {
 }
 
 // HealKeepAlive sets the keepalive up again when the person turned it on and
-// it is gone or out of date (see schedule.Heal). It returns a failure only
+// it is gone or out of date (see schedule.Heal), which only the cask does,
+// on macOS. It returns a failure only
 // when it differs from the last one, so a lasting one is told once.
 func HealKeepAlive() error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
 	if fsx.Stat(keepAliveWanted()) == nil {
 		// Turned on by an aims from before the marker.
 		if _, on := schedule.Installed(KeepAliveName); !on {
