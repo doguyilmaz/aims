@@ -10,7 +10,7 @@ env FAKE_LINGER=5s
 cp LIMITED $HOME/.claude/LIMITED
 exec aims claude --model opus --add-dir a b -- hello
 stdout 'claude interactive as default args=\["--model" "opus" "--add-dir" "a" "b" "--" "hello"\]'
-stderr 'Claude Code on personal: at a limit this session moves to work, and back once personal works again'
+stderr 'claude: personal \(auto → work\)'
 stdout 'claude stopped as default'
 stderr 'claude: personal hit its usage limit; continuing this conversation on work'
 stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
@@ -47,7 +47,7 @@ exec aims login claude personal
 cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
 exec aims claude@work
 stdout 'claude interactive as work args=\[\]'
-stderr 'Claude Code pinned to work: this session stays on work, also at a limit \(start it without @work to let aims move it\)'
+stderr 'claude: work \(pinned\)'
 ! stdout 'stopped'
 
 # The user's own --settings keep working, with the hooks merged in.
@@ -93,7 +93,7 @@ exec aims clear claude
 
 # A command that is not a session is neither explained nor listed.
 exec aims claude --version
-! stderr 'Claude Code on'
+! stderr 'claude: personal'
 
 # Outside such a session there is nothing to move.
 ! exec aims move work

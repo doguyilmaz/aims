@@ -26,7 +26,7 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "status [tool]",
 		Aliases: []string{"ls"},
-		Short:   "Show accounts, open sessions and what is left to set up",
+		Short:   "Show accounts, open sessions and next steps",
 		Example: `aims status
 aims status codex --live
 aims status --json`,
@@ -233,7 +233,7 @@ func pickProfile(ctx context.Context) (tool.Adapter, string, error) {
 func newToolCmd(a tool.Adapter) *cobra.Command {
 	return &cobra.Command{
 		Use:                string(a.ID()) + " [args...]",
-		Short:              "Start " + a.Title() + "; it moves on at a limit (" + string(a.ID()) + "@<profile> pins one)",
+		Short:              "Start " + a.Title() + " (" + string(a.ID()) + "@<profile> pins it)",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTool(cmd.Context(), a, "", args)

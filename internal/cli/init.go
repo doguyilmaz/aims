@@ -295,7 +295,7 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 	}
 	first := current
 	firstOpts := []ui.Option{{Label: current, Value: current}, {Label: second, Value: second}}
-	if err := r.Select("Which account should sessions start on?", "The other stands in when it hits a limit; aims moves the session back once the first works again.", firstOpts, &first); err != nil {
+	if err := r.Select("Which account first?", "The other takes over at a limit.", firstOpts, &first); err != nil {
 		return cancelled(r, err)
 	}
 
@@ -392,8 +392,8 @@ func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.I
 	}
 	rc := shell.RCFile(sh)
 	if rc != "" {
-		opts = append(opts, ui.Option{Label: "Make plain " + strings.Join(bins, " and ") + " go through aims, so sessions move on at a limit", Value: "shell",
-			Hint: "recommended: a line in " + fsx.Tildify(rc) + "; without it, start sessions with aims " + strings.Trim(bins[0], "`"), Short: "plain " + strings.Join(bins, " and ") + " through aims"})
+		opts = append(opts, ui.Option{Label: "Run plain " + strings.Join(bins, " and ") + " through aims", Value: "shell",
+			Hint: "recommended, for auto moves: a line in " + fsx.Tildify(rc), Short: "plain " + strings.Join(bins, " and ") + " through aims"})
 	}
 	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive",
 		Hint: "an hourly check renews a login only when it runs out (Claude Code: a one-word prompt)", Short: "login keepalive"})
@@ -556,20 +556,15 @@ func howItWorks(r *ui.Rail, newShell bool) {
 	} else if newShell {
 		where = " (in a new terminal)"
 	}
-	const w = 24
-	lines := []string{
-		s.Bold.Render("How it works"), "",
-		ui.Pad(ui.Kbd(s, start), w) + s.Dim.Render("starts a session on "+first+where),
-	}
+	const w = 20
+	lines := []string{ui.Pad(ui.Kbd(s, start), w) + s.Dim.Render("starts on "+first+where)}
 	if other != "" {
-		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("it moves to "+other+", and back once "+first+" works again"))
+		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("→ "+other+", then back"),
+			ui.Pad(ui.Kbd(s, "aims "+lead.Layout().Bin+"@"+other), w)+s.Dim.Render("pinned to "+other))
 	} else {
-		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("it waits for the reset; add an account to move on instead"))
+		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("waits for the reset"))
 	}
-	lines = append(lines, ui.Pad(ui.Kbd(s, "aims"), w)+s.Dim.Render("your accounts, open sessions and what is left to set up"))
-	if other != "" {
-		lines = append(lines, ui.Pad(ui.Kbd(s, "aims "+lead.Layout().Bin+"@"+other), w)+s.Dim.Render("a pinned session: stays on "+other+", also at a limit"))
-	}
+	lines = append(lines, ui.Pad(ui.Kbd(s, "aims"), w)+s.Dim.Render("status and next steps"))
 	r.Box(lines...)
 }
 

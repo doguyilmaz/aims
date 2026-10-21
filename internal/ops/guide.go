@@ -22,7 +22,7 @@ type Tip struct {
 // Tips lists those steps, most important first.
 func Tips(cfg *config.Config, report []ToolStatus) []Tip {
 	if !cfg.HasProfiles() {
-		return []Tip{{"Set up your accounts", "aims init"}}
+		return []Tip{{"no accounts yet", "aims init"}}
 	}
 	var out []Tip
 	var bins []string
@@ -30,30 +30,29 @@ func Tips(cfg *config.Config, report []ToolStatus) []Tip {
 		if !t.Installed || len(t.Profiles) == 0 {
 			continue
 		}
-		bins = append(bins, "`"+tools.Get(t.ID).Layout().Bin+"`")
+		bins = append(bins, tools.Get(t.ID).Layout().Bin)
 		for _, p := range t.Profiles {
 			if p.NeedsLogin() {
-				out = append(out, Tip{fmt.Sprintf("Log %s in to %s", p.Name, t.Title), "aims login " + string(t.ID) + " " + p.Name})
+				out = append(out, Tip{string(t.ID) + "/" + p.Name + " is not logged in", "aims login " + string(t.ID) + " " + p.Name})
 			}
 		}
 		if len(t.Profiles) == 1 {
-			out = append(out, Tip{fmt.Sprintf("Add a second %s account, so a session can move on at a limit", t.Title), "aims login " + string(t.ID) + " <name>"})
+			out = append(out, Tip{string(t.ID) + " has one account, nothing to move to", "aims login " + string(t.ID) + " <name>"})
 		}
 	}
 	if sh := shell.Detect(); sh != "" && shell.RCFile(sh) != "" && !shell.Installed(sh) && len(bins) > 0 {
-		out = append(out, Tip{"Let plain " + strings.Join(bins, " and ") + " go through aims, so it can move them at a limit", "aims setup --shell " + string(sh)})
+		out = append(out, Tip{"plain " + strings.Join(bins, " and ") + " skip aims", "aims setup --shell " + string(sh)})
 	}
 	for _, t := range report {
 		for _, s := range t.Sessions {
 			if s.Mode == profiles.Pinned {
-				a := tools.Get(t.ID)
-				out = append(out, Tip{fmt.Sprintf("%s in %s is pinned to %s: it stays there at a limit. To let aims move it, end it and run", t.Title, fsx.Brief(s.Dir), s.Profile),
-					"aims " + string(t.ID) + " " + strings.Join(a.Commands().Resume, " ")})
+				out = append(out, Tip{fmt.Sprintf("%s in %s is pinned to %s; for auto, restart it with", t.ID, fsx.Brief(s.Dir), s.Profile),
+					"aims " + string(t.ID) + " " + strings.Join(tools.Get(t.ID).Commands().Resume, " ")})
 			}
 		}
 	}
 	if !cfg.Failover.Auto {
-		out = append(out, Tip{"Automatic moves are off: sessions stay on their account at a limit", `"auto": true under "failover" in ` + fsx.Tildify(filepath.Join(config.Home(), "config.json"))})
+		out = append(out, Tip{"auto moves are off", `"auto": true under "failover" in ` + fsx.Tildify(filepath.Join(config.Home(), "config.json"))})
 	}
 	return out
 }
@@ -71,15 +70,15 @@ func (p ProfileStatus) NeedsLogin() bool {
 	return false
 }
 
-// Plan says in a sentence what happens to a new session of the tool.
+// Plan says what a new session of the tool does: "personal (auto → work)".
 func (t ToolStatus) Plan(auto bool) string {
 	switch {
 	case len(t.Profiles) == 0:
 		return ""
 	case len(t.Profiles) == 1:
-		return "sessions use " + t.Profiles[0].Name + "; at a limit they wait for the reset"
+		return "new sessions: " + t.Active + " (auto, one account)"
 	case !auto:
-		return "sessions use " + t.Active + "; automatic moves are off"
+		return "new sessions: " + t.Active + " (auto off)"
 	}
 	var others []string
 	for _, p := range t.Profiles {
@@ -87,5 +86,5 @@ func (t ToolStatus) Plan(auto bool) string {
 			others = append(others, p.Name)
 		}
 	}
-	return fmt.Sprintf("sessions start on %s; at a limit they move to %s, and back once %s works again", t.Active, strings.Join(others, ", then "), t.Active)
+	return "new sessions: " + t.Active + " (auto → " + strings.Join(others, ", ") + ")"
 }

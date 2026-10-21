@@ -247,11 +247,11 @@ func Sessions(s *Styles, report []ops.ToolStatus) []string {
 			var mode string
 			switch o.Mode {
 			case profiles.Watched:
-				mode = s.OK.Render("moves at a limit")
+				mode = s.OK.Render("auto")
 			case profiles.Pinned:
-				mode = s.Warn.Render("pinned, stays on " + o.Profile)
+				mode = s.Warn.Render("pinned")
 			default:
-				mode = s.Warn.Render("stays on " + o.Profile)
+				mode = s.Warn.Render("auto off")
 			}
 			rows = append(rows, [4]string{t.Title, o.Profile, mode, s.Dim.Render(fsx.Brief(o.Dir) + " · " + ago(o.Started))})
 		}

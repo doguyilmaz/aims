@@ -61,7 +61,7 @@ claude                     # or codex: aims picks the account and watches the se
 With the shell integration (`aims setup` offers it), plain `claude` and `codex` go through aims. Without it, type `aims claude` and `aims codex`. Each session says what aims does with it when it starts, and Claude Code's status line shows it while it runs:
 
 ```text
-› Claude Code on personal: at a limit this session moves to work, and back once personal works again
+› claude: personal (auto → work)
 personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 ```
 

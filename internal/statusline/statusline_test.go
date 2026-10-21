@@ -30,7 +30,7 @@ func TestRender(t *testing.T) {
 		{[]tool.Window{w("5h", 6, time.Hour)}, &config.ProfileState{Until: now.Add(2 * time.Hour)}, profiles.Watched, "work limited ↻2h ▱▱▱▱▱  6% → personal"},
 		// A session that does not move says so, also at its limit.
 		{[]tool.Window{w("5h", 97, time.Hour)}, nil, profiles.Pinned, "work ▰▰▰▰▰  97% ↻1h · pinned"},
-		{[]tool.Window{w("5h", 11, time.Hour)}, nil, profiles.Unwatched, "work ▰▱▱▱▱  11% · stays on work"},
+		{[]tool.Window{w("5h", 11, time.Hour)}, nil, profiles.Unwatched, "work ▰▱▱▱▱  11% · auto off"},
 		{[]tool.Window{w("5h", 11, time.Hour)}, nil, "", "work ▰▱▱▱▱  11% · not via aims"},
 	}
 	for _, c := range cases {

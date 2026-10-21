@@ -138,11 +138,11 @@ func (m *dashboard) setReport(r []ops.ToolStatus) {
 	if cfg, err := config.Load(); err == nil {
 		m.auto, m.tips = cfg.Failover.Auto, ops.Tips(cfg, r)
 	}
-	m.start = "Start a session with " + Out.Cmd.Render("aims claude") + " or " + Out.Cmd.Render("aims codex") + ", or press " + Out.Cmd.Render("s")
+	m.start = Out.Dim.Render("start: ") + Out.Cmd.Render("aims claude") + Out.Dim.Render(", ") + Out.Cmd.Render("aims codex")
 	if ops.Installed().Shell != "" {
-		m.start = "Start a session with " + Out.Cmd.Render("claude") + " or " + Out.Cmd.Render("codex") + " in a terminal, or press " + Out.Cmd.Render("s")
+		m.start = Out.Dim.Render("start: ") + Out.Cmd.Render("claude") + Out.Dim.Render(", ") + Out.Cmd.Render("codex")
 	}
-	m.start += Out.Dim.Render(": aims picks the account and moves the session at a limit")
+	m.start += Out.Dim.Render(" or press ") + Out.Cmd.Render("s")
 	m.rows = m.rows[:0]
 	for ti, t := range r {
 		for pi := range t.Profiles {

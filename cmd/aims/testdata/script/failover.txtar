@@ -49,7 +49,7 @@ stdout 'Please run /login'
 stderr 'claude/work hit a login error; new runs will use another profile \(not retried'
 exec aims status claude
 stdout 'work .*login expired'
-stdout '→ Log work in to Claude Code  aims login claude work'
+stdout '→ claude/work is not logged in  aims login claude work'
 exec aims claude -p -- next-run
 stdout 'answer from default: next-run'
 stderr 'log work in again: aims login claude work'

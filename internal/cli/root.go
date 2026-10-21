@@ -118,15 +118,12 @@ func newRoot(version string) *cobra.Command {
 		Use:   "aims",
 		Short: "Several Claude Code and Codex accounts on one machine",
 		Long: "aims (AI multi-session) keeps one login per account for Claude Code and Codex\n" +
-			"and shares history and settings across them.\n\n" +
-			"Start a session with `aims claude` or `aims codex`, or with plain `claude` and\n" +
-			"`codex` once `aims setup` added the shell integration. It starts on your first\n" +
-			"account; at a usage limit it moves to the next one and continues the\n" +
-			"conversation, and it moves back once the first works again. `aims claude@work`\n" +
-			"pins a session to one account instead: it stays there, also at a limit.",
-		Example: `aims init        # once: name your accounts and log in
-aims claude      # a session that moves on at a limit
-aims             # your accounts, open sessions and what is left to set up`,
+			"and shares history between them. A session starts on your first account,\n" +
+			"moves to the next at a limit, and comes back.",
+		Example: `aims init          # once
+aims claude        # or plain claude after aims setup
+aims claude@work   # pinned: stays on work
+aims               # status and next steps`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

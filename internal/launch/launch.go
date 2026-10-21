@@ -8,12 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
-	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
@@ -283,31 +281,30 @@ func hints(o Options, skipped []profiles.Evaluation) {
 	}
 }
 
-// explain says, as a session starts, what aims does with it at a limit.
+// explain says, as a session starts, its account and what happens at a
+// limit, in the status line's words: "claude: personal (auto → work)".
 func explain(o Options, cfg *config.Config, preferred, name string, mode profiles.Mode) {
-	a := o.Tool
+	tag := "auto"
 	switch mode {
 	case profiles.Pinned:
-		o.say(Info, "%s pinned to %s: this session stays on %s, also at a limit (start it without @%s to let aims move it)", a.Title(), name, name, name)
-		return
+		tag = "pinned"
 	case profiles.Unwatched:
-		o.say(Info, "%s on %s: automatic moves are off (failover.auto in %s), so it stays on %s", a.Title(), name, fsx.Tildify(filepath.Join(config.Home(), "config.json")), name)
-		return
-	}
-	var others []string
-	for _, n := range cfg.Tools[a.ID()].Order {
-		if n != name && n != preferred {
-			others = append(others, n)
+		tag = "auto off"
+	default:
+		var others []string
+		for _, n := range cfg.Tools[o.Tool.ID()].Order {
+			if n != name && n != preferred {
+				others = append(others, n)
+			}
+		}
+		switch {
+		case name != preferred:
+			tag += ", back to " + preferred
+		case len(others) > 0:
+			tag += " → " + strings.Join(others, ", ")
 		}
 	}
-	switch {
-	case name != preferred:
-		o.say(Info, "%s on %s: this session goes back to %s once it works again", a.Title(), name, preferred)
-	case len(others) == 0:
-		o.say(Info, "%s on %s, the only account: at a limit this session waits for the reset and goes on", a.Title(), name)
-	default:
-		o.say(Info, "%s on %s: at a limit this session moves to %s, and back once %s works again", a.Title(), name, strings.Join(others, " or "), name)
-	}
+	o.say(Info, "%s: %s (%s)", o.Tool.ID(), name, tag)
 }
 
 // workDir is where the session runs.

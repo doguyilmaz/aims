@@ -15,16 +15,16 @@ weight: 8
  Codex                                                                                   ~/.codex
    ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
      work       me@company.com   team   ready           5h [......]    –   7d [......]    –
-     sessions start on personal; at a limit they move to work, and back once personal works again
+     new sessions: personal (auto → work)
 
  Open sessions
-     Claude Code  personal  moves at a limit       ~/src/app · 2h
-     Codex        work      pinned, stays on work  ~/src/api · 20m
+     Claude Code  personal  auto    ~/src/app · 2h
+     Codex        work      pinned  ~/src/api · 20m
 
  Next
-   → Codex in ~/src/api is pinned to work: it stays there at a limit. To let aims move it, end it and run  aims codex resume --last
+   → codex in ~/src/api is pinned to work; for auto, restart it with  aims codex resume --last
 
- Start a session with claude or codex in a terminal, or press s: aims picks the account and moves the session at a limit
+ start: claude, codex or press s
 
  ╭──────────────────────────────────────────────────────────────────────────────╮
  │ claude / personal  active · default login                                    │
@@ -57,7 +57,7 @@ weight: 8
 | `?` | Show all keys |
 | `q`, `esc` | Quit |
 
-**Open sessions** are the sessions aims started that still run, with whether each moves at a limit. **Next** lists what is still missing for sessions to move on their own (a second account, a login, plain `claude` going through aims), each with the command that does it.
+**Open sessions** are the sessions aims started that still run, with `auto` (moves at a limit) or `pinned` (stays). **Next** lists what is still missing for sessions to move on their own (a second account, a login, plain `claude` going through aims), each with the command that does it.
 
 The bars turn yellow at 70% and red at the failover threshold. The card under the list shows the selected account's folder, usage windows with their reset times, and when aims last heard from it.
 

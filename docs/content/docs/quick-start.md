@@ -26,14 +26,14 @@ The setup walks you through a few questions and does the work as it goes:
 ◇  Name your other account
 │  work
 │
-◇  Which account should sessions start on?
+◇  Which account first?
 │  personal
 │
 ◇  What should personal and work share?
 │  Everything
 │
 ◇  Connect aims to your tools
-│  MCP server and skill, status line, plain `claude` and `codex` through aims
+│  MCP server and skill, status line, plain claude and codex through aims
 │
 │  ✓ claude/personal  your current login, me@gmail.com
 │  ✓ claude/work  ~/.aims/profiles/claude/work
@@ -55,14 +55,12 @@ The setup walks you through a few questions and does the work as it goes:
 It ends with what to type from now on:
 
 ```text
-│  ╭──────────────────────────────────────────────────────────────────────────────╮
-│  │ How it works                                                                 │
-│  │                                                                              │
-│  │ claude or codex         starts a session on personal (in a new terminal)     │
-│  │ at a limit              it moves to work, and back once personal works again │
-│  │ aims                    your accounts, open sessions and what is left to set up │
-│  │ aims claude@work        a pinned session: stays on work, also at a limit     │
-│  ╰──────────────────────────────────────────────────────────────────────────────╯
+│  ╭───────────────────────────────────────────╮
+│  │ claude, codex       starts on personal    │
+│  │ at a limit          → work, then back     │
+│  │ aims claude@work    pinned to work        │
+│  │ aims                status and next steps │
+│  ╰───────────────────────────────────────────╯
 └  Ready.
 ```
 
@@ -91,13 +89,13 @@ Claude Code  ~/.claude
 Codex  ~/.codex
   ● personal   me@gmail.com     plus   ready           5h [......]    –   7d [......]    –
     work       no login                not logged in   5h [......]    –   7d [......]    –
-  sessions start on personal; at a limit they move to work, and back once personal works again
+  new sessions: personal (auto → work)
 
 Next
-  → Log work in to Codex  aims login codex work
+  → codex/work is not logged in  aims login codex work
 ```
 
-`●` marks the account sessions start on. Under each tool, one line says what a new session does. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up.
+`●` marks the account sessions start on. Under each tool, one line says what a new session does: `auto → work` moves to work at a limit and comes back. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up.
 
 ## 3. Use it
 
@@ -106,7 +104,7 @@ Start sessions the way you always do: `claude` and `codex`. With the shell integ
 Each session says, as it starts, what aims will do with it:
 
 ```text
-› Claude Code on personal: at a limit this session moves to work, and back once personal works again
+› claude: personal (auto → work)
 ```
 
 and Claude Code's status line keeps saying it while the session runs:

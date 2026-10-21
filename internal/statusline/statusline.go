@@ -179,7 +179,7 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	case profiles.Pinned:
 		tag = "pinned"
 	case profiles.Unwatched:
-		tag = "stays on " + name
+		tag = "auto off"
 	default:
 		tag = "not via aims"
 	}
