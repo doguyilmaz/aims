@@ -1,6 +1,7 @@
 ---
 title: Everyday use
 weight: 4
+aliases: ["/docs/everyday/"]
 ---
 
 ## Starting a session

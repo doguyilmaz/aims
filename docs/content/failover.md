@@ -1,6 +1,7 @@
 ---
 title: Limits and failover
 weight: 5
+aliases: ["/docs/failover/"]
 ---
 
 Plans have usage windows (five hours, a week) and logins expire. aims keeps track of both, steers new sessions away from accounts that cannot work right now, and repeats a headless run on another account when that is safe.

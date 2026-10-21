@@ -1,6 +1,7 @@
 ---
 title: Commands
 weight: 9
+aliases: ["/docs/commands/"]
 ---
 
 `aims help <command>` shows the same with examples. `<tool>` is `claude` or `codex`; `<profile>` is an account name you chose.

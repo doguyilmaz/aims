@@ -1,6 +1,7 @@
 ---
 title: Installation
 weight: 2
+aliases: ["/docs/installation/"]
 ---
 
 aims is one static binary with no runtime to install. It needs Claude Code, Codex, or both; it does not install them.

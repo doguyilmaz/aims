@@ -1,6 +1,7 @@
 ---
 title: How it works
 weight: 11
+aliases: ["/docs/how-it-works/"]
 ---
 
 ## One folder per login

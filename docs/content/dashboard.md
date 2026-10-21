@@ -1,6 +1,7 @@
 ---
 title: Dashboard
 weight: 8
+aliases: ["/docs/dashboard/"]
 ---
 
 `aims` with no arguments opens a full-screen view of every account, the sessions open now and what is left to set up. It runs in your terminal; nothing is served or opened in a browser.
