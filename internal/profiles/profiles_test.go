@@ -321,3 +321,18 @@ func TestSameAccountForgetsTenant(t *testing.T) {
 		t.Fatalf("b's tenant is unknown now: %+v", ev)
 	}
 }
+
+func TestNames(t *testing.T) {
+	for _, c := range []struct {
+		in   []string
+		want string
+	}{
+		{[]string{"work"}, "work"},
+		{[]string{"a", "b", "c"}, "a, b, c"},
+		{[]string{"a", "b", "c", "d", "e"}, "a, b +3 more"},
+	} {
+		if got := Names(c.in, ", "); got != c.want {
+			t.Errorf("Names(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

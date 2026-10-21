@@ -550,6 +550,15 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 	return p
 }
 
+// Names lists accounts for a sentence, joined by sep; past three, the first
+// two and how many more: "work, client +18 more".
+func Names(names []string, sep string) string {
+	if len(names) > 3 {
+		return strings.Join(names[:2], sep) + fmt.Sprintf(" +%d more", len(names)-2)
+	}
+	return strings.Join(names, sep)
+}
+
 // Duration formats a wait for people: "45m", "2h10m", "3d".
 func Duration(d time.Duration) string {
 	if d <= 0 {
