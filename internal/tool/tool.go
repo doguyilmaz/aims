@@ -261,6 +261,9 @@ type Account struct {
 	// to. Two logins with the same Email and Tenant share one plan, and
 	// so its limits; one e-mail can have a personal plan and a team seat.
 	Tenant string
+	// Stale: the account details the tool saved belong to another login
+	// than the one it holds, so Org and Tenant are left out.
+	Stale bool
 	// Expires is when the login's access token runs out; the tool renews it
 	// on its next request after that. Zero when unknown.
 	Expires time.Time

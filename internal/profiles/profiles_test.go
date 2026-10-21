@@ -301,3 +301,23 @@ func TestSameAccount(t *testing.T) {
 		t.Fatalf("a's rate limit and login are its own: %+v", ev)
 	}
 }
+
+// A login whose tenant aims cannot tell stops counting as the account it
+// was stored as.
+func TestSameAccountForgetsTenant(t *testing.T) {
+	cfg, a := setup(t)
+	for _, n := range []string{"a", "b"} {
+		_ = config.UpdateState("codex", n, func(ps *config.ProfileState) {
+			ps.Account = &config.Account{Email: "me@corp.com", Tenant: "ws-1"}
+		})
+	}
+	_ = RecordUsage("codex", "b", []tool.Window{{Label: "7d", Percent: 99, ResetsAt: now.Add(time.Hour)}}, "test")
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a"); ev.Usable {
+		t.Fatalf("a shares b's usage: %+v", ev)
+	}
+	// b's login now names the e-mail but no workspace.
+	testutil.Write(t, filepath.Join(config.Home(), "profiles", "codex", "b", "auth.json"), `{"tokens":{"id_token":"x.eyJlbWFpbCI6Im1lQGNvcnAuY29tIn0.sig","refresh_token":"r"}}`)
+	if ev := Evaluate(t.Context(), cfg, config.LoadState(), a, "a"); !ev.Usable {
+		t.Fatalf("b's tenant is unknown now: %+v", ev)
+	}
+}

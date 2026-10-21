@@ -157,6 +157,7 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 			Email   string `json:"emailAddress"`
 			Org     string `json:"organizationName"`
 			OrgUUID string `json:"organizationUuid"`
+			OrgType string `json:"organizationType"`
 		} `json:"oauthAccount"`
 	}
 	fsx.ReadJSONLenient(claudeJSON(h), &cj)
@@ -191,7 +192,25 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 			}
 		}
 	}
+	// Claude Code does not always rewrite oauthAccount when the login
+	// changes; an organization of another kind than the login's plan is
+	// an earlier login's.
+	if org, plan := planKind(cj.OAuthAccount.OrgType), planKind(acct.Plan); org != "" && plan != "" && org != plan {
+		acct.Stale, acct.Org, acct.Tenant = true, "", ""
+	}
 	return acct
+}
+
+// planKind is the plan a subscription or organization type names:
+// "claude_max" and "max" are both "max"; "" when it names none.
+func planKind(s string) string {
+	s = strings.ToLower(s)
+	for _, k := range []string{"enterprise", "team", "max", "pro"} {
+		if strings.Contains(s, k) {
+			return k
+		}
+	}
+	return ""
 }
 
 // Probe sends a one-word prompt to the smallest model. Claude Code has no

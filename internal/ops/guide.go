@@ -32,8 +32,11 @@ func Tips(cfg *config.Config, report []ToolStatus) []Tip {
 		}
 		bins = append(bins, tools.Get(t.ID).Layout().Bin)
 		for _, p := range t.Profiles {
-			if p.NeedsLogin() {
+			switch {
+			case p.NeedsLogin():
 				out = append(out, Tip{string(t.ID) + "/" + p.Name + " is not logged in", "aims login " + string(t.ID) + " " + p.Name})
+			case p.Stale:
+				out = append(out, Tip{string(t.ID) + "/" + p.Name + "'s account details are out of date; log in again", "aims login " + string(t.ID) + " " + p.Name})
 			}
 		}
 		if len(t.Profiles) == 1 {
