@@ -90,13 +90,19 @@ Claude Code  ~/.claude
 Codex  ~/.codex
   ● personal   me@gmail.com     plus   ready           5h [......]    –   7d [......]    –
     work       no login                not logged in   5h [......]    –   7d [......]    –
-  new sessions: personal (auto → work)
 
 Next
   → codex/work is not logged in  aims login codex work
+
+How it works
+  claude and codex start on personal. At a limit or a dead login the
+  conversation continues on work, and goes back to personal once it works again.
+  codex/work cannot be used now (not logged in); a codex session at its limit
+  has nowhere to move.
+  aims claude@work keeps a session on work and never moves it.
 ```
 
-`●` marks the account sessions start on. Under each tool, one line says what a new session does: `auto → work` moves to work at a limit and comes back. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up.
+`●` marks the account sessions start on. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up. **How it works** says in words what a new session does and what keeps an account out right now.
 
 ## 3. Use it
 
@@ -133,6 +139,10 @@ aims failover claude --resume
 ```
 
 This marks the account you were using as limited until its reset time and continues your last conversation, with all its context, on the next account. New sessions use that one until the limit resets, then go back to your active account on their own. [Limits and failover](../failover) explains what aims does on its own.
+
+## Setting it up again
+
+Run `aims init` again and pick **Go through setup again**. Accounts and logins stay. aims checks every login (not logged in, two profiles on one account, out of date details) and offers to log in again, asks which account comes first, then what it connects, and ends with how it works.
 
 ## Adding more accounts
 

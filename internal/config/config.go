@@ -100,6 +100,13 @@ type StatusLine struct {
 // HomeVar points aims at another directory than ~/.aims.
 const HomeVar = "AIMS_HOME"
 
+// Guided reports whether aims has told the person how it works: at the end
+// of init or setup, or as a session started.
+func Guided() bool { return fsx.Stat(filepath.Join(Home(), "guided")) != nil }
+
+// MarkGuided records that it has.
+func MarkGuided() { _ = fsx.WriteFile(filepath.Join(Home(), "guided"), nil, 0o600) }
+
 // Home is aims' own directory, ~/.aims or $AIMS_HOME.
 func Home() string {
 	if v := os.Getenv(HomeVar); v != "" {

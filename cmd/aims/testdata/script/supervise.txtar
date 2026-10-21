@@ -17,6 +17,8 @@ stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "
 ! stdout 'stopped as work'
 exec aims status claude
 stdout 'personal .*limited .*marked by a session'
+stdout 'claude starts on personal\. At a limit or a dead login the'
+stdout 'claude/personal cannot be used now \(5h limit for .*\); new claude sessions'
 
 # Once personal works again, the conversation goes back to it with the
 # user's next prompt, which the hook holds back so nothing is lost.
@@ -90,6 +92,13 @@ stdout 'claude interactive as default args=\["--resume" "s-work" "--" "next ques
 env FAKE_BEFORE_TURN=
 env FAKE_NEXT_PROMPT=
 exec aims clear claude
+
+# The first session after an upgrade says once what auto means.
+rm $HOME/.aims/guided
+exec aims claude
+stderr 'at a limit this conversation continues on work and comes back to personal\. More: aims status'
+exec aims claude
+! stderr 'More: aims status'
 
 # A command that is not a session is neither explained nor listed.
 exec aims claude --version

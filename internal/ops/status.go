@@ -42,6 +42,8 @@ type ProfileStatus struct {
 	// StandsIn names the preferred profile when it is unusable and new
 	// sessions get this one instead.
 	StandsIn string `json:"standsIn,omitempty"`
+	// SameAs names an earlier profile logged in to the same account.
+	SameAs string `json:"sameAs,omitempty"`
 }
 
 // ToolStatus is one tool in `aims status`.
@@ -125,6 +127,17 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 		}
 		if ev.Name == standIn && standIn != preferred {
 			row.StandsIn = preferred
+		}
+		if acct := ev.Account; acct.Email != "" && acct.Tenant != "" {
+			for _, o := range evs {
+				if o.Name == ev.Name {
+					break
+				}
+				if strings.EqualFold(o.Account.Email, acct.Email) && o.Account.Tenant == acct.Tenant {
+					row.SameAs = o.Name
+					break
+				}
+			}
 		}
 		ts.Profiles = append(ts.Profiles, row)
 	}
