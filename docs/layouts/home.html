@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ site.Title }}</title>
+<meta name="description" content="{{ site.Params.description }}">
+<meta property="og:title" content="{{ site.Title }}">
+<meta property="og:description" content="{{ site.Params.description }}">
+<meta property="og:image" content="{{ "images/og.png" | absURL }}">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="{{ "favicon.svg" | relURL }}">
+<link rel="canonical" href="{{ "docs/" | absURL }}">
+<meta http-equiv="refresh" content="0; url={{ "docs/" | relURL }}">
+</head>
+<body><a href="{{ "docs/" | relURL }}">{{ site.Title }} docs</a></body>
+</html>

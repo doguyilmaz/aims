@@ -11,11 +11,6 @@
   --primary-lightness: 60%;
 }
 
-/* Commands in the feature cards read better unbroken. */
-.hextra-feature-card code {
-  white-space: nowrap;
-}
-
 /* Terminal transcripts: keep box drawing and bars aligned. */
 pre code {
   font-variant-ligatures: none;
