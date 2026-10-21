@@ -1,6 +1,7 @@
 ---
 title: Quick start
 weight: 3
+aliases: ["/docs/quick-start/"]
 ---
 
 Five minutes from install to two working accounts. You need Claude Code or Codex installed, ideally already logged in with one of your accounts.

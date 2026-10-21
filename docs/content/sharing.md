@@ -1,6 +1,7 @@
 ---
 title: What accounts share
 weight: 6
+aliases: ["/docs/sharing/"]
 ---
 
 Each account (aims calls it a profile) has its own folder. The login in it is private; the rest links to the tool's normal folder, `~/.claude` or `~/.codex`, which aims calls the hub.

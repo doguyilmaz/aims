@@ -1,6 +1,7 @@
 ---
 title: Configuration
 weight: 10
+aliases: ["/docs/configuration/"]
 ---
 
 aims keeps everything in `~/.aims` (or `$AIMS_HOME`):

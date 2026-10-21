@@ -1,6 +1,9 @@
 ---
 title: Introduction
-weight: 1
+type: docs
+cascade:
+  type: docs
+aliases: ["/docs/"]
 ---
 
 aims (short for **AI multi-session**) runs several Claude Code and Codex accounts on one machine. A personal and a work subscription, say, or two work seats. Each account keeps its own login; everything else is shared. You switch accounts without logging out, and when one account runs out of quota the next session moves to another.

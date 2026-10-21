@@ -1,6 +1,7 @@
 ---
 title: Troubleshooting
 weight: 13
+aliases: ["/docs/troubleshooting/"]
 ---
 
 ## Start with doctor

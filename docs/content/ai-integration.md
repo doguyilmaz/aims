@@ -1,6 +1,7 @@
 ---
 title: AI integration
 weight: 7
+aliases: ["/docs/ai-integration/"]
 ---
 
 aims can tell Claude Code and Codex which accounts exist and let them act on it: switch the account for new sessions, fail over when this one hits its limit, or hand a self-contained task to another account right now.
