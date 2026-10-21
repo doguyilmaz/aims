@@ -39,7 +39,7 @@ It checks the tools, every login and shared folder, and the integrations, repair
 
 ### Both profiles log in as the same account
 
-The browser signed in with whatever account it was already logged into. aims warns when it sees this (`me@gmail.com is already used by personal`). Log the second profile in again from a private window, or let Claude Code pre-fill the address:
+The browser signed in with whatever account it was already logged into. aims warns when it sees this (`me@gmail.com is already used by personal`), and `aims status` lists it under **Next**. Log the second profile in again from a private window, or let Claude Code pre-fill the address:
 
 ```bash
 aims login claude work -- --email me@company.com

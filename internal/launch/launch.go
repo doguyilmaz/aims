@@ -284,27 +284,38 @@ func hints(o Options, skipped []profiles.Evaluation) {
 // explain says, as a session starts, its account and what happens at a
 // limit, in the status line's words: "claude: personal (auto → work)".
 func explain(o Options, cfg *config.Config, preferred, name string, mode profiles.Mode) {
-	tag := "auto"
-	switch mode {
-	case profiles.Pinned:
-		tag = "pinned"
-	case profiles.Unwatched:
-		tag = "auto off"
-	default:
-		var others []string
-		for _, n := range cfg.Tools[o.Tool.ID()].Order {
-			if n != name && n != preferred {
-				others = append(others, n)
-			}
-		}
-		switch {
-		case name != preferred:
-			tag += ", back to " + preferred
-		case len(others) > 0:
-			tag += " → " + strings.Join(others, ", ")
+	var others []string
+	for _, n := range cfg.Tools[o.Tool.ID()].Order {
+		if n != name && n != preferred {
+			others = append(others, n)
 		}
 	}
+	tag := "auto"
+	switch {
+	case mode == profiles.Pinned:
+		tag = "pinned"
+	case mode == profiles.Unwatched:
+		tag = "auto off"
+	case name != preferred:
+		tag += ", back to " + preferred
+	case len(others) > 0:
+		tag += " → " + strings.Join(others, ", ")
+	}
 	o.say(Info, "%s: %s (%s)", o.Tool.ID(), name, tag)
+	// The first session after an upgrade says once what the tag means.
+	if config.Guided() || mode == profiles.Unwatched {
+		return
+	}
+	config.MarkGuided()
+	bin := o.Tool.Layout().Bin
+	switch {
+	case mode == profiles.Pinned:
+		o.say(Hint, "this session stays on %s; plain aims %s moves on at a limit. More: aims status", name, bin)
+	case name != preferred:
+		o.say(Hint, "%s is out, so this session runs on %s and goes back once %s works. More: aims status", preferred, name, preferred)
+	case len(others) > 0:
+		o.say(Hint, "at a limit this conversation continues on %s and comes back to %s. More: aims status", others[0], name)
+	}
 }
 
 // workDir is where the session runs.

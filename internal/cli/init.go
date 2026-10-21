@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/doguyilmaz/aims/internal/config"
@@ -523,6 +524,7 @@ func loginStep(ctx context.Context, r *ui.Rail, a tool.Adapter, name string) err
 // then does on its own. newShell: the shell integration was just added, so
 // it works in terminals opened from now on.
 func howItWorks(r *ui.Rail, newShell bool) {
+	config.MarkGuided()
 	s := ui.Out
 	cfg, err := config.Load()
 	if err != nil {
@@ -556,15 +558,22 @@ func howItWorks(r *ui.Rail, newShell bool) {
 	} else if newShell {
 		where = " (in a new terminal)"
 	}
-	const w = 20
-	lines := []string{ui.Pad(ui.Kbd(s, start), w) + s.Dim.Render("starts on "+first+where)}
+	rows := [][2]string{{ui.Kbd(s, start), "starts on " + first + where}}
 	if other != "" {
-		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("→ "+other+", then back"),
-			ui.Pad(ui.Kbd(s, "aims "+lead.Layout().Bin+"@"+other), w)+s.Dim.Render("pinned to "+other))
+		rows = append(rows, [2]string{"at a limit", "→ " + other + ", then back"},
+			[2]string{ui.Kbd(s, "aims "+lead.Layout().Bin+"@"+other), "pinned to " + other})
 	} else {
-		lines = append(lines, ui.Pad("at a limit", w)+s.Dim.Render("waits for the reset"))
+		rows = append(rows, [2]string{"at a limit", "waits for the reset"})
 	}
-	lines = append(lines, ui.Pad(ui.Kbd(s, "aims"), w)+s.Dim.Render("status and next steps"))
+	rows = append(rows, [2]string{ui.Kbd(s, "aims"), "status and next steps"})
+	w := 0
+	for _, row := range rows {
+		w = max(w, lipgloss.Width(row[0])+2)
+	}
+	lines := make([]string, len(rows))
+	for i, row := range rows {
+		lines[i] = ui.Pad(row[0], w) + s.Dim.Render(row[1])
+	}
 	r.Box(lines...)
 }
 
@@ -587,6 +596,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	choice := "add"
 	opts := []ui.Option{
 		{Label: "Add an account", Value: "add"},
+		{Label: "Go through setup again", Value: "again", Hint: "keeps accounts and logins"},
 		{Label: "Change what aims connects", Value: "connect", Hint: "MCP server and skill, status line, shell, login keepalive"},
 		{Label: "Nothing, show my accounts", Value: "status"},
 	}
@@ -596,6 +606,8 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	switch choice {
 	case "connect":
 		return reconnect(ctx, r, inst)
+	case "again":
+		return initReview(ctx, r, inst)
 	case "status":
 		r.Outro("")
 		report, err := ops.Status(ctx, nil)
@@ -611,6 +623,58 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 		adapters[i] = f.a
 	}
 	return addAccount(ctx, r, adapters, "")
+}
+
+// initReview is setup again on what is there: every account and login
+// stays. It checks the logins, offering a new one where it is needed, asks
+// which account comes first, then what aims connects.
+func initReview(ctx context.Context, r *ui.Rail, inst []found) error {
+	report, err := ops.Status(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, t := range report {
+		if !t.Installed || len(t.Profiles) == 0 {
+			continue
+		}
+		a := tools.Get(t.ID)
+		for _, p := range t.Profiles {
+			var problem string
+			switch {
+			case p.NeedsLogin():
+				problem = "is not logged in"
+			case p.SameAs != "":
+				problem = "is logged in to the same account as " + p.SameAs
+			case p.Stale:
+				problem = "has out of date account details"
+			}
+			if problem == "" {
+				r.OK(fmt.Sprintf("%s/%s  %s", t.ID, p.Name, ui.Out.Dim.Render(p.Email)))
+				continue
+			}
+			r.Fail(fmt.Sprintf("%s/%s %s", t.ID, p.Name, problem))
+			if err := loginStep(ctx, r, a, p.Name); err != nil {
+				return cancelled(r, err)
+			}
+		}
+		if len(t.Profiles) < 2 {
+			continue
+		}
+		first := t.Active
+		var opts []ui.Option
+		for _, p := range t.Profiles {
+			opts = append(opts, ui.Option{Label: p.Name, Value: p.Name})
+		}
+		if err := r.Select(fmt.Sprintf("Which %s account first?", t.Title), "The others take over at a limit.", opts, &first); err != nil {
+			return cancelled(r, err)
+		}
+		if first != t.Active {
+			if _, err := ops.SetOrder(a, []string{first}); err != nil {
+				r.Fail(err.Error())
+			}
+		}
+	}
+	return reconnect(ctx, r, inst)
 }
 
 // initQuiet is `aims init --yes`. Tools that already have profiles are left

@@ -219,9 +219,6 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string
 			}
 			b.WriteString(strings.TrimRight(line, " ") + "\n")
 		}
-		if plan := t.Plan(cfg.Failover.Auto); plan != "" {
-			b.WriteString("  " + s.Dim.Render(plan) + "\n")
-		}
 	}
 	if lines := Sessions(s, report); len(lines) > 0 {
 		b.WriteString("\n" + s.Bold.Render("Open sessions") + "\n")
@@ -233,6 +230,14 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string
 		b.WriteString("\n" + s.Bold.Render("Next") + "\n")
 		for _, t := range tips {
 			b.WriteString("  " + Tip(s, t) + "\n")
+		}
+	}
+	if lines := ops.Explain(cfg, report); len(lines) > 0 {
+		b.WriteString("\n" + s.Bold.Render("How it works") + "\n")
+		for _, l := range lines {
+			for _, w := range wrap(l, 78) {
+				b.WriteString("  " + s.Dim.Render(w) + "\n")
+			}
 		}
 	}
 	return b.String()
@@ -329,4 +334,21 @@ func Until(t time.Time) string {
 		clock = t.Local().Format("Mon 15:04")
 	}
 	return profiles.Duration(d) + ", until " + clock
+}
+
+// wrap breaks text into lines of at most width columns.
+func wrap(text string, width int) []string {
+	var lines []string
+	line := ""
+	for _, w := range strings.Fields(text) {
+		if line != "" && lipgloss.Width(line)+1+lipgloss.Width(w) > width {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += w
+	}
+	return append(lines, line)
 }
