@@ -187,6 +187,15 @@ func TestAccount(t *testing.T) {
 	if acct.LoggedIn == nil || !*acct.LoggedIn || acct.Email != "w@x.com" || acct.Plan != "max" || acct.Org != "X" {
 		t.Fatalf("logged in: %+v", acct)
 	}
+	// A personal organization beside a team login is an earlier login's.
+	testutil.Write(t, filepath.Join(dir, ".claude.json"), `{"oauthAccount":{"emailAddress":"w@x.com","organizationUuid":"o1","organizationType":"claude_max"}}`)
+	if acct := a.Account(t.Context(), h); acct.Stale || acct.Tenant != "o1" {
+		t.Fatalf("matching organization: %+v", acct)
+	}
+	testutil.Write(t, filepath.Join(dir, ".credentials.json"), `{"claudeAiOauth":{"subscriptionType":"team"}}`)
+	if acct := a.Account(t.Context(), h); !acct.Stale || acct.Tenant != "" || acct.Email != "w@x.com" {
+		t.Fatalf("stale organization: %+v", acct)
+	}
 	// The default login keeps .claude.json next to the folder, in HOME.
 	testutil.Write(t, filepath.Join(home, ".claude.json"), `{"oauthAccount":{"emailAddress":"me@x.com"}}`)
 	if acct := a.Account(t.Context(), tool.Home{Dir: filepath.Join(home, ".claude")}); acct.Email != "me@x.com" {

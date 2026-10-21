@@ -14,18 +14,20 @@ import (
 
 // ProfileStatus is one row of `aims status`.
 type ProfileStatus struct {
-	Name     string   `json:"name"`
-	Active   bool     `json:"active"`
-	Pinned   bool     `json:"pinned"`
-	Existing bool     `json:"existing"`
-	Share    string   `json:"share"`
-	Dir      string   `json:"dir"`
-	Email    string   `json:"email,omitempty"`
-	Plan     string   `json:"plan,omitempty"`
-	Method   string   `json:"method,omitempty"`
-	LoggedIn *bool    `json:"loggedIn"`
-	Usable   bool     `json:"usable"`
-	Reasons  []string `json:"reasons,omitempty"`
+	Name     string `json:"name"`
+	Active   bool   `json:"active"`
+	Pinned   bool   `json:"pinned"`
+	Existing bool   `json:"existing"`
+	Share    string `json:"share"`
+	Dir      string `json:"dir"`
+	Email    string `json:"email,omitempty"`
+	Plan     string `json:"plan,omitempty"`
+	Method   string `json:"method,omitempty"`
+	LoggedIn *bool  `json:"loggedIn"`
+	// Stale: the tool's saved account details are another login's.
+	Stale   bool     `json:"stale,omitempty"`
+	Usable  bool     `json:"usable"`
+	Reasons []string `json:"reasons,omitempty"`
 	// ReadyAt is when an unusable profile works again, if known.
 	ReadyAt time.Time     `json:"readyAt,omitzero"`
 	Usage   []tool.Window `json:"usage,omitempty"`
@@ -101,7 +103,7 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			Name: ev.Name, Active: t.Active == ev.Name, Pinned: ts.Pinned == ev.Name,
 			Existing: p.Existing, Share: p.ShareMode(), Dir: cfg.Dir(id, ev.Name),
 			Email: ev.Account.Email, Plan: ev.Account.Plan, Method: ev.Account.Method,
-			LoggedIn: ev.Account.LoggedIn, Usable: ev.Usable, Reasons: ev.Reasons,
+			LoggedIn: ev.Account.LoggedIn, Stale: ev.Account.Stale, Usable: ev.Usable, Reasons: ev.Reasons,
 			ReadyAt: ev.ReadyAt, LastUsed: ps.LastUsedAt,
 		}
 		if ps.Account != nil {
@@ -173,7 +175,7 @@ func RecordLogin(ctx context.Context, a tool.Adapter, name string) (LoginResult,
 		if other == name {
 			continue
 		}
-		if o := a.Account(ctx, profiles.Home(cfg, a, other)); strings.EqualFold(o.Email, acct.Email) {
+		if o := a.Account(ctx, profiles.Home(cfg, a, other)); strings.EqualFold(o.Email, acct.Email) && o.Tenant == acct.Tenant {
 			res.SameAs = append(res.SameAs, other)
 		}
 	}

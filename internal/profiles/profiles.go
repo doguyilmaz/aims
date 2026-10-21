@@ -242,18 +242,22 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		}
 	}
 	id := identity(acct, ps)
-	if id.Email != "" && id.Tenant != "" && (ps.Account == nil || ps.Account.Email != id.Email || ps.Account.Tenant != id.Tenant) {
+	if acct.Email != "" && (ps.Account == nil || ps.Account.Email != acct.Email || ps.Account.Tenant != acct.Tenant) {
 		_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) {
 			if ps.Account == nil {
 				ps.Account = &config.Account{}
 			}
-			ps.Account.Email, ps.Account.Tenant = id.Email, id.Tenant
+			ps.Account.Email, ps.Account.Tenant = acct.Email, acct.Tenant
 		})
 	}
 	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
 			other := st.Get(a.ID(), n)
-			if n == name || other.Account == nil || !strings.EqualFold(other.Account.Email, id.Email) || other.Account.Tenant != id.Tenant {
+			if n == name || other.Account == nil || !sameLogin(*other.Account, id) {
+				continue
+			}
+			// What aims stored can be out of date; the login itself decides.
+			if live := a.Account(ctx, Home(cfg, a, n)); live.Email != "" && !sameLogin(config.Account{Email: live.Email, Tenant: live.Tenant}, id) {
 				continue
 			}
 			if r, until := sameAccount(cfg, other, now); r != "" {
@@ -267,6 +271,10 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		ev.ReadyAt = time.Time{}
 	}
 	return ev
+}
+
+func sameLogin(x, y config.Account) bool {
+	return strings.EqualFold(x.Email, y.Email) && x.Tenant == y.Tenant
 }
 
 // identity is who a login is: its e-mail and tenant, from the login itself

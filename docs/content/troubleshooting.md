@@ -46,6 +46,10 @@ aims login claude work -- --email me@company.com
 aims login codex work -- --device-auth      # a code you enter in any browser
 ```
 
+### "account details are out of date"
+
+Claude Code keeps the account's details next to the login and does not always rewrite them when the login changes. When they name another kind of plan than the login, aims stops trusting them, so the profile is not taken for another account and does not share its limits. Logging in again rewrites them: `aims login claude work`.
+
 ### "ignoring ANTHROPIC_API_KEY from your shell"
 
 An API key in your shell would override every profile's login, so aims removes it for the tool it starts. To use an API key on purpose, give it its own profile with the key in [`env`](../configuration#profiles).
