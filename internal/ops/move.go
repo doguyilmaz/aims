@@ -64,7 +64,7 @@ func Move(ctx context.Context, to string) (MoveResult, error) {
 	case cfg.Tools[id].Profiles[res.To] == nil:
 		return res, fmt.Errorf("no %s profile %q (see: aims status)", id, res.To)
 	case slices.Contains(apart, res.To):
-		return res, fmt.Errorf("%s and %s do not share history, so %s would not find this conversation", from, res.To, res.To)
+		return res, fmt.Errorf("%s and %s do not fully share history; check sharing settings and run `aims doctor` before moving this conversation", from, res.To)
 	}
 	if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To); !ev.Usable && res.To != from {
 		return res, fmt.Errorf("%s cannot be used now: %s", res.To, strings.Join(ev.Reasons, ", "))

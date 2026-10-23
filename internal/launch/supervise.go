@@ -203,6 +203,13 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				wake = nil
 				continue // stay: a resume that cannot be built would lose the conversation
 			}
+			// A pending move can outlive a change to sharing or a tool replacing
+			// a link. Recheck before stopping the process that owns the conversation.
+			if next != name && !validMove(a.ID(), name, next) {
+				o.say(Warn, "%s: history is no longer shared with %s; staying on %s (aims doctor)", a.ID(), next, name)
+				wake, chosen = nil, ""
+				continue
+			}
 			select {
 			case <-child.Done():
 				ticker.Stop()
@@ -251,7 +258,11 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, profiles.Apart(cfg, a.ID(), name))
+	apart := profiles.Apart(cfg, a.ID(), name)
+	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+	if pick.Name == "" && len(apart) > 0 {
+		o.say(Warn, "%s: %s cannot receive this conversation because history is not fully shared (aims doctor)", a.ID(), profiles.Names(apart, ", "))
+	}
 	switch {
 	case pick.Name != "" && pick.Name != name:
 		return pick.Name, continuePrompt, name + " hit " + failureText(f) + "; continuing this conversation on " + pick.Name, nil

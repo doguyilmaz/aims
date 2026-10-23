@@ -17,6 +17,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/tool"
+	"github.com/doguyilmaz/aims/internal/tools"
 )
 
 // SessionVar tells a running tool, and the MCP server it starts, which
@@ -50,10 +51,17 @@ func Session() (id tool.ID, name string, ok bool) {
 // that do not share history with it, so would not find the conversation.
 func Apart(cfg *config.Config, id tool.ID, name string) []string {
 	t := cfg.Tools[id]
-	shared := t.Profiles[name] != nil && t.Profiles[name].ShareMode() == config.ShareAll
+	layout := tools.Get(id).Layout()
+	hub := cfg.EnsureHub(id)
+	sharesHistory := func(n string) bool {
+		p := t.Profiles[n]
+		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
+			links.HistoryShared(hub, cfg.Dir(id, n), layout)
+	}
+	shared := sharesHistory(name)
 	var out []string
 	for _, n := range t.Order {
-		if n != name && (!shared || t.Profiles[n].ShareMode() != config.ShareAll) {
+		if n != name && (!shared || !sharesHistory(n)) {
 			out = append(out, n)
 		}
 	}
@@ -162,12 +170,13 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 		return []links.Report{{Name: dir, Action: links.Conflict, Quiet: true, Detail: "another aims process is repairing the shared folders; skipped"}}
 	}
 	defer unlock()
-	private := Private(p, a.Layout())
-	out := links.Detach(hub, dir, private, a.Layout())
+	layout := a.Layout()
+	private := Private(p, layout)
+	out := links.Detach(hub, dir, private, layout)
 	if p.ShareMode() == config.ShareNone {
 		return out
 	}
-	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: a.Layout(), Private: private, Label: name, Fix: fix})...)
+	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: layout, Private: private, Label: name, Fix: fix})...)
 }
 
 // Private reports which home entries a profile keeps to itself.

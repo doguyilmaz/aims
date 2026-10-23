@@ -74,6 +74,30 @@ The entry in the profile is a link aims did not make, for example from a dotfile
 
 Codex keeps some state in SQLite databases. aims moves a database into the shared folder only when it is closed. Quit Codex and run `aims doctor --fix`.
 
+### "This conversation is open in another app"
+
+Another Codex process owns the conversation's writer lock. Close that conversation in its other terminal or app, then press `r` in the waiting terminal. A background daemon can keep the conversation loaded after the original terminal closes.
+
+Supervised aims sessions disable `daemon_auto_start`, but that does not stop daemons started earlier. If an old daemon owns the conversation, stop that specific profile's daemon after finishing any work it hosts. For a profile called `personal` in the default aims directory on macOS or Linux:
+
+```bash
+CODEX_HOME="$HOME/.aims/profiles/codex/personal" command codex app-server daemon stop
+```
+
+Use the profile's actual folder shown by aims; an account using the original login may use `~/.codex` instead. Stopping a daemon disconnects all conversations it hosts. Do not delete lock files to bypass an active writer.
+
+### Private writer locks
+
+New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory. aims reports this and leaves it intact, including with `--fix`.
+
+To migrate an old profile, first close **all Codex instances using the profile or hub**, including their background daemons. Move the profile's private `thread-writer-locks/` directory to a backup outside the profile, then run `aims sync` and `aims doctor` before reopening Codex. Leave the hub's lock directory in place. Do not perform this migration while a conversation is running.
+
+### "history sharing is incomplete"
+
+Both the profile and hub have a database such as `thread_history_1.sqlite`. aims preserves both rather than overwrite potentially different history. `aims doctor --fix` cannot merge these databases and continues to report the conflict. Automatic moves skip the affected profile until its history is shared again.
+
+Close the affected tools and daemons and back up both databases with their SQLite sidecars before planning a migration. Different turn counts may reflect different history projections; they do not by themselves establish that conversation data was lost. Keep the shared rollout files and both database copies until the histories have been reconciled and verified.
+
 ### Windows: links are hard links or junctions
 
 Without Developer Mode, Windows does not let normal users create symlinks, so aims uses junctions for folders and hard links for files. Both work for sharing. Turning Developer Mode on makes later links symlinks.

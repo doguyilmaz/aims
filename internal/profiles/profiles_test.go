@@ -17,6 +17,23 @@ import (
 
 func TestMain(m *testing.M) { testutil.Main(m) }
 
+func TestApartHonorsHistoryExclusions(t *testing.T) {
+	cfg, _ := setup(t)
+	for _, name := range []string{"sessions", "archived_sessions", "state_5.sqlite", "thread_history_1.sqlite", "thread-writer-locks"} {
+		cfg.Tools["codex"].Profiles["b"].Exclude = []string{name}
+		if got := Apart(cfg, "codex", "a"); !slices.Equal(got, []string{"b"}) {
+			t.Fatalf("%s: destination with private history allowed: %v", name, got)
+		}
+		if got := Apart(cfg, "codex", "b"); !slices.Equal(got, []string{"a", "c"}) {
+			t.Fatalf("%s: source with private history allowed: %v", name, got)
+		}
+	}
+	cfg.Tools["codex"].Profiles["b"].Exclude = []string{"config.toml"}
+	if got := Apart(cfg, "codex", "a"); len(got) != 0 {
+		t.Fatalf("private settings should not block shared history: %v", got)
+	}
+}
+
 var now = time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 
 // setup makes codex profiles a, b and c, all logged in.

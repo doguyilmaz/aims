@@ -9,11 +9,60 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
 func TestMain(m *testing.M) { testutil.Main(m) }
+
+func TestSharedWriterLocks(t *testing.T) {
+	hub, profile := t.TempDir(), t.TempDir()
+	layout := New().Layout()
+	o := links.Options{Hub: hub, Dir: profile, Layout: layout}
+	links.Ensure(o)
+	name := "thread-writer-locks"
+	lock := filepath.Join(hub, name, "thread.lock")
+	testutil.Write(t, lock, "")
+	a, err := os.Stat(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.Stat(filepath.Join(profile, name, "thread.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(a, b) {
+		t.Fatal("profiles do not coordinate on the same lock inode")
+	}
+	if !layout.IsHistory(name) {
+		t.Fatal("isolated histories must keep their locks private")
+	}
+
+	// An older profile already has a private lock namespace. Even --fix
+	// must preserve its files rather than merge live locks into the hub.
+	old := t.TempDir()
+	privateLock := filepath.Join(old, name, "thread.lock")
+	testutil.Write(t, privateLock, "")
+	before, _ := os.Stat(privateLock)
+	o.Dir, o.Fix = old, true
+	found := false
+	for _, r := range links.Ensure(o) {
+		if r.Name == name {
+			found = true
+			if r.Action != links.Conflict {
+				t.Fatalf("private locks were changed: %+v", r)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("private writer locks not checked")
+	}
+	after, err := os.Stat(privateLock)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("private lock inode changed")
+	}
+}
 
 func TestAnalyzer(t *testing.T) {
 	a := New()

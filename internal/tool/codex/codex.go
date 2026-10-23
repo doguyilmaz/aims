@@ -40,12 +40,13 @@ func (*Adapter) Layout() tool.Layout {
 		HomeEnv:     "CODEX_HOME",
 		DefaultHome: ".codex",
 		Shared: append(tool.Names(
-			"sessions", // rollouts: `codex resume` works across accounts
+			"sessions", "thread-writer-locks", // shared rollouts need shared writer ownership
 			"archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "AGENTS.override.md",
 			"prompts", "skills", "rules", "plugins", "memories", "session_index.jsonl", "packages",
 		), tool.Entry{Pattern: regexp.MustCompile(`^(state|memories|goals|queue|thread_history)_\d+\.sqlite$`)}),
-		SharedDirs:     []string{"sessions", "archived_sessions", "prompts", "skills"},
-		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
+		SharedDirs:     []string{"sessions", "archived_sessions", "prompts", "skills", "thread-writer-locks"},
+		LockDirs:       []string{"thread-writer-locks"},
+		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl", "thread-writer-locks"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
 		ConflictingEnv: []string{"CODEX_API_KEY"},
 		SkillsDir:      "skills",
 		Markers:        []string{"auth.json", "config.toml", "sessions", "history.jsonl"},

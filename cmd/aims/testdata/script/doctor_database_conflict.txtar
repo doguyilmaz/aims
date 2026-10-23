@@ -1,0 +1,19 @@
+# Two existing databases cannot be merged by file linking. Doctor must report
+# the incomplete sharing as a problem, including when --fix is requested.
+exec codex login
+exec aims init --yes --tools codex --integrations none
+exec aims login codex work
+cp HUB $HOME/.codex/thread_history_1.sqlite
+cp PRIVATE $HOME/.aims/profiles/codex/work/thread_history_1.sqlite
+! exec aims doctor
+stdout 'history sharing is incomplete'
+! stdout 'everything is in order'
+! exec aims doctor --fix
+stdout 'history sharing is incomplete'
+cmp $HOME/.codex/thread_history_1.sqlite HUB
+cmp $HOME/.aims/profiles/codex/work/thread_history_1.sqlite PRIVATE
+
+-- HUB --
+shared history fixture
+-- PRIVATE --
+private history fixture

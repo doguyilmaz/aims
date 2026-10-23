@@ -107,13 +107,12 @@ func newDoctorCmd(version string) *cobra.Command {
 					fix1("aims init")
 					continue
 				}
-				emails := map[string][]string{}
-				for _, ev := range profiles.EvaluateAll(cmd.Context(), cfg, config.LoadState(), a) {
+				evaluations := profiles.EvaluateAll(cmd.Context(), cfg, config.LoadState(), a)
+				for _, ev := range evaluations {
 					name := ev.Name
 					label := string(id) + "/" + name
 					if ev.Account.Email != "" {
 						label += " " + s.Dim.Render(ev.Account.Email)
-						emails[strings.ToLower(ev.Account.Email)] = append(emails[strings.ToLower(ev.Account.Email)], name)
 					}
 					var conflicts []links.Report
 					for _, r := range profiles.Sync(cfg, a, name, fix) {
@@ -137,18 +136,12 @@ func newDoctorCmd(version string) *cobra.Command {
 						ok("%s", label)
 					}
 					for _, c := range conflicts {
-						if c.Quiet {
-							fmt.Println("    " + s.Dim.Render(c.Name+": "+c.Detail))
-							continue
-						}
 						bad("%s: %s: %s", label, c.Name, c.Detail)
 					}
 				}
-				for email, names := range emails {
-					if len(names) > 1 {
-						bad("%s are the same account (%s)", strings.Join(names, " and "), email)
-						fix1("aims login " + string(id) + " " + names[len(names)-1])
-					}
+				for _, names := range duplicateAccounts(evaluations) {
+					bad("%s are the same account", strings.Join(names, " and "))
+					fix1("aims login " + string(id) + " " + names[len(names)-1])
 				}
 			}
 
@@ -201,4 +194,33 @@ func newDoctorCmd(version string) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&fix, "fix", false, "also adopt databases that look open (close the tools first)")
 	return cmd
+}
+
+// An email can belong to both a personal account and an organization. Match
+// the tenant too, as status does, and leave incomplete identities unclassified.
+func duplicateAccounts(evaluations []profiles.Evaluation) [][]string {
+	type identity struct{ email, tenant string }
+	seen := map[identity]int{}
+	var groups [][]string
+	for _, ev := range evaluations {
+		a := ev.Account
+		if a.Email == "" || a.Tenant == "" || a.Stale {
+			continue
+		}
+		id := identity{strings.ToLower(a.Email), a.Tenant}
+		i, ok := seen[id]
+		if !ok {
+			i = len(groups)
+			seen[id] = i
+			groups = append(groups, nil)
+		}
+		groups[i] = append(groups[i], ev.Name)
+	}
+	var duplicates [][]string
+	for _, names := range groups {
+		if len(names) > 1 {
+			duplicates = append(duplicates, names)
+		}
+	}
+	return duplicates
 }

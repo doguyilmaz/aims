@@ -162,6 +162,64 @@ func TestEnsureConflicts(t *testing.T) {
 	}
 }
 
+func TestWrongDanglingLinkIsConflict(t *testing.T) {
+	hub, dir := dirs(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wrong := filepath.Join(t.TempDir(), "missing")
+	path := filepath.Join(dir, "history.jsonl")
+	if err := os.Symlink(wrong, path); err != nil {
+		t.Skip(err)
+	}
+	if got := ensure(hub, dir)["history.jsonl"]; got.Action != Conflict {
+		t.Fatalf("wrong dangling link accepted: %+v", got)
+	}
+	if HistoryShared(hub, dir, layout) {
+		t.Fatal("wrong dangling history considered shared")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(hub, "history.jsonl"), path); err != nil {
+		t.Fatal(err)
+	}
+	if got := ensure(hub, dir)["history.jsonl"]; got.Action != OK {
+		t.Fatalf("correct link to a future file rejected: %+v", got)
+	}
+	if !HistoryShared(hub, dir, layout) {
+		t.Fatal("correct history links rejected")
+	}
+}
+
+func TestLargeHistoryRepair(t *testing.T) {
+	root := t.TempDir()
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	for _, size := range []int{0, 32 << 10, (96 << 10) + 17} {
+		content := strings.Repeat("x", size)
+		testutil.Write(t, a, content)
+		testutil.Write(t, b, content)
+		if !sameContent(a, b) {
+			t.Fatalf("equal histories differ at size %d", size)
+		}
+		if size > 0 {
+			testutil.Write(t, b, content[:size-1]+"y")
+			if sameContent(a, b) {
+				t.Fatalf("missed difference at end of %d bytes", size)
+			}
+		}
+	}
+	prefix, suffix := "first\n", strings.Repeat("later\n", 20000)
+	testutil.Write(t, a, prefix)
+	testutil.Write(t, b, suffix)
+	if err := appendFile(a, b); err != nil {
+		t.Fatal(err)
+	}
+	if got := testutil.Read(t, a); got != prefix+suffix {
+		t.Fatal("streamed history append lost or reordered data")
+	}
+}
+
 func TestPrivateAndDetach(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file links need developer mode on Windows")

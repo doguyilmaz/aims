@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -37,6 +38,33 @@ func setup(t *testing.T) Options {
 		testutil.Write(t, filepath.Join(home, ".aims", "profiles", "codex", n, "auth.json"), `{"tokens":{"refresh_token":"r"}}`)
 	}
 	return Options{Tool: tools.Get("codex")}
+}
+
+func TestOnFailureSkipsConflictingHistory(t *testing.T) {
+	for _, entry := range []string{"thread_history_1.sqlite", "thread-writer-locks", "sessions"} {
+		t.Run(entry, func(t *testing.T) {
+			o := setup(t)
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(cfg.Dir("codex", "b"), entry)
+			if entry == "thread_history_1.sqlite" {
+				testutil.Write(t, path, "private history")
+			} else if err := os.MkdirAll(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "c" {
+				t.Fatalf("moved into conflicting %s: %q", entry, next)
+			}
+			if validMove("codex", "a", "b") {
+				t.Fatal("explicit move accepted conflicting history")
+			}
+			if next, _, _, _ := onFailure(t.Context(), o, "b", limited); next != "" {
+				t.Fatalf("moved out of private %s: %q", entry, next)
+			}
+		})
+	}
 }
 
 func limit(t *testing.T, name string, d time.Duration) {

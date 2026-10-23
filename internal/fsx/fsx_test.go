@@ -2,6 +2,7 @@ package fsx
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -163,5 +164,58 @@ func TestLockTimesOut(t *testing.T) {
 		t.Fatal("lock not released")
 	} else {
 		u()
+	}
+}
+
+func TestLiveLockDoesNotExpire(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "slow-merge")
+	unlock, ok, err := Lock(path, 0)
+	if err != nil || !ok {
+		t.Fatalf("first lock: %v", err)
+	}
+	defer unlock()
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path+".lock", past, past); err != nil {
+		t.Fatal(err)
+	}
+	if unlockAgain, ok, err := Lock(path, 0); err != nil || ok {
+		if ok {
+			unlockAgain()
+		}
+		t.Fatalf("live lock must not expire: acquired=%v err=%v", ok, err)
+	}
+}
+
+func TestDeadLockCanBeRecovered(t *testing.T) {
+	child := exec.Command(os.Args[0], "-test.run=^$")
+	if err := child.Run(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "abandoned")
+	if err := os.WriteFile(path+".lock", []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path+".lock", past, past); err != nil {
+		t.Fatal(err)
+	}
+	unlock, ok, err := Lock(path, 0)
+	if err != nil || !ok {
+		t.Fatalf("dead lock was not recovered: %v", err)
+	}
+	unlock()
+}
+
+func TestWithLockDoesNotWriteOnTimeout(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings")
+	unlock, ok, err := Lock(path, 0)
+	if err != nil || !ok {
+		t.Fatalf("first lock: %v", err)
+	}
+	defer unlock()
+	called := false
+	err = WithLock(path, func() error { called = true; return nil })
+	if err == nil || called {
+		t.Fatalf("unlocked update: called=%v err=%v", called, err)
 	}
 }

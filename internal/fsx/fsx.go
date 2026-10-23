@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/doguyilmaz/aims/internal/proc"
 )
 
 // Home returns the user's home directory. HOME (USERPROFILE on Windows) is
@@ -212,8 +214,8 @@ func ReadJSONLenient(path string, v any) bool {
 	return ok && err == nil
 }
 
-// lockStale is how old a lock file may get before it is assumed to belong to a
-// process that died while holding it.
+// lockStale is how long to wait before checking whether a lock's owner died.
+// A slow copy or merge can hold a live lock much longer than this.
 const lockStale = 10 * time.Second
 
 // Lock takes an exclusive lock file next to path, waiting up to wait. It
@@ -238,8 +240,17 @@ func Lock(path string, wait time.Duration) (unlock func(), ok bool, err error) {
 			return nil, false, err
 		}
 		if fi := Stat(lock); fi != nil && time.Since(fi.ModTime()) > lockStale {
-			os.Remove(lock)
-			continue
+			b, readErr := os.ReadFile(lock)
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(b)))
+			if readErr == nil && parseErr == nil && pid > 0 && !proc.Alive(pid) {
+				// Another contender may have recovered the dead lock already.
+				if current := Stat(lock); current != nil && os.SameFile(fi, current) && current.ModTime().Equal(fi.ModTime()) {
+					if err := os.Remove(lock); err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return nil, false, err
+					}
+					continue
+				}
+			}
 		}
 		if time.Now().After(deadline) {
 			return nil, false, nil
@@ -256,10 +267,9 @@ func WithLock(path string, fn func() error) error {
 	if err != nil {
 		return err
 	}
-	if ok {
-		defer unlock()
+	if !ok {
+		return fmt.Errorf("timed out waiting for lock on %s", Tildify(path))
 	}
-	// Without the lock after 3s: better to risk a lost update than to hang a
-	// command forever.
+	defer unlock()
 	return fn()
 }

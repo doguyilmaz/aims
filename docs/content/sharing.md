@@ -38,12 +38,13 @@ Private to each profile: `.credentials.json` (or the macOS keychain entry) and `
 | Shared | What it is | History |
 | --- | --- | --- |
 | `sessions/`, `archived_sessions/` | conversations | yes |
+| `thread-writer-locks/` | prevents two processes from writing the same shared conversation | yes |
 | `history.jsonl` | prompt history | yes |
 | `memories/`, `state_*.sqlite`, `goals_*.sqlite` and similar | memory and session databases | yes |
 | `config.toml` | settings, MCP servers, profiles | |
 | `AGENTS.md`, `prompts/`, `skills/`, `rules/`, `plugins/` | your instructions and customizations | |
 
-Private to each profile: `auth.json` (or the OS keyring entry).
+Private to each profile: `auth.json` (or the OS keyring entry). Daemon processes and their control sockets also remain private: sharing history does not mean sharing an authenticated running server.
 
 ## Keeping one entry private
 
@@ -64,9 +65,21 @@ Tools often save a file by writing a new one and renaming it over the old, which
 - For a plain file in both places, the newer one wins and the other is kept next to it as a backup.
 - Prompt history files (`.jsonl`) are appended, not replaced.
 - A database that may be open (its `-wal` file is not empty) is left alone until you close the tool and run `aims doctor --fix`.
+- If both the profile and hub already have a database with the same name, both are kept. `--fix` does not merge them or choose a winner. Doctor reports incomplete history sharing and exits with an error.
+- An existing private `thread-writer-locks/` directory is never merged, even with `--fix`: replacing a lock file could bypass a live writer's lock. See [migrating writer locks](../troubleshooting#private-writer-locks).
 
 `aims doctor` and `aims sync` run the same repair for every profile and report anything that needs a decision.
 
 ## Changing the mode later
 
-Edit `share` in the config file. On the next launch, entries the profile should no longer share are replaced: settings with a private copy, history with an empty folder, so work conversations never copy into another account's folder. Going back to `all` merges the profile's own history into the hub.
+Edit `share` in the config file. On the next launch, entries the profile should no longer share are replaced: settings with a private copy, history with an empty folder, so work conversations never copy into another account's folder. Going back to `all` merges history folders, but existing databases and writer lock directories may require the steps above. Close the tools before changing sharing modes.
+
+Automatic moves require shared history on both profiles. A profile using `settings` or `none`, excluding a history entry, or still holding a private history database or writer lock directory cannot move a conversation to another account or receive one from it. aims checks existing links before choosing another profile and again before stopping the current session for a move.
+
+## Runtime cost and disk use
+
+Once links are in place, profiles access the same files. Normal synchronization checks the home directory's entries and link targets; it does not read database contents, walk conversation directories, copy history, or produce recurring backups. The move checks are also metadata-only and do not call a model or a provider API.
+
+Repairs run when a tool starts or when you explicitly run `aims sync` or `aims doctor`; there is no background migration loop. If a tool replaces a link, the next repair may need to move or merge that entry. On the same filesystem, moves use rename rather than making a second copy. Across filesystems, a move must copy before removing the source. Comparing duplicate files and appending prompt history stream data with bounded memory.
+
+Backups are retained for actual conflicts, not on every launch. Existing independent databases remain untouched until a deliberate migration reconciles them; aims cannot safely discard one merely because the other looks newer. Do not change sharing or migrate history while the affected tools are running.

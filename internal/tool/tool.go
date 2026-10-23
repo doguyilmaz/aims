@@ -169,6 +169,9 @@ type Layout struct {
 	Shared []Entry
 	// SharedDirs are created in the hub up front so a profile never forks them.
 	SharedDirs []string
+	// LockDirs coordinate writers to shared history. Existing private lock
+	// directories must never be merged or replaced while a tool may use them.
+	LockDirs []string
 	// History is conversation data: a profile that stops sharing starts with
 	// it empty rather than with a copy.
 	History []Entry

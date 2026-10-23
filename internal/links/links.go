@@ -193,9 +193,35 @@ func sameContent(a, b string) bool {
 	if fa == nil || fb == nil || fa.Size() != fb.Size() {
 		return false
 	}
-	ba, err1 := os.ReadFile(a)
-	bb, err2 := os.ReadFile(b)
-	return err1 == nil && err2 == nil && bytes.Equal(ba, bb)
+	if os.SameFile(fa, fb) {
+		return true
+	}
+	left, err := os.Open(a)
+	if err != nil {
+		return false
+	}
+	defer left.Close()
+	right, err := os.Open(b)
+	if err != nil {
+		return false
+	}
+	defer right.Close()
+	// Repairs can encounter multi-GB rollouts. Compare in fixed-size chunks
+	// rather than keeping two entire histories in memory.
+	ba, bb := make([]byte, 32<<10), make([]byte, 32<<10)
+	for {
+		na, ea := io.ReadFull(left, ba)
+		nb, eb := io.ReadFull(right, bb)
+		if na != nb || !bytes.Equal(ba[:na], bb[:nb]) {
+			return false
+		}
+		if ea == io.EOF || ea == io.ErrUnexpectedEOF {
+			return ea == eb
+		}
+		if ea != nil || eb != nil {
+			return false
+		}
+	}
 }
 
 // mergeDir moves src's contents into dst without overwriting anything, then
@@ -280,7 +306,7 @@ func ensureOne(o Options, name string) (Report, error) {
 
 	switch {
 	case lfi != nil && lfi.Mode()&fs.ModeSymlink != 0, lfi != nil && isJunction(link):
-		if pointsTo(link, target) || (fsx.Stat(link) == nil && hfi == nil) {
+		if pointsTo(link, target) {
 			r.Action = OK
 			return r, nil
 		}
@@ -313,6 +339,13 @@ func ensureOne(o Options, name string) (Report, error) {
 		return r, nil
 
 	case lfi.IsDir():
+		if slices.Contains(o.Layout.LockDirs, name) {
+			// Moving or deduplicating even an empty lock file changes its
+			// inode and can let two processes own the same conversation.
+			// --fix does not establish that every tool has been stopped.
+			r.Action, r.Detail = Conflict, "private writer locks; close all instances of the tool, move this directory aside, then run `aims sync`"
+			return r, nil
+		}
 		if hfi == nil {
 			if err := move(link, target); err != nil {
 				return r, err
@@ -352,7 +385,7 @@ func ensureOne(o Options, name string) (Report, error) {
 		}
 		r.Action, r.Quiet = Conflict, hfi != nil
 		if hfi != nil {
-			r.Detail = "this profile and the shared folder each have their own database; its threads stay with this profile"
+			r.Detail = "this profile and the shared folder each have their own database; history sharing is incomplete; both copies are kept, including with --fix"
 		} else {
 			r.Detail = "the database is open; close the tool and run `aims doctor --fix`"
 		}
@@ -406,16 +439,55 @@ func ensureOne(o Options, name string) (Report, error) {
 	return r, makeLink(target, link, false)
 }
 
+// HistoryShared checks existing history entries without reading their contents
+// or walking history directories. Missing entries can be linked by the next
+// Sync; existing private copies must be reconciled before a conversation moves.
+func HistoryShared(hub, dir string, layout tool.Layout) bool {
+	if fsx.Real(hub) == fsx.Real(dir) {
+		return true
+	}
+	if fsx.Inside(dir, hub) || fsx.Inside(hub, dir) {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return errors.Is(err, fs.ErrNotExist)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !layout.IsShared(name) || !layout.IsHistory(name) {
+			continue
+		}
+		path, target := filepath.Join(dir, name), filepath.Join(hub, name)
+		if entry.Type()&fs.ModeSymlink != 0 || isJunction(path) {
+			if !pointsTo(path, target) {
+				return false
+			}
+			continue
+		}
+		local, err := os.Stat(path)
+		if err != nil {
+			return false
+		}
+		shared, err := os.Stat(target)
+		if err != nil || !os.SameFile(local, shared) {
+			return false
+		}
+	}
+	return true
+}
+
 func appendFile(dst, src string) error {
-	b, err := os.ReadFile(src)
+	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
+	defer in.Close()
 	f, err := os.OpenFile(dst, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(b); err != nil {
+	if _, err := io.Copy(f, in); err != nil {
 		f.Close()
 		return err
 	}
