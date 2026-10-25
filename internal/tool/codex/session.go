@@ -64,10 +64,17 @@ var resumeFlags = []string{"--last", "--all", "--include-non-interactive"}
 // ResumeArgs keeps the options of args and drops the command and its words:
 // the prompt, or resume's or fork's conversation. Which options take a
 // value comes from the installed codex's help, and from valueFlags when
-// that cannot be read.
-func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]string, error) {
+// that cannot be read. A resumed conversation also drops the options that
+// set it up (setupFlags): codex restores the model, effort and approvals it
+// had at its last turn, which the options would override.
+func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, error) {
 	arity := optionArity(bin)
 	var out []string
+	keep := func(seg []string) {
+		if r.ID == "" || !setsUp(seg) {
+			out = append(out, seg...)
+		}
+	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		name, _, inline := strings.Cut(a, "=")
@@ -76,29 +83,48 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 			i = len(args)
 		case slices.Contains(resumeFlags, a) || !strings.HasPrefix(a, "-"):
 		case inline || arity[name] == tool.ArgNone:
-			out = append(out, a)
+			keep(args[i : i+1])
 		case arity[name] == tool.ArgVariadic:
 			end := i + 1
 			for end < len(args) && !strings.HasPrefix(args[end], "-") {
 				end++
 			}
-			out = append(out, args[i:end]...)
+			keep(args[i:end])
 			i = end - 1
 		case arity[name] == tool.ArgOptional && (i+1 >= len(args) || strings.HasPrefix(args[i+1], "-")):
-			out = append(out, a)
+			keep(args[i : i+1])
 		default:
-			out = append(out, args[i:min(i+2, len(args))]...)
+			keep(args[i:min(i+2, len(args))])
 			i++
 		}
 	}
-	if id == "" {
+	if r.ID == "" {
 		return out, nil
 	}
-	out = append(out, "resume", id)
-	if prompt != "" {
-		out = append(out, "--", prompt)
+	out = append(out, "resume", r.ID)
+	if r.Prompt != "" {
+		out = append(out, "--", r.Prompt)
 	}
 	return out, nil
+}
+
+// setupFlags and setupKeys (of -c) set up the model, effort and approvals.
+var (
+	setupFlags = []string{"-m", "--model", "-a", "--ask-for-approval", "-s", "--sandbox", "--full-auto", "--dangerously-bypass-approvals-and-sandbox", "--yolo"}
+	setupKeys  = []string{"model", "model_reasoning_effort", "model_reasoning_summary", "model_verbosity", "plan_mode_reasoning_effort", "approval_policy", "approvals_reviewer", "sandbox_mode", "service_tier"}
+)
+
+// setsUp reports whether an option and its value set the conversation up.
+func setsUp(seg []string) bool {
+	name, value, _ := strings.Cut(seg[0], "=")
+	if name == "-c" || name == "--config" {
+		if value == "" && len(seg) > 1 {
+			value = seg[1]
+		}
+		key, _, _ := strings.Cut(value, "=")
+		return slices.Contains(setupKeys, strings.TrimSpace(key))
+	}
+	return slices.Contains(setupFlags, name)
 }
 
 // optionArity is valueFlags, with what the help of codex and of its resume

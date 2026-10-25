@@ -84,10 +84,19 @@ type Supervisor interface {
 	// Watch returns the args to start the session with, and poll, which
 	// reports the turns that ended since it was last called.
 	Watch(w Watch) (args []string, poll func() []SessionEvent, err error)
-	// ResumeArgs turns args into ones that resume conversation id instead of
-	// starting one, and send prompt first when it is not "". With id "" they
-	// start a new conversation without args' prompt.
-	ResumeArgs(bin string, args []string, id, prompt string) ([]string, error)
+	// ResumeArgs turns args into ones that resume conversation r.ID instead
+	// of starting one, as it was set up at its last turn, and send r.Prompt
+	// first when it is not "". With r.ID "" they start a new conversation
+	// without args' prompt.
+	ResumeArgs(bin string, args []string, r Resume) ([]string, error)
+}
+
+// Resume is the conversation a session restarts on.
+type Resume struct {
+	ID, Prompt string
+	// Transcript is its file, when the tool said; Mode its permission mode
+	// at the last hook, "" when unknown.
+	Transcript, Mode string
 }
 
 // Watch describes a supervised run.
@@ -132,6 +141,8 @@ type SessionEvent struct {
 	// Lost: aims cannot tell which conversation is the session's, so it
 	// does not follow it.
 	Lost bool `json:"lost,omitempty"`
+	// Mode is the conversation's permission mode, when the tool says.
+	Mode string `json:"mode,omitempty"`
 }
 
 // Hooker reads what a tool passes to the hook `aims hook <tool>`.

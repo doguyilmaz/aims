@@ -97,7 +97,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return Result{Code: 127, Profile: name}, err
 		}
 
-		var session, transcript string
+		var session, transcript, mode string
 		var wake *profiles.Pick
 		var carry []tool.SessionEvent
 		running := false // a turn is under way: no move that is not forced
@@ -137,6 +137,9 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				}
 				if ev.Transcript != "" {
 					transcript = ev.Transcript
+				}
+				if ev.Mode != "" {
+					mode = ev.Mode
 				}
 				switch {
 				case ev.Lost:
@@ -213,7 +216,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				}
 			}
 			var err error
-			if resume, err = sv.ResumeArgs(bin, o.Args, id, prompt); err != nil {
+			if resume, err = sv.ResumeArgs(bin, o.Args, tool.Resume{ID: id, Prompt: prompt, Transcript: transcript, Mode: mode}); err != nil {
 				wake = nil
 				continue // stay: a resume that cannot be built would lose the conversation
 			}
