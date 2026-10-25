@@ -120,10 +120,22 @@ func optionArity(bin string) map[string]tool.Arity {
 }
 
 // noDaemon keeps the conversation in the codex process aims stops: a shared
-// app-server daemon would outlive it and keep the conversation loaded. A
-// config override, unlike --disable, is fine with a codex that does not
-// know the feature.
-var noDaemon = []string{"-c", "features.daemon_auto_start=false"}
+// app-server daemon would outlive it and keep the conversation loaded.
+// --no-daemon also leaves a daemon that already runs alone, where the config
+// override would ask to restart it with that setting for every client. A
+// codex too old for the flag gets the override, which is fine with a codex
+// that does not know the feature.
+func noDaemon(bin string, args []string) []string {
+	if tool.HasFlag(args, "--no-daemon") {
+		return nil
+	}
+	if bin != "" {
+		if help, code, err := proc.Output(bin, []string{"--help"}, nil, 10*time.Second); err == nil && code == 0 && strings.Contains(help, "--no-daemon") {
+			return []string{"--no-daemon"}
+		}
+	}
+	return []string{"-c", "features.daemon_auto_start=false"}
+}
 
 // Watch follows the conversation's rollout, the JSONL file codex writes it
 // to. Codex has no hook for a turn that fails, but the rollout records how
@@ -141,7 +153,7 @@ func (a *Adapter) Watch(w tool.Watch) ([]string, func() []tool.SessionEvent, err
 			f.find(next)
 		}
 	}
-	args := slices.Clone(noDaemon)
+	args := noDaemon(w.Home.Bin, w.Args)
 	// Codex hands its shell commands a filtered environment.
 	for _, k := range slices.Sorted(maps.Keys(w.Env)) {
 		args = append(args, "-c", "shell_environment_policy.set."+k+"="+strconv.Quote(w.Env[k]))

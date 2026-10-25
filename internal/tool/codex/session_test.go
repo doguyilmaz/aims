@@ -112,7 +112,7 @@ func TestFollow(t *testing.T) {
 
 	// A resumed conversation is read from where it was.
 	args, poll, _ := New().Watch(tool.Watch{Args: []string{"resume", "mine"}, Home: tool.Home{Dir: home}, Dir: "/work", Since: now})
-	if !slices.Equal(args[:2], noDaemon) {
+	if !slices.Equal(args[:2], []string{"-c", "features.daemon_auto_start=false"}) {
 		t.Fatalf("daemon left on: %q", args)
 	}
 	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)

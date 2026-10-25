@@ -78,7 +78,7 @@ Codex keeps some state in SQLite databases. aims moves a database into the share
 
 Another Codex process owns the conversation's writer lock. Close that conversation in its other terminal or app, then press `r` in the waiting terminal. A background daemon can keep the conversation loaded after the original terminal closes.
 
-Supervised aims sessions disable `daemon_auto_start`, but that does not stop daemons started earlier. If an old daemon owns the conversation, stop that specific profile's daemon after finishing any work it hosts. For a profile called `personal` in the default aims directory on macOS or Linux:
+Supervised aims sessions run with `--no-daemon`, but a session started another way (`aims codex@work`, plain `codex`, an editor) can start a daemon that keeps running after it closes; `aims doctor --fix` cannot set a profile's private writer locks aside while one holds them. If an old daemon owns the conversation, stop that specific profile's daemon after finishing any work it hosts. For a profile called `personal` in the default aims directory on macOS or Linux:
 
 ```bash
 CODEX_HOME="$HOME/.aims/profiles/codex/personal" command codex app-server daemon stop

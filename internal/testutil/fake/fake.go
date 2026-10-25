@@ -325,10 +325,14 @@ func Codex() int {
 	toml := filepath.Join(dir, "config.toml")
 	has := func(n string) bool { return exists(filepath.Join(dir, n)) }
 	loggedIn := exists(auth)
+	if slices.Contains(args, "--help") {
+		fmt.Println("Options:\n      --no-daemon\n          Run without the shared background server")
+		return 0
+	}
 	// aims runs a conversation it follows without the app-server daemon.
-	supervised := len(args) > 1 && args[0] == "-c" && args[1] == "features.daemon_auto_start=false"
+	supervised := len(args) > 0 && args[0] == "--no-daemon"
 	if supervised {
-		args = args[2:]
+		args = args[1:]
 		for len(args) > 1 && args[0] == "-c" && strings.HasPrefix(args[1], "shell_environment_policy.set.") {
 			args = args[2:]
 		}
