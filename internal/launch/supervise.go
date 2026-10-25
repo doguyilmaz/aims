@@ -75,8 +75,15 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		if err := os.Mkdir(dir, 0o700); err != nil {
 			return Result{Code: 1, Profile: name}, err
 		}
+		var child *proc.Attached
+		pid := func() int {
+			if child == nil {
+				return 0
+			}
+			return child.Pid()
+		}
 		watched, poll, err := sv.Watch(tool.Watch{
-			Args: args, Self: self, RunDir: dir, Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now(),
+			Args: args, Self: self, RunDir: dir, Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now(), PID: pid,
 			Env: map[string]string{profiles.RunVar: dir, profiles.SessionVar: string(a.ID()) + ":" + name},
 		})
 		if err != nil {
@@ -85,7 +92,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: profiles.Watched, Dir: workDir(o), Started: started})
 		env := sessionEnv(o, cfg, name)
 		env = append(env, profiles.RunVar+"="+dir)
-		child, err := proc.StartAttached(bin, watched, env, o.Dir)
+		child, err = proc.StartAttached(bin, watched, env, o.Dir)
 		if err != nil {
 			return Result{Code: 127, Profile: name}, err
 		}
@@ -120,6 +127,11 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			var heldFor, heldPrompt string
 			for _, ev := range evs {
 				lastEvent = time.Now()
+				// Another conversation was opened in the tool: a continue
+				// waiting for a reset was the last one's.
+				if ev.Opened && ev.Session != "" && ev.Session != session {
+					running, wake = false, nil
+				}
 				if ev.Session != "" {
 					session = ev.Session
 				}
@@ -127,6 +139,8 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 					transcript = ev.Transcript
 				}
 				switch {
+				case ev.Lost:
+					o.tell(Warn, "%s: another conversation in this folder could be this session's; it does not move at a limit", a.ID())
 				case ev.Opened:
 				case ev.Started && ev.HeldFor != "":
 					heldFor, heldPrompt = ev.HeldFor, ev.Prompt
@@ -206,7 +220,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			// A pending move can outlive a change to sharing or a tool replacing
 			// a link. Recheck before stopping the process that owns the conversation.
 			if next != name && !validMove(a.ID(), name, next) {
-				o.say(Warn, "%s: history is no longer shared with %s; staying on %s (aims doctor)", a.ID(), next, name)
+				o.tell(Warn, "%s: history is no longer shared with %s; staying on %s (aims doctor)", a.ID(), next, name)
 				wake, chosen = nil, ""
 				continue
 			}
@@ -220,7 +234,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		}
 		ticker.Stop()
 		child.Stop(stopGrace)
-		o.say(Info, "%s: %s", a.ID(), why)
+		o.tell(Info, "%s: %s", a.ID(), why)
 		args, name = resume, next
 	}
 }
@@ -261,12 +275,13 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 	apart := profiles.Apart(cfg, a.ID(), name)
 	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
 	if pick.Name == "" && len(apart) > 0 {
-		o.say(Warn, "%s: %s cannot receive this conversation because history is not fully shared (aims doctor)", a.ID(), profiles.Names(apart, ", "))
+		o.tell(Warn, "%s: %s cannot receive this conversation because history is not fully shared (aims doctor)", a.ID(), profiles.Names(apart, ", "))
 	}
 	switch {
 	case pick.Name != "" && pick.Name != name:
 		return pick.Name, continuePrompt, name + " hit " + failureText(f) + "; continuing this conversation on " + pick.Name, nil
 	case pick.Name == "" && pick.Soonest != "":
+		o.tell(Warn, "%s: every account is limited; this conversation continues on %s at %s", a.ID(), pick.Soonest, pick.ReadyAt.Add(wakeAfter).Local().Format("15:04"))
 		return "", "", "", &pick
 	}
 	return "", "", "", nil

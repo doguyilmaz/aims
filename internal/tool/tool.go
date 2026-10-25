@@ -102,6 +102,8 @@ type Watch struct {
 	Dir string
 	// Since is when this run started.
 	Since time.Time
+	// PID is the tool's process id once it has started, 0 before.
+	PID func() int
 	// Env is what the commands the session runs (a shell command, the aims
 	// MCP server) must see, so `aims move` finds its session.
 	Env map[string]string
@@ -127,6 +129,9 @@ type SessionEvent struct {
 	// is the provider's message.
 	Failure Failure `json:"failure,omitempty"`
 	Text    string  `json:"text,omitempty"`
+	// Lost: aims cannot tell which conversation is the session's, so it
+	// does not follow it.
+	Lost bool `json:"lost,omitempty"`
 }
 
 // Hooker reads what a tool passes to the hook `aims hook <tool>`.

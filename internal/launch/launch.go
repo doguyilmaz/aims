@@ -67,6 +67,13 @@ func (o *Options) say(l Level, format string, args ...any) {
 	}
 }
 
+// tell is say for a supervised session, whose tool may cover what aims
+// prints: the terminal shows it as a desktop notification too.
+func (o *Options) tell(l Level, format string, args ...any) {
+	o.say(l, format, args...)
+	proc.Notify(fmt.Sprintf(format, args...))
+}
+
 // busyFor is how long a profile rests after a short-lived rate limit.
 const busyFor = 2 * time.Minute
 

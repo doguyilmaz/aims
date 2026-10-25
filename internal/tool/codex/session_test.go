@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,8 +164,11 @@ func TestFollowOnly(t *testing.T) {
 
 	poll = watch()
 	testutil.Write(t, filepath.Join(day, "rollout-4-other.jsonl"), meta("other", "codex-tui", "user", now)+limit(now))
-	if evs := poll(); len(evs) != 0 {
+	if evs := poll(); len(evs) != 1 || !evs[0].Lost {
 		t.Fatalf("two candidates: %+v", evs)
+	}
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("lost told twice: %+v", evs)
 	}
 }
 
@@ -191,5 +195,132 @@ func TestFollowLinkedSessions(t *testing.T) {
 	appendLine(`{"type":"event_msg","payload":{"type":"task_complete","completed_at":` + strconv.FormatInt(now.Unix()+1, 10) + `}}`)
 	if evs := poll(); len(evs) != 1 || evs[0].Session != "old" {
 		t.Fatalf("linked: %+v", evs)
+	}
+}
+
+// With codex's open files readable, the follower goes with the conversation
+// codex writes: one opened inside codex long after the run started, back
+// to an earlier one, and not another codex's in the same directory.
+func TestTrackOpenRollout(t *testing.T) {
+	home := t.TempDir()
+	since := time.Now().Add(-time.Minute)
+	every, w, c := openEvery, writing, children
+	t.Cleanup(func() { openEvery, writing, children = every, w, c })
+	openEvery = 0
+	held := map[int][]string{}
+	writing = func(pids ...int) (map[int][]string, bool) {
+		out := map[int][]string{}
+		for _, p := range pids {
+			out[p] = held[p]
+		}
+		return out, true
+	}
+	children = func(pid int) []int { return []int{pid + 1} }
+
+	rollout := func(day time.Time, id string, source string, lines ...string) string {
+		p := filepath.Join(home, "sessions", day.Format("2006/01/02"), "rollout-x-"+id+".jsonl")
+		meta := `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"/work","originator":"codex-tui","thread_source":"` + source + `","timestamp":"` + day.UTC().Format(time.RFC3339Nano) + `"}}`
+		testutil.Write(t, p, strings.Join(append([]string{meta}, lines...), "\n")+"\n")
+		return p
+	}
+	// Writes are a second apart on disk; turns end now, after the last look.
+	mtime := since
+	appendTo := func(p, line string) {
+		f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
+		_, _ = f.WriteString(line + "\n")
+		f.Close()
+		mtime = mtime.Add(time.Second)
+		_ = os.Chtimes(p, mtime, mtime)
+	}
+	limit := func(at time.Time) string {
+		return `{"type":"event_msg","payload":{"type":"task_complete","completed_at":` + strconv.FormatInt(at.Unix(), 10) + `,"error":{"message":"x","codex_error_info":"usage_limit_exceeded"}}}`
+	}
+	done := func(at time.Time) string {
+		return `{"type":"event_msg","payload":{"type":"task_complete","completed_at":` + strconv.FormatInt(at.Unix(), 10) + `}}`
+	}
+
+	old := since.AddDate(0, 0, -3)
+	a := rollout(old, "a", "user", limit(old))
+	b := rollout(old, "b", "user", done(old))
+	guardian := rollout(since, "g", "guardian_review")
+	theirs := rollout(since, "theirs", "user")
+	_, poll, _ := New().Watch(tool.Watch{Home: tool.Home{Dir: home}, Dir: "/work", Since: since, PID: func() int { return 41 }})
+
+	// 41 is a wrapper: the first look finds nothing it writes, the next
+	// looks among its children.
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("nothing open: %+v", evs)
+	}
+
+	// /resume of an old conversation: its history is not replayed.
+	held[42] = []string{a, guardian}
+	appendTo(a, `{"type":"event_msg","payload":{"type":"thread_settings_applied"}}`)
+	appendTo(theirs, limit(time.Now()))
+	if evs := poll(); len(evs) != 1 || !evs[0].Opened || evs[0].Session != "a" {
+		t.Fatalf("resumed in codex: %+v", evs)
+	}
+	appendTo(a, limit(time.Now()))
+	appendTo(guardian, limit(time.Now()))
+	if evs := poll(); len(evs) != 1 || evs[0].Session != "a" || evs[0].Failure != tool.FailLimit {
+		t.Fatalf("a's limit: %+v", evs)
+	}
+
+	// /resume of b keeps a open; b is written last, and what it wrote since
+	// the last look counts.
+	held[42] = []string{a, b, guardian}
+	appendTo(b, done(time.Now().Add(time.Second)))
+	if evs := poll(); len(evs) != 2 || !evs[0].Opened || evs[0].Session != "b" || evs[1].Failure != tool.FailNone {
+		t.Fatalf("switched to b: %+v", evs)
+	}
+	// Back to a: its limit, seen before, is not reported again, nor a turn
+	// without a time.
+	appendTo(a, `{"type":"event_msg","payload":{"type":"task_complete"}}`)
+	if evs := poll(); len(evs) != 1 || !evs[0].Opened || evs[0].Session != "a" {
+		t.Fatalf("back to a: %+v", evs)
+	}
+
+	// /new: codex is still writing the new conversation's first line.
+	fresh := filepath.Join(home, "sessions", since.Format("2006/01/02"), "rollout-x-c.jsonl")
+	testutil.Write(t, fresh, `{"type":"session_meta","payload":{"id":"c","cwd":"/wo`)
+	held[42] = []string{a, b, fresh, guardian}
+	_ = os.Chtimes(fresh, mtime.Add(time.Minute), mtime.Add(time.Minute))
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("half a first line: %+v", evs)
+	}
+	testutil.Write(t, fresh, `{"type":"session_meta","payload":{"id":"c","cwd":"/work","originator":"codex-tui","thread_source":"user"}}`+"\n")
+	_ = os.Chtimes(fresh, mtime.Add(2*time.Minute), mtime.Add(2*time.Minute))
+	if evs := poll(); len(evs) != 1 || evs[0].Session != "c" {
+		t.Fatalf("new conversation: %+v", evs)
+	}
+}
+
+// Where codex's open files can be read, two conversations in the folder are
+// no reason to warn: the one codex writes settles it.
+func TestTrackNotLost(t *testing.T) {
+	home := t.TempDir()
+	now := time.Now()
+	every, w := openEvery, writing
+	t.Cleanup(func() { openEvery, writing = every, w })
+	openEvery = 0
+	writing = func(...int) (map[int][]string, bool) { return map[int][]string{}, true }
+	day := filepath.Join(home, "sessions", now.Format("2006/01/02"))
+	for _, id := range []string{"x", "y"} {
+		testutil.Write(t, filepath.Join(day, "rollout-1-"+id+".jsonl"), `{"type":"session_meta","payload":{"id":"`+id+`","cwd":"/work","originator":"codex-tui","thread_source":"user","timestamp":"`+now.UTC().Format(time.RFC3339Nano)+`"}}`+"\n")
+	}
+	_, poll, _ := New().Watch(tool.Watch{Home: tool.Home{Dir: home}, Dir: "/work", Since: now, PID: func() int { return 7 }})
+	if evs := poll(); len(evs) != 0 {
+		t.Fatalf("warned: %+v", evs)
+	}
+}
+
+// A conversation entered part way is read from a line's start.
+func TestTail(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "r.jsonl")
+	line := strings.Repeat("x", 999) + "\n"
+	testutil.Write(t, p, strings.Repeat(line, tailRead/len(line)+5))
+	off := tail(p)
+	b, _ := os.ReadFile(p)
+	if off <= 0 || off%int64(len(line)) != 0 || int64(len(b))-off > tailRead {
+		t.Fatalf("tail at %d of %d", off, len(b))
 	}
 }
