@@ -233,6 +233,53 @@ func TestEnvExistingUnsetsHome(t *testing.T) {
 	}
 }
 
+// Every profile that shares history keeps its databases in the hub; one
+// with history of its own keeps them; the adopted login is left as it is.
+func TestEnvDatabases(t *testing.T) {
+	cfg, a := setup(t)
+	hub := cfg.EnsureHub("codex")
+	cfg.Tools["codex"].Profiles["b"].Share = config.ShareSettings
+	cfg.Tools["codex"].Profiles["c"].Existing = true
+	base := []string{"CODEX_SQLITE_HOME=/stale"}
+	get := func(name string, base []string) string {
+		env, _ := Env(cfg, a, name, base)
+		for _, kv := range env {
+			if v, ok := strings.CutPrefix(kv, "CODEX_SQLITE_HOME="); ok {
+				return v
+			}
+		}
+		return "unset"
+	}
+	if v := get("a", nil); v != hub {
+		t.Errorf("shared: %q, want the hub %q", v, hub)
+	}
+	if v := get("a", []string{"CODEX_SQLITE_HOME=/mine"}); v != "/mine" {
+		t.Errorf("the user's own folder: %q", v)
+	}
+	if v := get("b", base); v != "unset" {
+		t.Errorf("own history: %q", v)
+	}
+	if v := get("c", base); v != "/stale" {
+		t.Errorf("adopted login: %q", v)
+	}
+	// An index of its own is no reason to stay; a database with data is,
+	// until it is adopted into the hub.
+	dir := cfg.Dir("codex", "a")
+	testutil.Write(t, filepath.Join(dir, "thread_history_1.sqlite"), "index")
+	if v := get("a", nil); v != hub || !StateShared(cfg, a, "a") {
+		t.Errorf("own index: %q", v)
+	}
+	testutil.Write(t, filepath.Join(dir, "goals_1.sqlite"), "goals")
+	if v := get("a", nil); v != "unset" || StateShared(cfg, a, "a") {
+		t.Errorf("own goals: %q", v)
+	}
+	_ = os.Remove(filepath.Join(dir, "goals_1.sqlite"))
+	cfg.Tools["codex"].Profiles["a"].Exclude = []string{"sessions"}
+	if v := get("a", base); v != "unset" {
+		t.Errorf("private history: %q", v)
+	}
+}
+
 func TestDuration(t *testing.T) {
 	for d, want := range map[time.Duration]string{
 		0: "now", 20 * time.Second: "1m", 45 * time.Minute: "45m", 2 * time.Hour: "2h",

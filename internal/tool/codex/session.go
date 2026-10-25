@@ -293,6 +293,9 @@ func (f *follower) track() []tool.SessionEvent {
 	}
 	last := f.looked
 	f.looked = time.Now()
+	if f.holder != 0 && !proc.Alive(f.holder) {
+		f.holder, f.wide = 0, true
+	}
 	pids := []int{f.holder}
 	if f.holder == 0 {
 		pids = []int{pid}

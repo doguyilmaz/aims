@@ -114,11 +114,13 @@ func newDoctorCmd(version string) *cobra.Command {
 					if ev.Account.Email != "" {
 						label += " " + s.Dim.Render(ev.Account.Email)
 					}
-					var conflicts []links.Report
+					var conflicts, unused []links.Report
 					for _, r := range profiles.Sync(cfg, a, name, fix) {
 						switch r.Action {
 						case links.Conflict:
 							conflicts = append(conflicts, r)
+						case links.Unused:
+							unused = append(unused, r)
 						case links.Merged, links.Adopted, links.Detached:
 							fmt.Println("    " + s.Dim.Render("repaired "+r.Name+": "+string(r.Action)))
 						}
@@ -137,6 +139,9 @@ func newDoctorCmd(version string) *cobra.Command {
 					}
 					for _, c := range conflicts {
 						bad("%s: %s: %s", label, c.Name, c.Detail)
+					}
+					for _, u := range unused {
+						fmt.Println("    " + s.Dim.Render(u.Name+": "+u.Detail))
 					}
 				}
 				for _, names := range duplicateAccounts(evaluations) {

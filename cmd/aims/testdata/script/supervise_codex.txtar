@@ -5,6 +5,11 @@ exec aims init --yes --tools codex --integrations none
 exec aims login codex work
 env FAKE_LINGER=5s
 
+# Profiles that share history keep their databases in ~/.codex, so a
+# database a new Codex adds is shared from the start.
+exec aims env codex work
+stdout 'export CODEX_SQLITE_HOME=.*\.codex'
+
 # personal hits its usage limit mid-session: aims stops codex and resumes the
 # same conversation on work, keeping the options.
 cp LIMITED $HOME/.codex/LIMITED

@@ -3,6 +3,7 @@
 package proc
 
 import (
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -50,6 +51,30 @@ func Writing(pids ...int) (map[int][]string, bool) {
 		}
 	}
 	return files, true
+}
+
+// Holding reports whether a process has a file in dir open. ok is false
+// when this system cannot tell.
+func Holding(dir string) (held, ok bool) {
+	bin, err := exec.LookPath("lsof")
+	if err != nil {
+		bin = "/usr/sbin/lsof"
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return false, false
+	}
+	// -t prints only pids; lsof exits 1 both when nothing has the folder's
+	// files open and on an error, which prints a message instead.
+	out, code, err := CombinedOutput(bin, []string{"-w", "-n", "-P", "-t", "+d", dir}, nil, 10*time.Second)
+	if err != nil || (code != 0 && code != 1) {
+		return false, false
+	}
+	for f := range strings.FieldsSeq(out) {
+		if _, err := strconv.Atoi(f); err != nil {
+			return false, false
+		}
+	}
+	return strings.TrimSpace(out) != "", true
 }
 
 // Children lists the processes pid started.

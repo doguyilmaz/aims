@@ -88,15 +88,15 @@ Use the profile's actual folder shown by aims; an account using the original log
 
 ### Private writer locks
 
-New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory. aims reports this and leaves it intact, including with `--fix`.
+New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory, and aims warns about it on launch. A lock file is open for as long as Codex has the conversation open, so `aims doctor --fix` checks that no process has a file in the profile's directory open, sets the directory aside (as `thread-writer-locks.aims-<profile>-<time>`) and links the shared one. While any Codex still uses it, `--fix` leaves it as it is: close every Codex using that profile, including the app and background daemons, and run it again. Do not delete lock files to bypass an active writer.
 
-To migrate an old profile, first close **all Codex instances using the profile or hub**, including their background daemons. Move the profile's private `thread-writer-locks/` directory to a backup outside the profile, then run `aims sync` and `aims doctor` before reopening Codex. Leave the hub's lock directory in place. Do not perform this migration while a conversation is running.
+### "the tool uses the shared copy; delete this one to free its space"
+
+aims starts every Codex profile that shares history with `CODEX_SQLITE_HOME` set to `~/.codex`, so all of them read and write the same databases, including ones a new Codex version adds. An index or log database still in the profile folder (`thread_history_*.sqlite`, `logs_*.sqlite`), created by Codex before aims did this, is no longer read: the index is rebuilt from the shared rollout files, so the conversations themselves are not in it. Once no Codex started before the update is running, you can delete the file and its `-wal` and `-shm` sidecars. aims never deletes it itself.
 
 ### "history sharing is incomplete"
 
-Both the profile and hub have a database such as `thread_history_1.sqlite`. aims preserves both rather than overwrite potentially different history. `aims doctor --fix` cannot merge these databases and continues to report the conflict. Automatic moves skip the affected profile until its history is shared again.
-
-Close the affected tools and daemons and back up both databases with their SQLite sidecars before planning a migration. Different turn counts may reflect different history projections; they do not by themselves establish that conversation data was lost. Keep the shared rollout files and both database copies until the histories have been reconciled and verified.
+Both the profile and the hub have a database that holds data, such as `goals_1.sqlite`. aims keeps both, and the profile keeps using its own (aims does not set `CODEX_SQLITE_HOME` for it), so nothing it wrote is hidden. `aims doctor --fix` cannot merge the two, and automatic moves skip the profile until its history is shared again. Close the affected tools and daemons and back up both databases with their SQLite sidecars before reconciling them; once only the hub's is left, the profile reads the shared databases.
 
 ### Windows: links are hard links or junctions
 

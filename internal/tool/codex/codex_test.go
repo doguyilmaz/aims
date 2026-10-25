@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
@@ -39,28 +41,50 @@ func TestSharedWriterLocks(t *testing.T) {
 		t.Fatal("isolated histories must keep their locks private")
 	}
 
-	// An older profile already has a private lock namespace. Even --fix
-	// must preserve its files rather than merge live locks into the hub.
+	// An older profile already has a private lock namespace. While a process
+	// holds one of its locks, even --fix leaves it alone; once none does,
+	// --fix sets it aside, inodes intact, and links the shared one.
 	old := t.TempDir()
 	privateLock := filepath.Join(old, name, "thread.lock")
 	testutil.Write(t, privateLock, "")
 	before, _ := os.Stat(privateLock)
 	o.Dir, o.Fix = old, true
-	found := false
-	for _, r := range links.Ensure(o) {
-		if r.Name == name {
-			found = true
-			if r.Action != links.Conflict {
-				t.Fatalf("private locks were changed: %+v", r)
+	ensure := func() links.Report {
+		for _, r := range links.Ensure(o) {
+			if r.Name == name {
+				return r
 			}
 		}
-	}
-	if !found {
 		t.Fatal("private writer locks not checked")
+		return links.Report{}
 	}
-	after, err := os.Stat(privateLock)
-	if err != nil || !os.SameFile(before, after) {
-		t.Fatal("private lock inode changed")
+	f, err := os.OpenFile(privateLock, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, known := proc.Holding(fsx.Real(filepath.Dir(privateLock))); !known {
+		f.Close()
+		t.Skip("cannot tell which files are open here")
+	}
+	if r := ensure(); r.Action != links.Conflict {
+		t.Fatalf("held locks were changed: %+v", r)
+	}
+	if after, err := os.Stat(privateLock); err != nil || !os.SameFile(before, after) {
+		t.Fatal("held lock inode changed")
+	}
+	f.Close()
+	if r := ensure(); r.Action != links.Adopted {
+		t.Fatalf("idle locks not set aside: %+v", r)
+	}
+	aside, _ := filepath.Glob(filepath.Join(old, name+".aims-*", "thread.lock"))
+	if len(aside) != 1 {
+		t.Fatalf("set aside: %v", aside)
+	}
+	if after, err := os.Stat(aside[0]); err != nil || !os.SameFile(before, after) {
+		t.Fatal("set-aside lock inode changed")
+	}
+	if fi, err := os.Stat(filepath.Join(old, name)); err != nil || !os.SameFile(fi, fsx.Stat(filepath.Join(hub, name))) {
+		t.Fatal("shared locks not linked")
 	}
 }
 

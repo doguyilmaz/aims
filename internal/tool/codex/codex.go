@@ -46,6 +46,8 @@ func (*Adapter) Layout() tool.Layout {
 		), tool.Entry{Pattern: regexp.MustCompile(`^(state|memories|goals|queue|thread_history)_\d+\.sqlite$`)}),
 		SharedDirs:     []string{"sessions", "archived_sessions", "prompts", "skills", "thread-writer-locks"},
 		LockDirs:       []string{"thread-writer-locks"},
+		StateEnv:       "CODEX_SQLITE_HOME",
+		Disposable:     []tool.Entry{{Pattern: regexp.MustCompile(`^(thread_history|logs)_\d+\.sqlite$`)}},
 		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl", "thread-writer-locks"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
 		ConflictingEnv: []string{"CODEX_API_KEY"},
 		SkillsDir:      "skills",

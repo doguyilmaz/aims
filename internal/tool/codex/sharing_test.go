@@ -62,7 +62,7 @@ func TestSharedHistorySyncDoesNotCopy(t *testing.T) {
 				t.Fatalf("warm sync modified shared data: %+v", r)
 			}
 		}
-		if !links.HistoryShared(o.Hub, o.Dir, o.Layout) {
+		if !links.HistoryShared(o.Hub, o.Dir, o.Layout, false) {
 			t.Fatal("shared history rejected")
 		}
 	}
@@ -98,7 +98,7 @@ func BenchmarkSharedHistory(b *testing.B) {
 			b.Run("move-check", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
-					if !links.HistoryShared(o.Hub, o.Dir, o.Layout) {
+					if !links.HistoryShared(o.Hub, o.Dir, o.Layout, false) {
 						b.Fatal("history not shared")
 					}
 				}

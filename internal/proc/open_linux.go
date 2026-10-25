@@ -41,6 +41,25 @@ func writable(fdinfo string) bool {
 	return false
 }
 
+// Holding reports whether a process has a file in dir open. ok is false
+// when this system cannot tell.
+func Holding(dir string) (held, ok bool) {
+	// With hidepid, other processes are out of sight.
+	if mounts, err := os.ReadFile("/proc/self/mounts"); err != nil || strings.Contains(string(mounts), "hidepid=") {
+		return false, false
+	}
+	fds, err := filepath.Glob("/proc/[0-9]*/fd/*")
+	if err != nil || len(fds) == 0 {
+		return false, false
+	}
+	for _, fd := range fds {
+		if path, err := os.Readlink(fd); err == nil && filepath.Dir(path) == dir {
+			return true, true
+		}
+	}
+	return false, true
+}
+
 // Children lists the processes pid started.
 func Children(pid int) []int {
 	tasks, _ := filepath.Glob("/proc/" + strconv.Itoa(pid) + "/task/*/children")

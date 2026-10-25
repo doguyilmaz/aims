@@ -177,6 +177,12 @@ type Layout struct {
 	// LockDirs coordinate writers to shared history. Existing private lock
 	// directories must never be merged or replaced while a tool may use them.
 	LockDirs []string
+	// StateEnv points the tool's databases (its *.sqlite entries) at another
+	// folder; profiles that share history get the hub.
+	StateEnv string
+	// Disposable databases hold nothing the tool cannot do without: an index
+	// it rebuilds from shared files, or logs.
+	Disposable []Entry
 	// History is conversation data: a profile that stops sharing starts with
 	// it empty rather than with a copy.
 	History []Entry
@@ -192,6 +198,9 @@ type Layout struct {
 
 // IsShared reports whether a home entry is shared between profiles.
 func (l Layout) IsShared(name string) bool { return matchAny(l.Shared, name) }
+
+// IsDisposable reports whether a database can be dropped without losing data.
+func (l Layout) IsDisposable(name string) bool { return matchAny(l.Disposable, name) }
 
 // IsHistory reports whether a home entry holds conversation data.
 func (l Layout) IsHistory(name string) bool { return matchAny(l.History, name) }

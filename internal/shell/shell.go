@@ -11,6 +11,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 )
@@ -102,6 +103,9 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 		homeVar := a.Layout().HomeEnv
 		if reset {
 			lines = append(lines, unset(sh, config.PinVar(id)))
+			if v := a.Layout().StateEnv; v != "" {
+				lines = append(lines, unset(sh, v))
+			}
 			if hub := cfg.Tools[id].HubEnv; hub != "" {
 				lines = append(lines, set(sh, homeVar, hub))
 			} else {
@@ -124,6 +128,14 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 			lines = append(lines, set(sh, homeVar, v))
 		} else {
 			lines = append(lines, unset(sh, homeVar))
+		}
+		stateVar := a.Layout().StateEnv
+		switch v, keep := profiles.StateHome(cfg, a, name, os.Getenv(stateVar)); {
+		case keep:
+		case v != "":
+			lines = append(lines, set(sh, stateVar, v))
+		default:
+			lines = append(lines, unset(sh, stateVar))
 		}
 	}
 	return strings.Join(lines, "\n") + "\n", nil
