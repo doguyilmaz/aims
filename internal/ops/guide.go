@@ -2,6 +2,7 @@ package ops
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -61,11 +62,47 @@ func Tips(cfg *config.Config, report []ToolStatus) []Tip {
 			}
 		}
 	}
+	out = append(out, sharingTips(cfg)...)
 	if fsx.Stat(keepAliveFailure()) != nil {
 		out = append(out, Tip{"the login keepalive is gone and could not be set up again", "aims keepalive on"})
 	}
 	if !cfg.Failover.Auto {
 		out = append(out, Tip{"auto moves are off", `"auto": true under "failover" in ` + fsx.Tildify(filepath.Join(config.Home(), "config.json"))})
+	}
+	return out
+}
+
+// sharingTips name a profile that cannot take part in moves yet because its
+// writer locks are its own and still in use, and unused copies of
+// databases a profile still keeps.
+func sharingTips(cfg *config.Config) []Tip {
+	var out []Tip
+	for _, id := range tools.IDs() {
+		t, l, hub := cfg.Tools[id], tools.Get(id).Layout(), cfg.EnsureHub(id)
+		for _, n := range t.Order {
+			p := t.Profiles[n]
+			if p.Existing || p.ShareMode() != config.ShareAll {
+				continue
+			}
+			dir := cfg.Dir(id, n)
+			for _, d := range l.LockDirs {
+				if fi := fsx.Lstat(filepath.Join(dir, d)); fi != nil && fi.IsDir() {
+					out = append(out, Tip{fmt.Sprintf("%s/%s takes no part in moves until no %s uses it; aims then shares its writer locks", id, n, tools.Get(id).Title()), "aims doctor"})
+				}
+			}
+			var size int64
+			entries, _ := os.ReadDir(dir)
+			for _, e := range entries {
+				if e.Type().IsRegular() && l.IsDisposable(e.Name()) && fsx.Stat(filepath.Join(hub, e.Name())) != nil {
+					if fi, err := e.Info(); err == nil {
+						size += fi.Size()
+					}
+				}
+			}
+			if size >= 1<<20 && profiles.StateShared(cfg, tools.Get(id), n) {
+				out = append(out, Tip{fmt.Sprintf("%s/%s keeps unused database copies (%d MB) that can go", id, n, size>>20), "aims doctor"})
+			}
+		}
 	}
 	return out
 }

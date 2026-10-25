@@ -66,7 +66,7 @@ Tools often save a file by writing a new one and renaming it over the old, which
 - Prompt history files (`.jsonl`) are appended, not replaced.
 - A database that may be open (its `-wal` file is not empty) is left alone until you close the tool and run `aims doctor --fix`.
 - If both the profile and hub already have a Codex database with the same name, both are kept. For an index or log, Codex reads the hub's (`CODEX_SQLITE_HOME`) and doctor names the profile's copy as unused; for one that holds data, the profile keeps using its own and doctor reports incomplete history sharing.
-- An existing private `thread-writer-locks/` directory is never merged: replacing a lock file could bypass a live writer's lock. `--fix` sets it aside only when no process has a file in it open. See [private writer locks](../troubleshooting#private-writer-locks).
+- An existing private `thread-writer-locks/` directory is never merged: replacing a lock file could bypass a live writer's lock. aims sets it aside, on its own, only once no process has a file in it open. See [private writer locks](../troubleshooting#private-writer-locks).
 
 `aims doctor` and `aims sync` run the same repair for every profile and report anything that needs a decision.
 

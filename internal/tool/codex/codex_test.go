@@ -42,13 +42,13 @@ func TestSharedWriterLocks(t *testing.T) {
 	}
 
 	// An older profile already has a private lock namespace. While a process
-	// holds one of its locks, even --fix leaves it alone; once none does,
-	// --fix sets it aside, inodes intact, and links the shared one.
+	// holds one of its locks, it stays; once none does, any sync sets it
+	// aside, inodes intact, and links the shared one.
 	old := t.TempDir()
 	privateLock := filepath.Join(old, name, "thread.lock")
 	testutil.Write(t, privateLock, "")
 	before, _ := os.Stat(privateLock)
-	o.Dir, o.Fix = old, true
+	o.Dir = old
 	ensure := func() links.Report {
 		for _, r := range links.Ensure(o) {
 			if r.Name == name {

@@ -668,7 +668,7 @@ func initReview(ctx context.Context, r *ui.Rail, inst []found) error {
 			continue
 		}
 		// init sets the order of every folder; a project's own stays.
-		everywhere := accountNames(t)
+		everywhere := t.Names()
 		if t.Project != "" {
 			everywhere = t.Everywhere
 		}

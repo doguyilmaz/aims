@@ -64,6 +64,15 @@ type ToolStatus struct {
 	Sessions []profiles.OpenSession `json:"sessions,omitempty"`
 }
 
+// Names lists the tool's profiles in their current order.
+func (t ToolStatus) Names() []string {
+	out := make([]string, len(t.Profiles))
+	for i, p := range t.Profiles {
+		out[i] = p.Name
+	}
+	return out
+}
+
 // Status reports every profile of the given tools (all when empty).
 func Status(ctx context.Context, ids []tool.ID) ([]ToolStatus, error) {
 	cfg, err := config.Load()

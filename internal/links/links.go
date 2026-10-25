@@ -354,7 +354,7 @@ func ensureOne(o Options, name string) (Report, error) {
 			// Moving or deduplicating even an empty lock file changes its
 			// inode and can let two processes own the same conversation:
 			// only a folder no process has a file of open moves aside.
-			if o.Fix && !holding(link) {
+			if !holding(link) {
 				aside := link + ".aims-" + o.Label + "-" + stamp()
 				if err := move(link, aside); err != nil {
 					return r, err
@@ -372,7 +372,7 @@ func ensureOne(o Options, name string) (Report, error) {
 					return r, makeLink(target, link, true)
 				}
 			}
-			r.Action, r.Detail = Conflict, "private writer locks; close every instance of the tool, then run `aims doctor --fix`"
+			r.Action, r.Quiet, r.Detail = Conflict, true, "private writer locks still in use; aims shares them once no instance of the tool uses this account"
 			return r, nil
 		}
 		if hfi == nil {

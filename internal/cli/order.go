@@ -218,7 +218,7 @@ func askOrder(ctx context.Context, only tool.Adapter, key string) error {
 			opts = append(opts, ui.Option{Label: label, Value: "", Hint: "the same accounts, one order"})
 		}
 		for _, t := range choices {
-			opts = append(opts, ui.Option{Label: t.Title, Value: string(t.ID), Hint: "now " + strings.Join(accountNames(t), " → ")})
+			opts = append(opts, ui.Option{Label: t.Title, Value: string(t.ID), Hint: "now " + strings.Join(t.Names(), " → ")})
 		}
 		pick := opts[0].Value
 		if err := r.Select("Order the accounts of which tool?", "", opts, &pick); err != nil {
@@ -234,7 +234,7 @@ func askOrder(ctx context.Context, only tool.Adapter, key string) error {
 	}
 	title := strings.Join(titles, " and ")
 
-	remaining := accountNames(picked[0])
+	remaining := picked[0].Names()
 	var order []string
 	for len(remaining) > 1 {
 		q := "Which " + title + " account should new sessions use first?"
@@ -294,22 +294,13 @@ func askOrder(ctx context.Context, only tool.Adapter, key string) error {
 	return nil
 }
 
-// accountNames lists a tool's profiles in their current order.
-func accountNames(t ops.ToolStatus) []string {
-	out := make([]string, len(t.Profiles))
-	for i, p := range t.Profiles {
-		out[i] = p.Name
-	}
-	return out
-}
-
 // sameAccounts reports whether the tools have the same profile names, so one
 // order fits them all.
 func sameAccounts(ts []ops.ToolStatus) bool {
-	first := accountNames(ts[0])
+	first := ts[0].Names()
 	slices.Sort(first)
 	for _, t := range ts[1:] {
-		names := accountNames(t)
+		names := t.Names()
 		slices.Sort(names)
 		if !slices.Equal(first, names) {
 			return false

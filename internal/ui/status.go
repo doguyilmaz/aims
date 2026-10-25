@@ -35,12 +35,13 @@ func OrderSummary(titles, where string, order []string, first lipgloss.Style) st
 
 // Where names a project: "this project (~/src/app)", or "this folder (~/x)"
 // outside a repository.
-func Where(key string) string {
-	what := "this folder"
+func Where(key string) string { return what(key) + " (" + fsx.Tildify(key) + ")" }
+
+func what(key string) string {
 	if _, err := os.Lstat(filepath.Join(key, ".git")); err == nil {
-		what = "this project"
+		return "this project"
 	}
-	return what + " (" + fsx.Tildify(key) + ")"
+	return "this folder"
 }
 
 // State is the one-word state of a profile and its style.
