@@ -56,7 +56,7 @@ func Apart(cfg *config.Config, id tool.ID, name string) []string {
 	sharesHistory := func(n string) bool {
 		p := t.Profiles[n]
 		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
-			links.HistoryShared(hub, cfg.Dir(id, n), layout)
+			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, tools.Get(id), n))
 	}
 	shared := sharesHistory(name)
 	var out []string
@@ -120,6 +120,13 @@ func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []
 	} else {
 		delete(m, l.HomeEnv)
 	}
+	if v, keep := StateHome(cfg, a, name, m[l.StateEnv]); !keep {
+		if v != "" {
+			m[l.StateEnv] = v
+		} else {
+			delete(m, l.StateEnv)
+		}
+	}
 	for k, v := range p.Env {
 		m[k] = v
 	}
@@ -176,7 +183,49 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 	if p.ShareMode() == config.ShareNone {
 		return out
 	}
-	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: layout, Private: private, Label: name, Fix: fix})...)
+	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: layout, Private: private, Label: name, Fix: fix, StateShared: StateShared(cfg, a, name)})...)
+}
+
+// StateHome is what a profile's StateEnv should be: for a profile that
+// shares history, the folder the user already set or else the hub, so every
+// profile uses the same databases; "" (unset) for one with history of its
+// own. keep: leave the variable as it is, for the adopted login, which
+// lives in the hub anyway.
+func StateHome(cfg *config.Config, a tool.Adapter, name, inherited string) (value string, keep bool) {
+	l := a.Layout()
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if l.StateEnv == "" || p == nil || cfg.HomeEnv(a.ID(), name) == "" {
+		return "", true
+	}
+	// A database of the profile's own that holds data stays in use until
+	// it is adopted into the hub.
+	if p.ShareMode() != config.ShareAll || slices.ContainsFunc(p.Exclude, l.IsHistory) || ownDatabase(cfg.Dir(a.ID(), name), l) {
+		return "", false
+	}
+	if inherited != "" {
+		return inherited, false
+	}
+	return cfg.EnsureHub(a.ID()), false
+}
+
+// StateShared reports whether a profile reads its databases from the same
+// folder as every other profile that shares history.
+func StateShared(cfg *config.Config, a tool.Adapter, name string) bool {
+	l := a.Layout()
+	if p := cfg.Tools[a.ID()].Profiles[name]; l.StateEnv == "" || p == nil || p.Env[l.StateEnv] != "" {
+		return false
+	}
+	v, keep := StateHome(cfg, a, name, os.Getenv(l.StateEnv))
+	return !keep && v != ""
+}
+
+// ownDatabase reports whether dir holds a database file of its own, not a
+// link, that is not disposable.
+func ownDatabase(dir string, l tool.Layout) bool {
+	entries, _ := os.ReadDir(dir)
+	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
+		return e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".sqlite") && !l.IsDisposable(e.Name())
+	})
 }
 
 // Private reports which home entries a profile keeps to itself.

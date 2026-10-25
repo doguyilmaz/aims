@@ -19,6 +19,7 @@ import (
 // newOrderCmd is `aims order`: which account comes first and which stand in
 // for it. Every argument is optional; on a terminal aims asks for the rest.
 func newOrderCmd() *cobra.Command {
+	var global, reset bool
 	cmd := &cobra.Command{
 		Use:   "order [tool] [profile...]",
 		Short: "Set which account comes first and which stand in for it",
@@ -26,11 +27,15 @@ func newOrderCmd() *cobra.Command {
 			"limited or logged out they use the next usable one in this order, and come\n" +
 			"back to the first once it works again. When every account is limited, they\n" +
 			"wait on the one that resets first.\n\n" +
+			"It is the order of the project aims runs in (the git repository, or the folder\n" +
+			"outside one), unless --global. --reset drops the project's own order.\n\n" +
 			"Without a tool, every tool that has these profiles changes. Without profiles,\n" +
 			"aims asks for the order, shows it and saves it once you confirm.",
 		Example: `aims order
-aims order personal work            # Claude Code and Codex
-aims order claude personal work`,
+aims order personal work            # Claude Code and Codex, in this project
+aims order claude personal work
+aims order --global personal work   # every folder without an order of its own
+aims order --reset                  # this project follows that order again`,
 		Args: cobra.ArbitraryArgs,
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			var out []string
@@ -54,28 +59,67 @@ aims order claude personal work`,
 					only, args = a, args[1:]
 				}
 			}
+			key, err := scopeKey(global)
+			if err != nil {
+				return err
+			}
+			if reset {
+				return resetOrder(only, key, args)
+			}
 			if len(args) == 0 {
 				if !ui.Interactive() {
 					return errors.New("which order? e.g. aims order personal work, or aims order claude personal work")
 				}
-				return askOrder(cmd.Context(), only)
+				return askOrder(cmd.Context(), only, key)
 			}
 			targets, err := orderTargets(only, args)
 			if err != nil {
 				return err
 			}
 			for _, a := range targets {
-				order, err := ops.SetOrder(a, args)
+				order, err := ops.SetOrder(a, args, key)
 				if err != nil {
 					return err
 				}
-				ui.Done("%s", ui.OrderSummary(a.Title(), order, ui.Err.Bold))
+				ui.Done("%s", ui.OrderSummary(a.Title(), key, order, ui.Err.Bold))
 				warnPinned(a, order[0])
 			}
+			afterScope(targets, key, "aims order --global "+strings.Join(args, " "))
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&global, "global", false, "the order of every folder without one of its own")
+	cmd.Flags().BoolVar(&reset, "reset", false, "drop this project's own order")
 	return cmd
+}
+
+// resetOrder drops the project's own order of one tool, or of every tool.
+func resetOrder(only tool.Adapter, key string, args []string) error {
+	switch {
+	case len(args) > 0:
+		return errors.New("--reset takes no profiles")
+	case key == "":
+		return errors.New("--reset is for a project's own order; --global has none to drop")
+	}
+	targets := tools.All()
+	if only != nil {
+		targets = []tool.Adapter{only}
+	}
+	dropped := false
+	for _, a := range targets {
+		had, err := ops.ForgetOrder(a, key)
+		if err != nil {
+			return err
+		}
+		if had {
+			dropped = true
+			ui.Done("%s in %s follows the order of every folder again", a.Title(), ui.Where(key))
+		}
+	}
+	if !dropped {
+		ui.Info("%s has no order of its own", ui.Where(key))
+	}
+	return nil
 }
 
 // limitLines say what happens when first hits a limit, after the order.
@@ -143,7 +187,7 @@ func orderLines(order []string) []string {
 
 // askOrder asks which tool and which account comes first (and next), shows
 // the order and saves it once the user confirms.
-func askOrder(ctx context.Context, only tool.Adapter) error {
+func askOrder(ctx context.Context, only tool.Adapter, key string) error {
 	report, err := loadAccounts(ctx)
 	if err != nil {
 		return err
@@ -174,7 +218,7 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 			opts = append(opts, ui.Option{Label: label, Value: "", Hint: "the same accounts, one order"})
 		}
 		for _, t := range choices {
-			opts = append(opts, ui.Option{Label: t.Title, Value: string(t.ID), Hint: "now " + strings.Join(accountNames(t), " → ")})
+			opts = append(opts, ui.Option{Label: t.Title, Value: string(t.ID), Hint: "now " + strings.Join(t.Names(), " → ")})
 		}
 		pick := opts[0].Value
 		if err := r.Select("Order the accounts of which tool?", "", opts, &pick); err != nil {
@@ -190,7 +234,7 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 	}
 	title := strings.Join(titles, " and ")
 
-	remaining := accountNames(picked[0])
+	remaining := picked[0].Names()
 	var order []string
 	for len(remaining) > 1 {
 		q := "Which " + title + " account should new sessions use first?"
@@ -223,7 +267,11 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 	order = append(order, remaining...)
 
 	save := true
-	if err := r.Confirm("Save this order for "+title+"?", strings.Join(orderLines(order), "\n"), &save); err != nil {
+	scope := ""
+	if key != "" {
+		scope = " in " + ui.Where(key)
+	}
+	if err := r.Confirm("Save this order for "+title+scope+"?", strings.Join(orderLines(order), "\n"), &save); err != nil {
 		return cancelled(r, err)
 	}
 	if !save {
@@ -231,34 +279,28 @@ func askOrder(ctx context.Context, only tool.Adapter) error {
 		return nil
 	}
 	for _, t := range picked {
-		if _, err := ops.SetOrder(tools.Get(t.ID), order); err != nil {
+		if _, err := ops.SetOrder(tools.Get(t.ID), order, key); err != nil {
 			r.Fail(err.Error())
 			return err
 		}
 	}
-	r.Outro(ui.Out.OK.Render("Saved. ") + ui.OrderSummary(title, order, ui.Out.Bold))
+	r.Outro(ui.Out.OK.Render("Saved. ") + ui.OrderSummary(title, key, order, ui.Out.Bold))
+	var changed []tool.Adapter
 	for _, t := range picked {
 		warnPinned(tools.Get(t.ID), order[0])
+		changed = append(changed, tools.Get(t.ID))
 	}
+	afterScope(changed, key, "aims order --global")
 	return nil
-}
-
-// accountNames lists a tool's profiles in their current order.
-func accountNames(t ops.ToolStatus) []string {
-	out := make([]string, len(t.Profiles))
-	for i, p := range t.Profiles {
-		out[i] = p.Name
-	}
-	return out
 }
 
 // sameAccounts reports whether the tools have the same profile names, so one
 // order fits them all.
 func sameAccounts(ts []ops.ToolStatus) bool {
-	first := accountNames(ts[0])
+	first := ts[0].Names()
 	slices.Sort(first)
 	for _, t := range ts[1:] {
-		names := accountNames(t)
+		names := t.Names()
 		slices.Sort(names)
 		if !slices.Equal(first, names) {
 			return false

@@ -325,10 +325,14 @@ func Codex() int {
 	toml := filepath.Join(dir, "config.toml")
 	has := func(n string) bool { return exists(filepath.Join(dir, n)) }
 	loggedIn := exists(auth)
+	if slices.Contains(args, "--help") {
+		fmt.Println("Options:\n      --no-daemon\n          Run without the shared background server")
+		return 0
+	}
 	// aims runs a conversation it follows without the app-server daemon.
-	supervised := len(args) > 1 && args[0] == "-c" && args[1] == "features.daemon_auto_start=false"
+	supervised := len(args) > 0 && args[0] == "--no-daemon"
 	if supervised {
-		args = args[2:]
+		args = args[1:]
 		for len(args) > 1 && args[0] == "-c" && strings.HasPrefix(args[1], "shell_environment_policy.set.") {
 			args = args[2:]
 		}
@@ -436,8 +440,9 @@ func Codex() int {
 
 // codexTurn plays one turn of a conversation aims follows: it runs
 // $FAKE_BEFORE_TURN, records the turn's end in the rollout as codex does
-// (failed when the account is limited or logged out), and waits $FAKE_LINGER;
-// stopped meanwhile, it exits with 143.
+// (failed when the account is limited or logged out), and waits $FAKE_LINGER
+// with the rollout open, as codex keeps it; stopped meanwhile, it exits with
+// 143. $FAKE_TUI_RESUME names a conversation opened from inside codex.
 func codexTurn(dir, label string, args []string, has func(string) bool) {
 	if c := os.Getenv("FAKE_BEFORE_TURN"); c != "" {
 		_ = exec.Command("sh", "-c", c).Run()
@@ -445,6 +450,8 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 	id := "c-" + label
 	if i := slices.Index(args, "resume"); i >= 0 && i+1 < len(args) {
 		id = args[i+1]
+	} else if v := os.Getenv("FAKE_TUI_RESUME"); v != "" {
+		id = v
 	}
 	matches, _ := filepath.Glob(filepath.Join(dir, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
 	path := ""
@@ -469,7 +476,7 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
 	if err == nil {
 		_, _ = f.Write(append(line, '\n'))
-		f.Close()
+		defer f.Close()
 	}
 	linger, _ := time.ParseDuration(os.Getenv("FAKE_LINGER"))
 	sig := make(chan os.Signal, 1)

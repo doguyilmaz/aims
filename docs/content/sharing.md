@@ -40,7 +40,7 @@ Private to each profile: `.credentials.json` (or the macOS keychain entry) and `
 | `sessions/`, `archived_sessions/` | conversations | yes |
 | `thread-writer-locks/` | prevents two processes from writing the same shared conversation | yes |
 | `history.jsonl` | prompt history | yes |
-| `memories/`, `state_*.sqlite`, `goals_*.sqlite` and similar | memory and session databases | yes |
+| `memories/`, `state_*.sqlite`, `goals_*.sqlite` and similar | memory and session databases; aims also sets `CODEX_SQLITE_HOME` to the hub, so a database a new Codex adds is shared from its start | yes |
 | `config.toml` | settings, MCP servers, profiles | |
 | `AGENTS.md`, `prompts/`, `skills/`, `rules/`, `plugins/` | your instructions and customizations | |
 
@@ -65,8 +65,8 @@ Tools often save a file by writing a new one and renaming it over the old, which
 - For a plain file in both places, the newer one wins and the other is kept next to it as a backup.
 - Prompt history files (`.jsonl`) are appended, not replaced.
 - A database that may be open (its `-wal` file is not empty) is left alone until you close the tool and run `aims doctor --fix`.
-- If both the profile and hub already have a database with the same name, both are kept. `--fix` does not merge them or choose a winner. Doctor reports incomplete history sharing and exits with an error.
-- An existing private `thread-writer-locks/` directory is never merged, even with `--fix`: replacing a lock file could bypass a live writer's lock. See [migrating writer locks](../troubleshooting#private-writer-locks).
+- If both the profile and hub already have a Codex database with the same name, both are kept. For an index or log, Codex reads the hub's (`CODEX_SQLITE_HOME`) and doctor names the profile's copy as unused; for one that holds data, the profile keeps using its own and doctor reports incomplete history sharing.
+- An existing private `thread-writer-locks/` directory is never merged: replacing a lock file could bypass a live writer's lock. aims sets it aside, on its own, only once no process has a file in it open. See [private writer locks](../troubleshooting#private-writer-locks).
 
 `aims doctor` and `aims sync` run the same repair for every profile and report anything that needs a decision.
 
@@ -74,7 +74,7 @@ Tools often save a file by writing a new one and renaming it over the old, which
 
 Edit `share` in the config file. On the next launch, entries the profile should no longer share are replaced: settings with a private copy, history with an empty folder, so work conversations never copy into another account's folder. Going back to `all` merges history folders, but existing databases and writer lock directories may require the steps above. Close the tools before changing sharing modes.
 
-Automatic moves require shared history on both profiles. A profile using `settings` or `none`, excluding a history entry, or still holding a private history database or writer lock directory cannot move a conversation to another account or receive one from it. aims checks existing links before choosing another profile and again before stopping the current session for a move.
+Automatic moves require shared history on both profiles. A profile using `settings` or `none`, excluding a history entry, or still holding a private data database or writer lock directory cannot move a conversation to another account or receive one from it. aims checks existing links before choosing another profile and again before stopping the current session for a move.
 
 ## Runtime cost and disk use
 

@@ -99,7 +99,7 @@ func TestStatusAndSwitch(t *testing.T) {
 	}
 
 	out, isErr = call(t, cs, "aims_switch", map[string]any{"profile": "work"})
-	if isErr || !strings.Contains(out, `Claude Code now use "work"`) {
+	if isErr || !strings.Contains(out, `Claude Code sessions in this project (`) || !strings.Contains(out, `now use "work"`) {
 		t.Fatalf("switch: %s", out)
 	}
 	out, _ = call(t, cs, "aims_status", nil)

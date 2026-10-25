@@ -3,23 +3,33 @@ exec claude auth login --email me@gmail.com
 exec codex login
 exec aims init --yes --integrations none
 
-# Without a tool, every tool that has the profiles changes.
+# Without a tool, every tool that has the profiles changes, in this folder.
 exec aims order work personal
-stderr 'New Claude Code sessions use work; while it is limited or logged out: personal'
-stderr 'New Codex sessions use work; while it is limited or logged out: personal'
+stderr 'New Claude Code sessions in this folder \(.*\) use work; while it is limited or logged out: personal'
+stderr 'New Codex sessions in this folder \(.*\) use work; while it is limited or logged out: personal'
+stderr 'Claude Code elsewhere: personal → work; every folder: aims order --global work personal'
 exec aims status
 stdout '● work'
 ! stdout '● personal'
+stdout 'order of this folder \(.*\); elsewhere personal → work'
+
+# Another folder keeps the order of every folder.
+mkdir other
+cd other
+exec aims status claude
+stdout '● personal'
+! stdout 'order of'
+cd $WORK
 
 # A tool narrows it down.
 exec aims order codex personal
-stderr 'New Codex sessions use personal; while it is limited or logged out: work'
+stderr 'New Codex sessions in this folder \(.*\) use personal; while it is limited or logged out: work'
 ! stderr 'Claude Code'
 
 # Only tools that have every named profile change.
 exec aims add codex client
 exec aims order client personal
-stderr 'New Codex sessions use client; while it is limited or logged out: personal, then work'
+stderr 'New Codex sessions in this folder \(.*\) use client; while it is limited or logged out: personal, then work'
 ! stderr 'Claude Code'
 
 # Names that match nothing say so, and change nothing.
@@ -37,3 +47,35 @@ stderr 'which order\? e.g. aims order personal work'
 ! exec aims order codex
 stderr 'which order'
 cmp $HOME/.aims/config.json config.before
+
+# A repository is one project: its subfolders share its order.
+exec aims login claude work
+mkdir repo/.git repo/sub
+cd repo/sub
+exec aims use claude work
+stderr 'New Claude Code sessions in this project \(.*repo\) use work'
+cd $WORK/repo
+exec aims claude
+stdout 'claude interactive as work'
+
+# --global changes every folder without an order of its own, and says which
+# keep theirs.
+exec aims use --global claude work
+stderr 'New Claude Code sessions use work'
+stderr 'this project \(.*repo\) keeps its own Claude Code order: work → personal; drop it with aims order --reset'
+stderr '1 other folder\(s\) keep their own Claude Code order'
+cd $WORK/other
+exec aims status claude
+stdout '● work'
+exec aims use --global claude personal
+
+# --reset drops a project's own order.
+cd $WORK/repo
+exec aims order --reset
+stderr 'Claude Code in this project \(.*repo\) follows the order of every folder again'
+exec aims claude
+stdout 'claude interactive as default'
+exec aims order --reset
+stderr 'has no order of its own'
+! exec aims order --reset --global
+stderr '--global has none to drop'

@@ -126,7 +126,7 @@ personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 | `aims claude@work` | work | stays on work | `pinned` |
 | `claude` without the shell integration | whatever `~/.claude` is logged in as | stays | `not via aims` |
 
-`aims` alone shows your accounts, the sessions open now (and which of them will not move), and what is left to set up. `aims order` changes which account comes first.
+`aims` alone shows your accounts, the sessions open now (and which of them will not move), and what is left to set up. `aims order` changes which account comes first, in this project or, with `--global`, everywhere.
 
 ## 4. When an account hits its limit
 

@@ -67,6 +67,13 @@ func (o *Options) say(l Level, format string, args ...any) {
 	}
 }
 
+// tell is say for a supervised session, whose tool may cover what aims
+// prints: the terminal shows it as a desktop notification too.
+func (o *Options) tell(l Level, format string, args ...any) {
+	o.say(l, format, args...)
+	proc.Notify(fmt.Sprintf(format, args...))
+}
+
 // busyFor is how long a profile rests after a short-lived rate limit.
 const busyFor = 2 * time.Minute
 
@@ -86,7 +93,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	if bin == "" {
 		return Result{Code: 127}, fmt.Errorf("%s is %w (or set %s)", a.Layout().Bin, ErrNotInstalled, a.Layout().BinEnv)
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return Result{Code: 1}, err
 	}

@@ -47,7 +47,11 @@ Every account with its login, plan usage and marks. Alias: `aims ls`.
 
 ### `aims use [tool] <profile>`
 
-Makes a profile the active account for new sessions and puts it first in the failover order. Without a tool, every tool that has a profile with that name switches.
+Makes a profile the account new sessions start on in this project, and puts it first in the project's failover order. A project is the git repository you are in, or the folder itself outside one; its order is kept in `~/.aims/config.json`, never in the project. aims says what changed and what other folders use. Without a tool, every tool that has a profile with that name switches.
+
+| Flag | |
+| --- | --- |
+| `--global` | Change every folder without an order of its own instead. aims names the projects that keep theirs. |
 
 ### `aims claude [args]`, `aims codex [args]`
 
@@ -90,7 +94,8 @@ Without a tool, aims uses the only tool with a second account, or asks. On a ter
 | Flag | |
 | --- | --- |
 | `--from` | The profile to mark (default: the one used last) |
-| `--to` | Make this profile active instead, as `aims use` would |
+| `--to` | Make this profile first in this project instead, as `aims use` would |
+| `--global` | With `--to`: first in every folder without an order of its own |
 | `--minutes` | How long the mark lasts when the reset time is unknown |
 | `--reason` | `limit` (default) or `login`. A login mark lasts until `aims login`. |
 | `--resume` | Continue the last conversation on the new account |
@@ -110,6 +115,13 @@ Removes limit and login marks. Without arguments, aims lists the marked accounts
 Sets which account comes first and which stand in for it. The first becomes the active account; while it is limited or logged out, new sessions use the next usable one, in this order. `aims order claude personal work` means "personal, and work when personal is out".
 
 Every argument is optional. Without a tool, every tool that has the named profiles changes (`aims order personal work`). Without profiles, aims asks which tool (or both, when they have the same accounts), and which account comes first, shows the order and saves it once you confirm. What happens at a limit is fixed; see [What aims does](../failover#what-aims-does).
+
+Like `aims use`, it sets the order of this project (the git repository, or the folder outside one). Profiles it does not name follow, in the order of every other folder.
+
+| Flag | |
+| --- | --- |
+| `--global` | Set the order of every folder without one of its own |
+| `--reset` | Drop this project's own order, so it follows the order of every folder again |
 
 ### `aims logout [tool] [profile]`
 
@@ -158,7 +170,7 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 
 ### `aims doctor`
 
-Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
+Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes, including a profile's own writer lock folder once no process uses it, and names database copies a profile no longer uses; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
 
 ### `aims keepalive [on|off]`
 

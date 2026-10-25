@@ -16,6 +16,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"golang.org/x/term"
 )
@@ -130,6 +131,25 @@ func (a *Attached) Done() <-chan struct{} { return a.done }
 
 // Code is the exit status, once Done is closed.
 func (a *Attached) Code() int { return a.code }
+
+// Pid is the tool's process id.
+func (a *Attached) Pid() int { return a.cmd.Process.Pid }
+
+// Notify asks the terminal for a desktop notification (OSC 9, which
+// Ghostty, iTerm2, WezTerm and kitty show). Other terminals ignore the
+// sequence, so it can go out while a tool draws on the screen.
+func Notify(msg string) {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return
+	}
+	msg = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, msg)
+	_, _ = io.WriteString(os.Stdout, "\x1b]9;aims: "+msg+"\x07")
+}
 
 // resetModes turns off what a full-screen tool may leave on:
 // the alternate screen, hidden cursor, bracketed paste, focus and mouse

@@ -175,7 +175,7 @@ func TestWrongDanglingLinkIsConflict(t *testing.T) {
 	if got := ensure(hub, dir)["history.jsonl"]; got.Action != Conflict {
 		t.Fatalf("wrong dangling link accepted: %+v", got)
 	}
-	if HistoryShared(hub, dir, layout) {
+	if HistoryShared(hub, dir, layout, false) {
 		t.Fatal("wrong dangling history considered shared")
 	}
 	if err := os.Remove(path); err != nil {
@@ -187,7 +187,7 @@ func TestWrongDanglingLinkIsConflict(t *testing.T) {
 	if got := ensure(hub, dir)["history.jsonl"]; got.Action != OK {
 		t.Fatalf("correct link to a future file rejected: %+v", got)
 	}
-	if !HistoryShared(hub, dir, layout) {
+	if !HistoryShared(hub, dir, layout, false) {
 		t.Fatal("correct history links rejected")
 	}
 }

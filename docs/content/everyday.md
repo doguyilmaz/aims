@@ -20,8 +20,9 @@ Which account a session gets, in order:
 
 1. `@profile` on the command line. This pins the session: it stays on that account, also at a limit, and says so when it starts.
 2. The terminal's pin, if you set one with `aims env` (below).
-3. The active account (`aims use`).
-4. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again. aims says so when it skips one:
+3. The project's first account, if `aims use` or `aims order` gave the project (the git repository, or the folder outside one) an order of its own.
+4. The active account (`aims use --global`).
+5. If that account is limited or logged out, the next usable one in [failover order](../failover#order), until the first works again. aims says so when it skips one:
 
 ```text
 › claude: skipping "personal" (limit for 2h10m), using "work"
@@ -30,11 +31,20 @@ Which account a session gets, in order:
 ## Switching
 
 ```bash
-aims use work               # every tool that has a "work" profile
+aims use work               # every tool that has a "work" profile, in this project
 aims use codex personal     # one tool
+aims use --global work      # every folder without an order of its own
+aims order --reset          # this project follows that order again
 ```
 
-This changes the account for **new** sessions and moves it to the front of the [failover order](../failover#order). A session that is already running keeps its login, unless it is [supervised](../failover#in-an-interactive-session): one started with `aims claude` or `aims codex` (no `@profile`) moves on by itself when its account hits a limit, and to the new active account once its current turn ends; `aims move` inside it moves just that one. To move any other, see [continuing on another account](#continuing-on-another-account).
+This changes the account for **new** sessions and moves it to the front of the [failover order](../failover#order), in the project you run it in: the git repository, or the folder itself outside one. Other folders keep theirs, and aims says which order they use:
+
+```text
+✓ New Claude Code sessions in this project (~/src/app) use work; while it is limited or logged out: personal
+  Claude Code elsewhere: personal → work; every folder: aims use --global work
+```
+
+`aims status` shows when a folder has its own order. A session that is already running keeps its login, unless it is [supervised](../failover#in-an-interactive-session): one started with `aims claude` or `aims codex` (no `@profile`) moves on by itself when its account hits a limit, and to the new active account once its current turn ends; `aims move` inside it moves just that one. To move any other, see [continuing on another account](#continuing-on-another-account).
 
 ## Continuing on another account
 
@@ -57,7 +67,7 @@ eval "$(aims env claude client-x)"
 eval "$(aims env --reset)"       # back to following the active account
 ```
 
-`aims env` prints the variables to set (`AIMS_CLAUDE_PROFILE`, and `CLAUDE_CONFIG_DIR` or `CODEX_HOME` so even the bare binaries use that login). It prints for your shell; pass `--shell fish` or `--shell powershell` to choose. In fish, use `aims env work | source`.
+`aims env` prints the variables to set (`AIMS_CLAUDE_PROFILE`, and `CLAUDE_CONFIG_DIR` or `CODEX_HOME` so even the bare binaries use that login; for Codex also `CODEX_SQLITE_HOME`, so they share its databases). It prints for your shell; pass `--shell fish` or `--shell powershell` to choose. In fish, use `aims env work | source`.
 
 ## Plain `claude` and `codex`
 

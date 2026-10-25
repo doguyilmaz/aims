@@ -21,7 +21,9 @@ Options:
   -c, --continue                    Continue the most recent conversation
   -d, --debug [filter]              Enable debug mode
   --dangerously-skip-permissions    Bypass permissions
+  --effort <level>                  Effort
   --model <model>                   Model
+  --permission-mode <mode>          Permission mode (choices: "acceptEdits", "auto", "plan")
   -n, --name <name>                 Name
   -r, --resume [value]              Resume a conversation
   -w, --worktree [name]             Worktree
@@ -47,18 +49,46 @@ func TestResumeArgs(t *testing.T) {
 		{[]string{"--resume", "--allowed-tools", "Bash", "Edit", "-d"}, []string{"--allowed-tools", "Bash", "Edit", "-d", "--resume", "S", "--", "continue"}},
 	}
 	for _, c := range cases {
-		if got, err := a.ResumeArgs(bin, c.in, "S", "continue"); err != nil || !slices.Equal(got, c.want) {
+		if got, err := a.ResumeArgs(bin, c.in, tool.Resume{ID: "S", Prompt: "continue"}); err != nil || !slices.Equal(got, c.want) {
 			t.Errorf("%q:\n got %q %v\nwant %q", c.in, got, err, c.want)
 		}
 	}
-	if got, _ := a.ResumeArgs(bin, []string{"hi"}, "S", ""); !slices.Equal(got, []string{"--resume", "S"}) {
+	if got, _ := a.ResumeArgs(bin, []string{"hi"}, tool.Resume{ID: "S"}); !slices.Equal(got, []string{"--resume", "S"}) {
 		t.Errorf("no prompt: %q", got)
 	}
-	if got, _ := a.ResumeArgs(bin, []string{"--model", "opus", "hi"}, "", ""); !slices.Equal(got, []string{"--model", "opus"}) {
+	if got, _ := a.ResumeArgs(bin, []string{"--model", "opus", "hi"}, tool.Resume{}); !slices.Equal(got, []string{"--model", "opus"}) {
 		t.Errorf("a new conversation: %q", got)
 	}
+	// A resumed conversation goes on as it was at its last turn: the model
+	// and effort of its last answer, the mode it was in, not the ones it
+	// started with. Bypassing permissions stays with the start's flags.
+	transcript := filepath.Join(dir, "t.jsonl")
+	testutil.Write(t, transcript, `{"type":"assistant","requestedModel":"claude-opus-5-5","effort":"low"}
+{"type":"assistant","isSidechain":true,"requestedModel":"claude-haiku-5-5","effort":"max"}
+{"type":"user"}
+{"type":"assistant","isApiErrorMessage":true,"message":{"model":"<synthetic>"}}
+`)
+	start := []string{"hi", "--model", "sonnet", "--effort=high", "--permission-mode", "plan", "--add-dir", "a"}
+	got, _ := a.ResumeArgs(bin, start, tool.Resume{ID: "S", Transcript: transcript, Mode: "auto"})
+	if want := []string{"--add-dir", "a", "--model", "claude-opus-5-5", "--effort", "low", "--permission-mode", "auto", "--resume", "S"}; !slices.Equal(got, want) {
+		t.Errorf("as at the last turn:\n got %q\nwant %q", got, want)
+	}
+	// A mode carried over turns off bypassing permissions from the start.
+	got, _ = a.ResumeArgs(bin, []string{"--dangerously-skip-permissions"}, tool.Resume{ID: "S", Mode: "plan"})
+	if want := []string{"--permission-mode", "plan", "--resume", "S"}; !slices.Equal(got, want) {
+		t.Errorf("bypass turned off:\n got %q\nwant %q", got, want)
+	}
+	// A mode this claude does not list stays with the start's flags.
+	got, _ = a.ResumeArgs(bin, start, tool.Resume{ID: "S", Mode: "default"})
+	if want := []string{"--model", "sonnet", "--effort=high", "--permission-mode", "plan", "--add-dir", "a", "--resume", "S"}; !slices.Equal(got, want) {
+		t.Errorf("unknown mode:\n got %q\nwant %q", got, want)
+	}
+	got, _ = a.ResumeArgs(bin, start, tool.Resume{ID: "S", Mode: "bypassPermissions"})
+	if want := []string{"--model", "sonnet", "--effort=high", "--permission-mode", "plan", "--add-dir", "a", "--resume", "S"}; !slices.Equal(got, want) {
+		t.Errorf("bypass, no transcript:\n got %q\nwant %q", got, want)
+	}
 	// Without the help, a prompt cannot be told from an option's value.
-	if _, err := a.ResumeArgs(filepath.Join(dir, "missing"), []string{"--model", "opus"}, "S", ""); err == nil {
+	if _, err := a.ResumeArgs(filepath.Join(dir, "missing"), []string{"--model", "opus"}, tool.Resume{ID: "S"}); err == nil {
 		t.Error("a missing claude must fail")
 	}
 }

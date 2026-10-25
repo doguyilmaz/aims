@@ -1,10 +1,13 @@
 package ops
 
 import (
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/testutil"
 )
 
 func TestExplain(t *testing.T) {
@@ -35,5 +38,28 @@ func TestExplain(t *testing.T) {
 	}
 	if got := Explain(cfg, report); !slices.Equal(got, want) {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// A profile whose writer locks are still its own, and one with an unused
+// index copy, each get a tip.
+func TestSharingTips(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		for _, n := range []string{"a", "b"} {
+			c.Tools["codex"].Profiles[n] = &config.Profile{}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := cfg.EnsureHub("codex")
+	testutil.Write(t, filepath.Join(hub, "thread_history_1.sqlite"), "shared")
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "a"), "thread-writer-locks", "x.lock"), "")
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "b"), "thread_history_1.sqlite"), strings.Repeat("x", 2<<20))
+	tips := sharingTips(cfg)
+	if len(tips) != 2 || !strings.Contains(tips[0].Text, "codex/a takes no part in moves") || !strings.Contains(tips[1].Text, "codex/b keeps unused database copies (2 MB)") {
+		t.Fatalf("tips: %+v", tips)
 	}
 }

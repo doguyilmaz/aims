@@ -40,8 +40,28 @@ func setup(t *testing.T) Options {
 	return Options{Tool: tools.Get("codex")}
 }
 
+// A profile's own copy of a database does not keep a conversation out:
+// Codex reads the shared one (CODEX_SQLITE_HOME).
+func TestOnFailureIgnoresPrivateDatabase(t *testing.T) {
+	o := setup(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "b"), "thread_history_1.sqlite"), "private history")
+	if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "b" || !validMove("codex", "a", "b") {
+		t.Fatalf("a private index kept the conversation out: %q", next)
+	}
+	// A database with data of its own still does: Codex keeps using it.
+	testutil.Write(t, filepath.Join(cfg.EnsureHub("codex"), "goals_1.sqlite"), "shared goals")
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "b"), "goals_1.sqlite"), "private goals")
+	if validMove("codex", "a", "b") {
+		t.Fatal("moved next to a database of its own")
+	}
+}
+
 func TestOnFailureSkipsConflictingHistory(t *testing.T) {
-	for _, entry := range []string{"thread_history_1.sqlite", "thread-writer-locks", "sessions"} {
+	for _, entry := range []string{"thread-writer-locks", "sessions"} {
 		t.Run(entry, func(t *testing.T) {
 			o := setup(t)
 			cfg, err := config.Load()
@@ -49,9 +69,7 @@ func TestOnFailureSkipsConflictingHistory(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(cfg.Dir("codex", "b"), entry)
-			if entry == "thread_history_1.sqlite" {
-				testutil.Write(t, path, "private history")
-			} else if err := os.MkdirAll(path, 0o755); err != nil {
+			if err := os.MkdirAll(path, 0o755); err != nil {
 				t.Fatal(err)
 			}
 			if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "c" {

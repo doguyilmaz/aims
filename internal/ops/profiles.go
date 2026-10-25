@@ -248,9 +248,10 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 	return config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil })
 }
 
-// Use makes name the active profile of a, or of every tool that has a profile
-// with that name when a is nil.
-func Use(a tool.Adapter, name string) ([]tool.Adapter, error) {
+// Use makes name the profile new sessions of a use in project key, or in
+// every folder without an order of its own when key is "". With a nil, it
+// does so for every tool that has a profile with that name.
+func Use(a tool.Adapter, name, key string) ([]tool.Adapter, error) {
 	var changed []tool.Adapter
 	_, err := config.Update(func(c *config.Config) error {
 		targets := tools.All()
@@ -264,7 +265,7 @@ func Use(a tool.Adapter, name string) ([]tool.Adapter, error) {
 				}
 				continue
 			}
-			c.Tools[t.ID()].Active = name
+			c.Tools[t.ID()].Arrange([]string{name}, key)
 			changed = append(changed, t)
 		}
 		if len(changed) == 0 {
@@ -275,9 +276,11 @@ func Use(a tool.Adapter, name string) ([]tool.Adapter, error) {
 	return changed, err
 }
 
-// SetOrder puts names first in the order. The first becomes the active
-// profile; the others stand in for it, in order, while it is unusable.
-func SetOrder(a tool.Adapter, names []string) ([]string, error) {
+// SetOrder puts names first in the order of project key, or of every folder
+// without one of its own when key is "", and returns that order. The first
+// is the profile new sessions use; the others stand in for it, in order,
+// while it is unusable.
+func SetOrder(a tool.Adapter, names []string, key string) ([]string, error) {
 	cfg, err := config.Update(func(c *config.Config) error {
 		t := c.Tools[a.ID()]
 		for _, n := range names {
@@ -285,15 +288,27 @@ func SetOrder(a tool.Adapter, names []string) ([]string, error) {
 				return fmt.Errorf("no %s profile %q", a.ID(), n)
 			}
 		}
-		rest := slices.DeleteFunc(slices.Clone(t.Order), func(n string) bool { return slices.Contains(names, n) })
-		t.Order = append(slices.Clone(names), rest...)
-		t.Active = names[0]
+		t.Arrange(names, key)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cfg.Tools[a.ID()].Order, nil
+	t := cfg.Tools[a.ID()]
+	return config.OrderFor(t.Projects[key], t.Order), nil
+}
+
+// ForgetOrder drops project key's own order: the order of every other
+// folder applies there again. It reports whether there was one.
+func ForgetOrder(a tool.Adapter, key string) (bool, error) {
+	had := false
+	_, err := config.Update(func(c *config.Config) error {
+		t := c.Tools[a.ID()]
+		_, had = t.Projects[key]
+		delete(t.Projects, key)
+		return nil
+	})
+	return had, err
 }
 
 // LastUsed is the profile aims launched most recently. It can differ from the
@@ -333,7 +348,7 @@ var ErrNoTarget = errors.New("no other usable profile")
 // active profile instead, as with Use.
 // It changes nothing when there is no profile to switch to.
 // by names who asked ("aims failover", "the dashboard"), for the mark.
-func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason, by string) (FailoverResult, error) {
+func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Duration, reason, by, key string) (FailoverResult, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return FailoverResult{}, err
@@ -393,7 +408,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		return res, fmt.Errorf("reason must be limit or login, not %q", reason)
 	}
 	if res.Switched {
-		if _, err := config.Update(func(c *config.Config) error { c.Tools[id].Active = res.To; return nil }); err != nil {
+		if _, err := config.Update(func(c *config.Config) error { c.Tools[id].Arrange([]string{res.To}, key); return nil }); err != nil {
 			return res, err
 		}
 	}

@@ -5,14 +5,20 @@ exec aims init --yes --tools codex --integrations none
 exec aims login codex work
 env FAKE_LINGER=5s
 
+# Profiles that share history keep their databases in ~/.codex, so a
+# database a new Codex adds is shared from the start.
+exec aims env codex work
+stdout 'export CODEX_SQLITE_HOME=.*\.codex'
+
 # personal hits its usage limit mid-session: aims stops codex and resumes the
-# same conversation on work, keeping the options.
+# same conversation on work. Codex restores its model itself, so -m is not
+# passed again; the sandbox stays as the session started.
 cp LIMITED $HOME/.codex/LIMITED
 exec aims codex -m gpt-5 -s workspace-write 'fix it'
 stdout 'codex interactive as default args=\["-m" "gpt-5" "-s" "workspace-write" "fix it"\]'
 stdout 'codex stopped as default'
 stderr 'codex: personal hit its usage limit; continuing this conversation on work'
-stdout 'codex interactive as work args=\["-m" "gpt-5" "-s" "workspace-write" "resume" "c-default" "--" "continue"\]'
+stdout 'codex interactive as work args=\["-s" "workspace-write" "resume" "c-default" "--" "continue"\]'
 ! stdout 'stopped as work'
 exec aims status codex
 stdout 'personal .*limited .*marked by a session'
@@ -34,11 +40,27 @@ stderr 'codex: personal hit a login error; continuing this conversation on work'
 exec aims status codex
 stdout 'personal .*login expired'
 
-# Other commands are not followed.
+# A conversation opened from inside codex (/resume) is followed too, though
+# it is older than the run, and moves on at a limit.
 rm $HOME/.codex/EXPIRED
 exec aims login codex personal
+mkdir $HOME/.codex/sessions/2020/01/02
+cp old-rollout $HOME/.codex/sessions/2020/01/02/rollout-2020-01-02T00-00-00-c-old.jsonl
+cp LIMITED $HOME/.codex/LIMITED
+env FAKE_TUI_RESUME=c-old
+exec aims codex
+stdout 'codex interactive as default'
+stderr 'codex: personal hit its usage limit; continuing this conversation on work'
+stdout 'codex interactive as work args=\["resume" "c-old" "--" "continue"\]'
+env FAKE_TUI_RESUME=
+rm $HOME/.codex/LIMITED
+
+# Other commands are not followed.
 exec aims codex login status
 stdout 'Logged in'
 ! stdout 'interactive'
 
 -- LIMITED --
+-- old-rollout --
+{"type":"session_meta","payload":{"id":"c-old","cwd":"/elsewhere","originator":"codex-tui","thread_source":"user","timestamp":"2020-01-02T00:00:00Z"}}
+{"type":"event_msg","payload":{"type":"task_complete","completed_at":1577923200,"error":{"message":"old limit","codex_error_info":"usage_limit_exceeded"}}}

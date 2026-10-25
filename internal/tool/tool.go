@@ -84,10 +84,19 @@ type Supervisor interface {
 	// Watch returns the args to start the session with, and poll, which
 	// reports the turns that ended since it was last called.
 	Watch(w Watch) (args []string, poll func() []SessionEvent, err error)
-	// ResumeArgs turns args into ones that resume conversation id instead of
-	// starting one, and send prompt first when it is not "". With id "" they
-	// start a new conversation without args' prompt.
-	ResumeArgs(bin string, args []string, id, prompt string) ([]string, error)
+	// ResumeArgs turns args into ones that resume conversation r.ID instead
+	// of starting one, as it was set up at its last turn, and send r.Prompt
+	// first when it is not "". With r.ID "" they start a new conversation
+	// without args' prompt.
+	ResumeArgs(bin string, args []string, r Resume) ([]string, error)
+}
+
+// Resume is the conversation a session restarts on.
+type Resume struct {
+	ID, Prompt string
+	// Transcript is its file, when the tool said; Mode its permission mode
+	// at the last hook, "" when unknown.
+	Transcript, Mode string
 }
 
 // Watch describes a supervised run.
@@ -102,6 +111,8 @@ type Watch struct {
 	Dir string
 	// Since is when this run started.
 	Since time.Time
+	// PID is the tool's process id once it has started, 0 before.
+	PID func() int
 	// Env is what the commands the session runs (a shell command, the aims
 	// MCP server) must see, so `aims move` finds its session.
 	Env map[string]string
@@ -127,6 +138,11 @@ type SessionEvent struct {
 	// is the provider's message.
 	Failure Failure `json:"failure,omitempty"`
 	Text    string  `json:"text,omitempty"`
+	// Lost: aims cannot tell which conversation is the session's, so it
+	// does not follow it.
+	Lost bool `json:"lost,omitempty"`
+	// Mode is the conversation's permission mode, when the tool says.
+	Mode string `json:"mode,omitempty"`
 }
 
 // Hooker reads what a tool passes to the hook `aims hook <tool>`.
@@ -172,6 +188,12 @@ type Layout struct {
 	// LockDirs coordinate writers to shared history. Existing private lock
 	// directories must never be merged or replaced while a tool may use them.
 	LockDirs []string
+	// StateEnv points the tool's databases (its *.sqlite entries) at another
+	// folder; profiles that share history get the hub.
+	StateEnv string
+	// Disposable databases hold nothing the tool cannot do without: an index
+	// it rebuilds from shared files, or logs.
+	Disposable []Entry
 	// History is conversation data: a profile that stops sharing starts with
 	// it empty rather than with a copy.
 	History []Entry
@@ -187,6 +209,9 @@ type Layout struct {
 
 // IsShared reports whether a home entry is shared between profiles.
 func (l Layout) IsShared(name string) bool { return matchAny(l.Shared, name) }
+
+// IsDisposable reports whether a database can be dropped without losing data.
+func (l Layout) IsDisposable(name string) bool { return matchAny(l.Disposable, name) }
 
 // IsHistory reports whether a home entry holds conversation data.
 func (l Layout) IsHistory(name string) bool { return matchAny(l.History, name) }

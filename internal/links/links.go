@@ -16,9 +16,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
@@ -31,6 +33,7 @@ const (
 	Adopted  Action = "adopted"  // the profile's copy moved into the hub
 	Merged   Action = "merged"   // both had content; combined in the hub
 	Skipped  Action = "skipped"  // nothing to link yet
+	Unused   Action = "unused"   // the profile's own copy, which the tool no longer reads
 	Detached Action = "detached" // stopped sharing
 	Conflict Action = "conflict" // needs a person
 )
@@ -40,8 +43,7 @@ type Report struct {
 	Name   string
 	Action Action
 	Detail string
-	// Quiet conflicts cannot be fixed automatically and are shown only by
-	// doctor and sync, not on every launch.
+	// Quiet conflicts are shown only by doctor and sync, not on every launch.
 	Quiet bool
 }
 
@@ -55,6 +57,8 @@ type Options struct {
 	Label string
 	// Fix also adopts databases that look open.
 	Fix bool
+	// StateShared: the tool reads the profile's databases from the hub.
+	StateShared bool
 }
 
 func readDir(dir string) []string {
@@ -90,6 +94,37 @@ func sharedNames(o Options) []string {
 		}
 	}
 	return out
+}
+
+var (
+	busyMu sync.Mutex
+	busyAt = map[string]time.Time{}
+	// BusyRecheck is how long a lock folder found in use is not asked about
+	// again by the same process: a session that moves syncs on every restart.
+	BusyRecheck = 10 * time.Minute
+)
+
+// busyLocks is holding for a lock folder, remembered for BusyRecheck when
+// it is in use.
+func busyLocks(dir string) bool {
+	busyMu.Lock()
+	defer busyMu.Unlock()
+	if at, ok := busyAt[dir]; ok && time.Since(at) < BusyRecheck {
+		return true
+	}
+	if holding(dir) {
+		busyAt[dir] = time.Now()
+		return true
+	}
+	delete(busyAt, dir)
+	return false
+}
+
+// holding reports whether a process may have a file in dir open: true too
+// when the system cannot tell.
+func holding(dir string) bool {
+	held, known := proc.Holding(fsx.Real(dir))
+	return held || !known
 }
 
 func stamp() string { return time.Now().UTC().Format("20060102T150405Z") }
@@ -341,9 +376,27 @@ func ensureOne(o Options, name string) (Report, error) {
 	case lfi.IsDir():
 		if slices.Contains(o.Layout.LockDirs, name) {
 			// Moving or deduplicating even an empty lock file changes its
-			// inode and can let two processes own the same conversation.
-			// --fix does not establish that every tool has been stopped.
-			r.Action, r.Detail = Conflict, "private writer locks; close all instances of the tool, move this directory aside, then run `aims sync`"
+			// inode and can let two processes own the same conversation:
+			// only a folder no process has a file of open moves aside.
+			if !busyLocks(link) {
+				aside := link + ".aims-" + o.Label + "-" + stamp()
+				if err := move(link, aside); err != nil {
+					return r, err
+				}
+				// A process that opened a lock between the look and the move.
+				if holding(aside) {
+					if err := move(aside, link); err != nil {
+						return r, err
+					}
+				} else {
+					if err := os.MkdirAll(target, 0o755); err != nil {
+						return r, err
+					}
+					r.Action, r.Detail = Adopted, "the old one is kept as "+filepath.Base(aside)
+					return r, makeLink(target, link, true)
+				}
+			}
+			r.Action, r.Quiet, r.Detail = Conflict, true, "private writer locks still in use; aims shares them once no instance of the tool uses this account"
 			return r, nil
 		}
 		if hfi == nil {
@@ -382,6 +435,10 @@ func ensureOne(o Options, name string) (Report, error) {
 			}
 			r.Action = Adopted
 			return r, makeLink(target, link, false)
+		}
+		if hfi != nil && o.StateShared && o.Layout.IsDisposable(name) {
+			r.Action, r.Detail = Unused, "the tool uses the shared copy; delete this one to free its space: "+link
+			return r, nil
 		}
 		r.Action, r.Quiet = Conflict, hfi != nil
 		if hfi != nil {
@@ -442,7 +499,7 @@ func ensureOne(o Options, name string) (Report, error) {
 // HistoryShared checks existing history entries without reading their contents
 // or walking history directories. Missing entries can be linked by the next
 // Sync; existing private copies must be reconciled before a conversation moves.
-func HistoryShared(hub, dir string, layout tool.Layout) bool {
+func HistoryShared(hub, dir string, layout tool.Layout, stateShared bool) bool {
 	if fsx.Real(hub) == fsx.Real(dir) {
 		return true
 	}
@@ -455,7 +512,7 @@ func HistoryShared(hub, dir string, layout tool.Layout) bool {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if !layout.IsShared(name) || !layout.IsHistory(name) {
+		if !layout.IsShared(name) || !layout.IsHistory(name) || (stateShared && layout.IsDisposable(name)) {
 			continue
 		}
 		path, target := filepath.Join(dir, name), filepath.Join(hub, name)

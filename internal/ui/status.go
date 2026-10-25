@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -16,14 +18,30 @@ import (
 )
 
 // OrderSummary says what an order means: "New Claude Code sessions use
-// personal; while it is limited or logged out: work". first styles the
-// first name.
-func OrderSummary(titles string, order []string, first lipgloss.Style) string {
-	msg := fmt.Sprintf("New %s sessions use %s", titles, first.Render(order[0]))
+// personal; while it is limited or logged out: work". where is the project
+// it is for (see Where), "" for every folder. first styles the first name.
+func OrderSummary(titles, where string, order []string, first lipgloss.Style) string {
+	if where != "" {
+		titles += " sessions in " + Where(where)
+	} else {
+		titles += " sessions"
+	}
+	msg := fmt.Sprintf("New %s use %s", titles, first.Render(order[0]))
 	if len(order) > 1 {
 		msg += "; while it is limited or logged out: " + strings.Join(order[1:], ", then ")
 	}
 	return msg
+}
+
+// Where names a project: "this project (~/src/app)", or "this folder (~/x)"
+// outside a repository.
+func Where(key string) string { return what(key) + " (" + fsx.Tildify(key) + ")" }
+
+func what(key string) string {
+	if _, err := os.Lstat(filepath.Join(key, ".git")); err == nil {
+		return "this project"
+	}
+	return "this folder"
 }
 
 // State is the one-word state of a profile and its style.
@@ -187,6 +205,9 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string
 			b.WriteString("  " + s.Dim.Render("no accounts yet") + "\n")
 			continue
 		}
+		if t.Project != "" {
+			b.WriteString("  " + s.Dim.Render("order of "+Where(t.Project)+"; elsewhere "+strings.Join(t.Everywhere, " → ")) + "\n")
+		}
 		for _, p := range t.Profiles {
 			mark := "  "
 			name := p.Name
@@ -290,6 +311,9 @@ func PlainStatus(report []ops.ToolStatus) string {
 		b.WriteString("\n")
 		if len(t.Profiles) == 0 {
 			b.WriteString("  no profiles\n")
+		}
+		if t.Project != "" {
+			fmt.Fprintf(&b, "  in the order of %s; elsewhere %s\n", Where(t.Project), strings.Join(t.Everywhere, " → "))
 		}
 		for _, p := range t.Profiles {
 			mark := " "

@@ -6,7 +6,7 @@ aliases: ["/docs/how-it-works/"]
 
 ## One folder per login
 
-Claude Code reads its state from `CLAUDE_CONFIG_DIR` (default `~/.claude`), Codex from `CODEX_HOME` (default `~/.codex`). Point a tool at another folder and it uses the login in that folder. aims gives each account such a folder and sets the variable when it starts the tool. It does not patch, wrap or proxy the tools: `aims claude` ends in the real `claude`, with your arguments, your terminal and your stdin.
+Claude Code reads its state from `CLAUDE_CONFIG_DIR` (default `~/.claude`), Codex from `CODEX_HOME` (default `~/.codex`). Point a tool at another folder and it uses the login in that folder. aims gives each account such a folder and sets the variable when it starts the tool. For a Codex account that shares history it also sets `CODEX_SQLITE_HOME` to `~/.codex`, so every account reads and writes the same databases. It does not patch, wrap or proxy the tools: `aims claude` ends in the real `claude`, with your arguments, your terminal and your stdin.
 
 The profile that adopted your existing login is special. It runs with the variable exactly as you had it, normally unset. This matters for Claude Code on macOS, which keeps the login in the keychain under a name derived from the exact `CLAUDE_CONFIG_DIR` string (`Claude Code-credentials` when unset, `Claude Code-credentials-<hash>` otherwise). Spelling out `~/.claude` would point at a different, empty login.
 

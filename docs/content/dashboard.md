@@ -48,8 +48,10 @@ aliases: ["/docs/dashboard/"]
 | --- | --- |
 | `↑` `↓` or `k` `j` | Move between accounts |
 | `s` | Close the dashboard and start a session of the selected tool. aims picks the account and moves the session at a limit |
-| `enter` or `u` | Make the selected account the one sessions start on |
-| `shift+↑` `shift+↓` or `K` `J` | Move the selected account up or down the [failover order](../failover#order); the top one is active |
+| `enter` or `u` | Make the selected account the one sessions start on in this project (or folder) |
+| `shift+↑` `shift+↓` or `K` `J` | Move the selected account up or down the [failover order](../failover#order); the top one is active. This changes the order of the project (or folder) you opened the dashboard in, named at the top |
+| `g` | Use the order shown for every folder without an order of its own |
+| `x` | Drop this project's own order; it follows the order of every folder again |
 | `l` | Log the selected account in (the browser opens; the dashboard comes back after) |
 | `f` | Mark the selected account as limited, so new sessions use the next one (asks first) |
 | `c` | Clear the selected account's marks |

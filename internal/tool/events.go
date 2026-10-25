@@ -57,6 +57,39 @@ func ReadLines(path string, offset int64) ([][]byte, int64) {
 	}
 }
 
+// TailLines returns the whole lines in the last n bytes of path.
+func TailLines(path string, n int64) [][]byte {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	// From one byte before the window, to tell whether it starts a line.
+	start := max(fi.Size()-n-1, 0)
+	if _, err := f.Seek(start, io.SeekStart); err != nil {
+		return nil
+	}
+	b, _ := io.ReadAll(f)
+	if start > 0 {
+		i := bytes.IndexByte(b, '\n')
+		if i < 0 {
+			return nil
+		}
+		b = b[i+1:]
+	}
+	var out [][]byte
+	for line := range bytes.Lines(b) {
+		if l, ok := bytes.CutSuffix(line, []byte("\n")); ok {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // FollowEvents returns a poll over dir's events file, starting empty.
 func FollowEvents(dir string) func() []SessionEvent {
 	path := filepath.Join(dir, EventsFile)

@@ -47,7 +47,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "aims_switch",
-		Description: "Make a profile the active account for new sessions of one tool, or of every tool that has a profile with that name. The running session keeps its account.",
+		Description: "Make a profile the account new sessions start on in this project (the git repository or folder this session runs in), for one tool or every tool that has a profile with that name; `global` does it for every folder. The running session keeps its account.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(false), IdempotentHint: true, OpenWorldHint: ptr(false)},
 	}, switchTool)
 
@@ -177,6 +177,7 @@ func statusTool(ctx context.Context, _ *mcp.CallToolRequest, in statusIn) (*mcp.
 type switchIn struct {
 	Tool    string `json:"tool,omitempty" jsonschema:"claude or codex; omit to switch every tool that has this profile"`
 	Profile string `json:"profile" jsonschema:"profile name, e.g. personal or work"`
+	Global  bool   `json:"global,omitempty" jsonschema:"true only when the user asks for every folder; default: this project only"`
 }
 
 func switchTool(_ context.Context, _ *mcp.CallToolRequest, in switchIn) (*mcp.CallToolResult, any, error) {
@@ -184,7 +185,13 @@ func switchTool(_ context.Context, _ *mcp.CallToolRequest, in switchIn) (*mcp.Ca
 	if err != nil {
 		return fail(err)
 	}
-	changed, err := ops.Use(a, in.Profile)
+	key := ""
+	if !in.Global {
+		if key = config.Here(); key == "" {
+			return fail(errors.New("cannot tell which project this is; pass global to change every folder"))
+		}
+	}
+	changed, err := ops.Use(a, in.Profile, key)
 	if err != nil {
 		return fail(err)
 	}
@@ -192,7 +199,11 @@ func switchTool(_ context.Context, _ *mcp.CallToolRequest, in switchIn) (*mcp.Ca
 	for _, c := range changed {
 		names = append(names, c.Title())
 	}
-	return text(fmt.Sprintf("%s now use %q for new sessions. This session keeps its current account.", strings.Join(names, " and "), in.Profile)), nil, nil
+	where := "in every folder without an order of its own"
+	if key != "" {
+		where = "in " + ui.Where(key)
+	}
+	return text(fmt.Sprintf("New %s sessions %s now use %q. This session keeps its current account.", strings.Join(names, " and "), where, in.Profile)), nil, nil
 }
 
 type failoverIn struct {
@@ -201,6 +212,7 @@ type failoverIn struct {
 	To      string `json:"to,omitempty" jsonschema:"profile to make active instead; default: the next usable one stands in while the mark lasts"`
 	Minutes int    `json:"minutes,omitempty" jsonschema:"cooldown length when the reset time is unknown"`
 	Reason  string `json:"reason,omitempty" jsonschema:"limit (default) or login"`
+	Global  bool   `json:"global,omitempty" jsonschema:"with to: true only when the user asks for every folder; default: this project only"`
 }
 
 func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*mcp.CallToolResult, any, error) {
@@ -214,7 +226,13 @@ func failoverTool(ctx context.Context, _ *mcp.CallToolRequest, in failoverIn) (*
 			from = p
 		}
 	}
-	res, err := ops.Failover(ctx, a, from, in.To, time.Duration(in.Minutes)*time.Minute, in.Reason, "the AI (aims_failover)")
+	key := ""
+	if !in.Global {
+		if key = config.Here(); key == "" {
+			return fail(errors.New("cannot tell which project this is; pass global to change every folder"))
+		}
+	}
+	res, err := ops.Failover(ctx, a, from, in.To, time.Duration(in.Minutes)*time.Minute, in.Reason, "the AI (aims_failover)", key)
 	if err != nil {
 		return fail(err)
 	}

@@ -33,6 +33,9 @@ type initOptions struct {
 	integrations string
 }
 
+// everyFolder says that the order init sets is the one of every folder.
+const everyFolder = "This order holds in every folder; aims order in a project gives it its own."
+
 // defaultInit is the setup with no flags given, the way `aims init` runs.
 func defaultInit(version string) initOptions {
 	return initOptions{version: version, current: "personal", second: "work", share: config.ShareAll, integrations: "all"}
@@ -296,7 +299,7 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 	}
 	first := current
 	firstOpts := []ui.Option{{Label: current, Value: current}, {Label: second, Value: second}}
-	if err := r.Select("Which account first?", "The other takes over at a limit.", firstOpts, &first); err != nil {
+	if err := r.Select("Which account first?", "The other takes over at a limit. "+everyFolder, firstOpts, &first); err != nil {
 		return cancelled(r, err)
 	}
 
@@ -354,7 +357,7 @@ func initFresh(ctx context.Context, r *ui.Rail, inst []found, o initOptions) err
 	}
 	if first != current {
 		for _, p := range plans {
-			_, _ = ops.SetOrder(p.f.a, []string{first})
+			_, _ = ops.SetOrder(p.f.a, []string{first}, "")
 		}
 	}
 	applyIntegrations(ctx, r, in)
@@ -544,8 +547,12 @@ func howItWorks(r *ui.Rail, newShell bool) {
 		return
 	}
 	t := cfg.Tools[lead.ID()]
-	first, other := t.Active, ""
-	for _, n := range t.Order {
+	order := t.Everywhere
+	if len(order) == 0 {
+		return
+	}
+	first, other := order[0], ""
+	for _, n := range order {
 		if n != first {
 			other = n
 			break
@@ -660,16 +667,21 @@ func initReview(ctx context.Context, r *ui.Rail, inst []found) error {
 		if len(t.Profiles) < 2 {
 			continue
 		}
-		first := t.Active
-		var opts []ui.Option
-		for _, p := range t.Profiles {
-			opts = append(opts, ui.Option{Label: p.Name, Value: p.Name})
+		// init sets the order of every folder; a project's own stays.
+		everywhere := t.Names()
+		if t.Project != "" {
+			everywhere = t.Everywhere
 		}
-		if err := r.Select(fmt.Sprintf("Which %s account first?", t.Title), "The others take over at a limit.", opts, &first); err != nil {
+		first := everywhere[0]
+		var opts []ui.Option
+		for _, n := range everywhere {
+			opts = append(opts, ui.Option{Label: n, Value: n})
+		}
+		if err := r.Select(fmt.Sprintf("Which %s account first?", t.Title), "The others take over at a limit. "+everyFolder, opts, &first); err != nil {
 			return cancelled(r, err)
 		}
-		if first != t.Active {
-			if _, err := ops.SetOrder(a, []string{first}); err != nil {
+		if first != everywhere[0] {
+			if _, err := ops.SetOrder(a, []string{first}, ""); err != nil {
 				r.Fail(err.Error())
 			}
 		}

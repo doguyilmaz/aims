@@ -29,7 +29,7 @@ type Launch struct {
 }
 
 type keymap struct {
-	Up, Down, MoveUp, MoveDown, Use, Start, Login, Failover, Clear, Refresh, Add, Help, Quit key.Binding
+	Up, Down, MoveUp, MoveDown, Use, Everywhere, Reset, Start, Login, Failover, Clear, Refresh, Add, Help, Quit key.Binding
 }
 
 func (k keymap) ShortHelp() []key.Binding {
@@ -37,23 +37,25 @@ func (k keymap) ShortHelp() []key.Binding {
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Failover, k.Clear, k.Refresh}, {k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Everywhere, k.Reset}, {k.Failover, k.Clear, k.Refresh}, {k.Help, k.Quit}}
 }
 
 var keys = keymap{
-	Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-	Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-	MoveUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up (top = active)")),
-	MoveDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
-	Use:      key.NewBinding(key.WithKeys("enter", "u"), key.WithHelp("enter", "make first")),
-	Start:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start a session")),
-	Login:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "log in")),
-	Failover: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fail over")),
-	Clear:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear marks")),
-	Refresh:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "check live")),
-	Add:      key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add account")),
-	Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "more")),
-	Quit:     key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
+	Up:         key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+	Down:       key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+	MoveUp:     key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up (top = active)")),
+	MoveDown:   key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
+	Use:        key.NewBinding(key.WithKeys("enter", "u"), key.WithHelp("enter", "make first here")),
+	Everywhere: key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "use this order in every folder")),
+	Reset:      key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "drop this project's own order")),
+	Start:      key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start a session")),
+	Login:      key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "log in")),
+	Failover:   key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fail over")),
+	Clear:      key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear marks")),
+	Refresh:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "check live")),
+	Add:        key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add account")),
+	Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "more")),
+	Quit:       key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
 }
 
 type row struct {
@@ -84,6 +86,8 @@ type dashboard struct {
 	tips    []ops.Tip
 	// start says how to start a session aims moves at a limit.
 	start string
+	// project is the one aims runs in, whose order the keys change.
+	project string
 }
 
 type reportMsg struct {
@@ -119,7 +123,7 @@ func RunDashboard(ctx context.Context, version string) (*Launch, error) {
 	h.Styles.ShortSeparator, h.Styles.FullSeparator = Out.Dim, Out.Dim
 	m := &dashboard{
 		ctx: ctx, version: version, threshold: cfg.Failover.Threshold,
-		spin: sp, help: h, checking: map[string]bool{}, self: self,
+		spin: sp, help: h, checking: map[string]bool{}, self: self, project: config.Here(),
 	}
 	m.setReport(report)
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
@@ -223,7 +227,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, func() tea.Msg {
-			res, err := ops.Failover(m.ctx, tools.Get(c.toolID), c.name, "", 0, "limit", "the dashboard")
+			res, err := ops.Failover(m.ctx, tools.Get(c.toolID), c.name, "", 0, "limit", "the dashboard", m.project)
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
@@ -253,10 +257,10 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, keys.Use):
 		return m, func() tea.Msg {
-			if _, err := ops.Use(tools.Get(sel.toolID), sel.name); err != nil {
+			if _, err := ops.Use(tools.Get(sel.toolID), sel.name, m.project); err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("New %s sessions use %s", tools.Get(sel.toolID).Title(), sel.name), false}
+			return flashMsg{OrderSummary(tools.Get(sel.toolID).Title(), m.project, []string{sel.name}, lipgloss.NewStyle()), false}
 		}
 	case key.Matches(msg, keys.Start):
 		// Not pinned to the row: aims picks the account and watches it.
@@ -275,6 +279,26 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return flashMsg{"Cleared the marks on " + sel.name, false}
 		}
+	case key.Matches(msg, keys.Everywhere):
+		a := tools.Get(sel.toolID)
+		return m, func() tea.Msg {
+			order, err := ops.SetOrder(a, sel.t.Names(), "")
+			if err != nil {
+				return flashMsg{err.Error(), true}
+			}
+			return flashMsg{OrderSummary(a.Title(), "", order, lipgloss.NewStyle()) + " in every folder without its own order", false}
+		}
+	case key.Matches(msg, keys.Reset):
+		a := tools.Get(sel.toolID)
+		return m, func() tea.Msg {
+			if had, err := ops.ForgetOrder(a, m.project); err != nil || !had {
+				if err != nil {
+					return flashMsg{err.Error(), true}
+				}
+				return flashMsg{Where(m.project) + " has no " + a.Title() + " order of its own", false}
+			}
+			return flashMsg{a.Title() + " in " + Where(m.project) + " follows the order of every folder again", false}
+		}
 	case key.Matches(msg, keys.MoveUp):
 		return m, m.move(sel, -1)
 	case key.Matches(msg, keys.MoveDown):
@@ -288,10 +312,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // move shifts the selected account by one place in its tool's order. The top
 // one is the active account; the others stand in for it in order.
 func (m *dashboard) move(sel selection, by int) tea.Cmd {
-	names := make([]string, len(sel.t.Profiles))
-	for i, p := range sel.t.Profiles {
-		names[i] = p.Name
-	}
+	names := sel.t.Names()
 	i := slices.Index(names, sel.name)
 	j := i + by
 	if i < 0 || j < 0 || j >= len(names) {
@@ -300,11 +321,11 @@ func (m *dashboard) move(sel selection, by int) tea.Cmd {
 	names[i], names[j] = names[j], names[i]
 	a := tools.Get(sel.toolID)
 	return func() tea.Msg {
-		order, err := ops.SetOrder(a, names)
+		order, err := ops.SetOrder(a, names, m.project)
 		if err != nil {
 			return flashMsg{err.Error(), true}
 		}
-		return flashMsg{OrderSummary(a.Title(), order, lipgloss.NewStyle()), false}
+		return flashMsg{OrderSummary(a.Title(), m.project, order, lipgloss.NewStyle()), false}
 	}
 }
 
@@ -349,6 +370,9 @@ func (m *dashboard) View() string {
 	var b strings.Builder
 
 	title := s.Title.Render("aims") + s.Dim.Render("  accounts for "+strings.Join(titles(), " and "))
+	if m.project != "" {
+		title += s.Dim.Render(" · order for " + Where(m.project))
+	}
 	ver := s.Dim.Render(m.version)
 	b.WriteString("\n " + title + strings.Repeat(" ", max(1, w-lipgloss.Width(title)-lipgloss.Width(ver)-2)) + ver + "\n\n")
 
@@ -382,6 +406,9 @@ func (m *dashboard) View() string {
 			}
 			b.WriteString(cursor + mark + l.Row(s, p, name, state, m.threshold) + "\n")
 			i++
+		}
+		if t.Project != "" {
+			b.WriteString("     " + s.Dim.Render(what(t.Project)+"'s own order; elsewhere "+strings.Join(t.Everywhere, " → ")+" · ") + s.Cmd.Render("g") + s.Dim.Render(" everywhere · ") + s.Cmd.Render("x") + s.Dim.Render(" drop it") + "\n")
 		}
 		if plan := t.Plan(m.auto); plan != "" {
 			b.WriteString("     " + s.Dim.Render(plan) + "\n")

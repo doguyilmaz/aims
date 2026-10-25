@@ -19,6 +19,9 @@ exec aims sync codex
 grep 'model = "o5"' $HOME/.aims/profiles/codex/work/config.toml
 mkdir $HOME/.aims/profiles/codex/personal/sessions/2026
 ! exists $HOME/.codex/sessions/2026
+# ...and their own databases.
+exec aims env codex work
+stdout 'unset CODEX_SQLITE_HOME'
 
 # A JSON run that hit the limit before any command is repeated on work.
 cp marker $HOME/.aims/profiles/codex/personal/LIMITED

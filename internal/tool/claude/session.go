@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -151,7 +152,7 @@ func (*Adapter) HookEvent(raw []byte) (tool.SessionEvent, bool) {
 	if id == "" || !slices.Contains(hookEvents, name) {
 		return tool.SessionEvent{}, false
 	}
-	ev := tool.SessionEvent{Session: id, Transcript: j.Get("transcript_path").String()}
+	ev := tool.SessionEvent{Session: id, Transcript: j.Get("transcript_path").String(), Mode: j.Get("permission_mode").String()}
 	switch name {
 	case "SessionStart":
 		ev.Opened = true
@@ -182,11 +183,27 @@ var sessionFlags = []string{
 	"--from-pr", "--teleport", "-n", "--name",
 }
 
-func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]string, error) {
-	arity, err := optionArity(bin)
+// setupFlags are how a session was set up at its start; a resumed run takes
+// how it was at its last turn instead, which /model, /effort and shift+tab
+// may have changed.
+var setupFlags = []string{"--model", "--effort", "--permission-mode"}
+
+func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, error) {
+	help, err := readHelp(bin)
 	if err != nil {
 		return nil, err
 	}
+	arity := tool.ParseOptions(help)
+	id, prompt := r.ID, r.Prompt
+	setup := setupOf(r)
+	// An older claude may not know a flag, or a mode a hook reported.
+	for f, v := range setup {
+		if arity[f] == tool.ArgNone || (f == "--permission-mode" && !strings.Contains(optionHelp(help, f), `"`+v+`"`)) {
+			delete(setup, f)
+		}
+	}
+	// A mode carried over replaces bypassing permissions from the start.
+	bypass := setup["--permission-mode"] != ""
 	var out []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -212,13 +229,18 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 				}
 			}
 		}
-		if !slices.Contains(sessionFlags, name) {
+		if !slices.Contains(sessionFlags, name) && (setup[name] == "" || id == "") && (name != "--dangerously-skip-permissions" || !bypass || id == "") {
 			out = append(out, args[i:end]...)
 		}
 		i = end - 1
 	}
 	if id == "" {
 		return out, nil
+	}
+	for _, f := range setupFlags {
+		if v := setup[f]; v != "" {
+			out = append(out, f, v)
+		}
 	}
 	out = append(out, "--resume", id)
 	if prompt != "" {
@@ -227,18 +249,64 @@ func (*Adapter) ResumeArgs(bin string, args []string, id, prompt string) ([]stri
 	return out, nil
 }
 
-// optionArity reads which options take a value from the installed claude's
-// help, so a prompt is told apart from an option's value whatever version
-// is installed.
-func optionArity(bin string) (map[string]tool.Arity, error) {
+// efforts are the levels --effort takes.
+var efforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+// setupOf is how the conversation was set up at its last turn: the model
+// and effort of its last answer, and its permission mode. Bypassing
+// permissions is not carried over; the flags the session started with
+// decide that.
+func setupOf(r tool.Resume) map[string]string {
+	out := map[string]string{}
+	if r.Mode != "" && r.Mode != "bypassPermissions" {
+		out["--permission-mode"] = r.Mode
+	}
+	if r.Transcript == "" {
+		return out
+	}
+	lines := tool.TailLines(r.Transcript, 1<<20)
+	for i := len(lines) - 1; i >= 0; i-- {
+		j := gjson.ParseBytes(lines[i])
+		// An error ending the turn (a limit) is written as an answer too.
+		if j.Get("type").String() != "assistant" || j.Get("isSidechain").Bool() || j.Get("isApiErrorMessage").Bool() {
+			continue
+		}
+		m := j.Get("requestedModel").String()
+		if m == "" || strings.HasPrefix(m, "-") || strings.HasPrefix(m, "<") {
+			continue
+		}
+		out["--model"] = m
+		if e := j.Get("effort").String(); slices.Contains(efforts, e) {
+			out["--effort"] = e
+		}
+		break
+	}
+	return out
+}
+
+// optionHelp is the part of help about one option: its line and the ones
+// under it, up to the next option.
+func optionHelp(help, option string) string {
+	loc := regexp.MustCompile(`(?m)^\s+(-\w, )?` + regexp.QuoteMeta(option) + `\b`).FindStringIndex(help)
+	if loc == nil {
+		return ""
+	}
+	rest := help[loc[1]:]
+	if j := regexp.MustCompile(`\n\s{1,4}-`).FindStringIndex(rest); j != nil {
+		rest = rest[:j[0]]
+	}
+	return rest
+}
+
+// readHelp reads the installed claude's help: which options take a value,
+// so a prompt is told apart from an option's value whatever version is
+// installed, and which values some of them take.
+func readHelp(bin string) (string, error) {
 	help, code, err := proc.Output(bin, []string{"--help"}, nil, 10*time.Second)
 	if err == nil && (code != 0 || !strings.Contains(help, "--resume")) {
 		err = fmt.Errorf("claude --help did not list its options")
 	}
-	if err != nil {
-		return nil, err
-	}
-	return tool.ParseOptions(help), nil
+	return help, err
 }
 
 // managedSettings is where an organization's policy for Claude Code lives.

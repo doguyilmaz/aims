@@ -70,7 +70,7 @@ personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 | `claude`, `aims claude` | your first account | moves to the next account, and back once the first works again |
 | `aims claude@work` | work | stays on work (pinned) |
 
-`aims` alone shows your accounts, the sessions open now and anything left to set up. `aims order` changes which account comes first, and `aims doctor` checks everything.
+`aims` alone shows your accounts, the sessions open now and anything left to set up. `aims order` changes which account comes first (in this project; `--global` for every folder), and `aims doctor` checks everything.
 
 ## How it works
 

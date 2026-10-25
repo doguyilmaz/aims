@@ -26,7 +26,7 @@ logout, and a conversation started on one account can continue on another.
   there while it works. The user can do the same with `!aims move work`.
 - Any other running session (`aims claude@work`, plain `claude` or `codex`) keeps
   the login it started with. `aims use` and `aims failover` change the account
-  of **new** sessions. To move such a conversation, the user exits and runs
+  of **new** sessions, in this project unless `--global`. To move such a conversation, the user exits and runs
   `aims claude --continue` or `aims codex resume --last`;
   `aims failover claude --resume` does both.
 - To use another account **right now**, run a self-contained task with it:
@@ -46,7 +46,7 @@ Otherwise use the CLI:
 | Task | Command |
 | --- | --- |
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
-| Switch the account for new sessions | `aims use work` (every tool) or `aims use claude work` |
+| Switch the account for new sessions in this project | `aims use work` (every tool) or `aims use claude work`; `--global` for every folder |
 | The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one) |
 | Move this session's conversation now | `aims move work` (only in a session aims moves) |
 | Undo a wrong mark | `aims clear claude [profile]` |
