@@ -67,7 +67,7 @@ eval "$(aims env claude client-x)"
 eval "$(aims env --reset)"       # back to following the active account
 ```
 
-`aims env` prints the variables to set (`AIMS_CLAUDE_PROFILE`, and `CLAUDE_CONFIG_DIR` or `CODEX_HOME` so even the bare binaries use that login). It prints for your shell; pass `--shell fish` or `--shell powershell` to choose. In fish, use `aims env work | source`.
+`aims env` prints the variables to set (`AIMS_CLAUDE_PROFILE`, and `CLAUDE_CONFIG_DIR` or `CODEX_HOME` so even the bare binaries use that login; for Codex also `CODEX_SQLITE_HOME`, so they share its databases). It prints for your shell; pass `--shell fish` or `--shell powershell` to choose. In fish, use `aims env work | source`.
 
 ## Plain `claude` and `codex`
 

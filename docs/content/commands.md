@@ -170,7 +170,7 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 
 ### `aims doctor`
 
-Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
+Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes, including a profile's own writer lock folder once no process uses it, and names database copies a profile no longer uses; `--fix` also adopts databases that looked open (close the tools first). Exits with 1 when something needs attention.
 
 ### `aims keepalive [on|off]`
 
