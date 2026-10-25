@@ -69,6 +69,13 @@ type Tool struct {
 	Active   string              `json:"active,omitempty"`
 	Order    []string            `json:"order,omitempty"`
 	Profiles map[string]*Profile `json:"profiles,omitempty"`
+	// Projects is the order of a project (see ProjectOf) that has its own:
+	// its profiles first, then the others in Order.
+	Projects map[string][]string `json:"projects,omitempty"`
+	// Project is the project whose order Load put in Active and Order;
+	// Everywhere is the order outside it.
+	Project    string   `json:"-"`
+	Everywhere []string `json:"-"`
 }
 
 // Failover tunes automatic account switching.
@@ -129,9 +136,27 @@ var nameRe = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,38}[A-Za-z0-9])
 // ValidName reports whether s can name a profile.
 func ValidName(s string) bool { return nameRe.MatchString(s) }
 
-// Load reads the config and fills defaults. A config that does not parse is an
+// Load reads the config and fills defaults, with the order of the project
+// aims runs in, if it has one, in effect. A config that does not parse is an
 // error, never an empty config: every command writes it back.
-func Load() (*Config, error) {
+func Load() (*Config, error) { return LoadIn("") }
+
+// LoadIn is Load for a tool that runs in dir ("" is aims' own folder): the
+// order of dir's project is in effect.
+func LoadIn(dir string) (*Config, error) {
+	c, err := load()
+	if err != nil {
+		return nil, err
+	}
+	key := Here()
+	if dir != "" {
+		key = ProjectOf(dir)
+	}
+	c.here(key)
+	return c, nil
+}
+
+func load() (*Config, error) {
 	c := &Config{Version: 1, Failover: Failover{Auto: true, CooldownMinutes: 300, Threshold: 95}}
 	if _, err := fsx.ReadJSON(configPath(), c); err != nil {
 		return nil, err
@@ -189,6 +214,7 @@ func (c *Config) normalize() {
 		if i := slices.Index(t.Order, t.Active); i > 0 {
 			t.Order = append([]string{t.Active}, slices.Delete(slices.Clone(t.Order), i, i+1)...)
 		}
+		t.cleanProjects()
 	}
 }
 
@@ -207,7 +233,7 @@ func Update(fn func(*Config) error) (*Config, error) {
 	}
 	var out *Config
 	err := fsx.WithLock(configPath(), func() error {
-		c, err := Load()
+		c, err := load()
 		if err != nil {
 			return err
 		}

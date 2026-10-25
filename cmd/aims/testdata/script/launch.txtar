@@ -25,7 +25,7 @@ stdout '(?s)● work.*\n +personal'
 
 # `order` does the same for its first account; the next ones stand in for it.
 exec aims order claude personal work
-stderr 'New Claude Code sessions use personal; while it is limited or logged out: work'
+stderr 'New Claude Code sessions in this folder \(.*\) use personal; while it is limited or logged out: work'
 exec aims claude
 stdout 'claude interactive as default'
 exec aims use work

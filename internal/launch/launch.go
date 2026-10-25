@@ -93,7 +93,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	if bin == "" {
 		return Result{Code: 127}, fmt.Errorf("%s is %w (or set %s)", a.Layout().Bin, ErrNotInstalled, a.Layout().BinEnv)
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return Result{Code: 1}, err
 	}

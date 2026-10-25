@@ -65,7 +65,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	// to, which the conversation stays on while it works.
 	var asked, held string
 	for launch := 1; ; launch++ {
-		cfg, err := config.Load()
+		cfg, err := config.LoadIn(o.Dir)
 		if err != nil {
 			return Result{Code: 1, Profile: name}, err
 		}
@@ -244,7 +244,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 // limited.
 func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
 	a := o.Tool
-	cfg, err := config.Load()
+	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return "", "", "", nil
 	}
@@ -292,7 +292,7 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 // once it works again, or the next usable one when this one is about to
 // run out.
 func onStop(ctx context.Context, o Options, name, held string) (next, why string) {
-	cfg, err := config.Load()
+	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return "", ""
 	}

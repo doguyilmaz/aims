@@ -111,12 +111,16 @@ func printStatus(ctx context.Context, cmd *cobra.Command, ids []tool.ID, asJSON 
 }
 
 func newUseCmd() *cobra.Command {
-	return &cobra.Command{
+	var global bool
+	cmd := &cobra.Command{
 		Use:   "use [tool] <profile>",
 		Short: "Choose the account new sessions start on",
-		Long:  "Without a tool, every tool that has a profile with that name switches.",
-		Example: `aims use work            # Claude Code and Codex
-aims use claude personal`,
+		Long: "In the project aims runs in (the git repository, or the folder outside one),\n" +
+			"unless --global. Without a tool, every tool that has a profile with that name\n" +
+			"switches.",
+		Example: `aims use work            # Claude Code and Codex, in this project
+aims use claude personal
+aims use --global work   # every folder without an order of its own`,
 		Args: cobra.MaximumNArgs(2),
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
@@ -147,7 +151,11 @@ aims use claude personal`,
 				}
 				name = args[1]
 			}
-			changed, err := ops.Use(a, name)
+			key, err := scopeKey(global)
+			if err != nil {
+				return err
+			}
+			changed, err := ops.Use(a, name, key)
 			if err != nil {
 				return err
 			}
@@ -156,9 +164,51 @@ aims use claude personal`,
 				titles = append(titles, c.Title())
 				warnPinned(c, name)
 			}
-			ui.Done("New %s sessions use %s", strings.Join(titles, " and "), ui.Err.Bold.Render(name))
+			ui.Done("%s", ui.OrderSummary(strings.Join(titles, " and "), key, []string{name}, ui.Err.Bold))
+			afterScope(changed, key, "aims use --global "+name)
 			return nil
 		},
+	}
+	cmd.Flags().BoolVar(&global, "global", false, "for every folder without an order of its own")
+	return cmd
+}
+
+// scopeKey is the project use and order change: the one aims runs in, or
+// none (every folder) with --global.
+func scopeKey(global bool) (string, error) {
+	if global {
+		return "", nil
+	}
+	key := config.Here()
+	if key == "" {
+		return "", errors.New("cannot tell which folder this is; --global changes every folder")
+	}
+	return key, nil
+}
+
+// afterScope says, after a change to key's order, what holds elsewhere:
+// for a project, the other folders' order and the command for all of them;
+// for every folder, the projects that keep their own.
+func afterScope(changed []tool.Adapter, key, globalCmd string) {
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	for _, a := range changed {
+		t := cfg.Tools[a.ID()]
+		switch {
+		case key != "":
+			ui.Hint("%s elsewhere: %s; every folder: %s", a.Title(), strings.Join(t.Everywhere, " → "), ui.Kbd(ui.Err, globalCmd))
+		case t.Project != "":
+			ui.Warn("%s keeps its own %s order: %s; drop it with %s", ui.Where(t.Project), a.Title(), strings.Join(t.Order, " → "), ui.Kbd(ui.Err, "aims order --reset"))
+		}
+		others := len(t.Projects)
+		if _, ok := t.Projects[t.Project]; ok {
+			others--
+		}
+		if key == "" && others > 0 {
+			ui.Hint("%d other folder(s) keep their own %s order (aims status)", others, a.Title())
+		}
 	}
 }
 

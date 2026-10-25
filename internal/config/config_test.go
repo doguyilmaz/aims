@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
 )
 
@@ -172,5 +173,58 @@ func TestStateUpdates(t *testing.T) {
 	}
 	if err := RemoveState("claude", "work"); err != nil || LoadState().Get("claude", "work").NeedsLogin {
 		t.Fatal("state not removed")
+	}
+}
+
+// A project's own order is in effect inside it, the profiles it names
+// first; elsewhere, and in what is saved, the order of every folder stays.
+func TestProjectOrder(t *testing.T) {
+	home := testutil.Sandbox(t)
+	repo := filepath.Join(home, "src", "app")
+	testutil.Write(t, filepath.Join(repo, ".git", "HEAD"), "ref: main\n")
+	testutil.Write(t, filepath.Join(repo, "web", "x"), "")
+	testutil.Write(t, filepath.Join(home, ".git", "HEAD"), "")
+	if got := ProjectOf(filepath.Join(repo, "web")); got != fsx.Real(repo) {
+		t.Errorf("subfolder: %q", got)
+	}
+	// A repository at home does not swallow every folder.
+	if got, want := ProjectOf(filepath.Join(home, "src")), fsx.Real(filepath.Join(home, "src")); got != want {
+		t.Errorf("home repository: %q, want %q", got, want)
+	}
+
+	if _, err := Update(func(c *Config) error {
+		tl := c.Tools["claude"]
+		for _, n := range []string{"a", "b", "c"} {
+			tl.Profiles[n] = &Profile{}
+		}
+		tl.Order = []string{"a", "b", "c"}
+		tl.Arrange([]string{"c"}, fsx.Real(repo))
+		tl.Arrange([]string{"b"}, fsx.Real(repo))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(repo, "web"))
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl := c.Tools["claude"]
+	if strings.Join(tl.Order, ",") != "b,c,a" || tl.Active != "b" || tl.Project != fsx.Real(repo) || strings.Join(tl.Everywhere, ",") != "a,b,c" {
+		t.Errorf("in the project: order=%v active=%q project=%q everywhere=%v", tl.Order, tl.Active, tl.Project, tl.Everywhere)
+	}
+	t.Chdir(home)
+	if c, _ = Load(); c.Tools["claude"].Active != "a" || c.Tools["claude"].Project != "" {
+		t.Errorf("elsewhere: %+v", c.Tools["claude"])
+	}
+
+	// A profile that goes leaves the project orders; an empty one goes too.
+	c, err = Update(func(c *Config) error {
+		delete(c.Tools["claude"].Profiles, "b")
+		delete(c.Tools["claude"].Profiles, "c")
+		return nil
+	})
+	if err != nil || c.Tools["claude"].Projects != nil || strings.Join(c.Tools["claude"].Order, ",") != "a" {
+		t.Errorf("cleaned: %v %+v", err, c.Tools["claude"])
 	}
 }

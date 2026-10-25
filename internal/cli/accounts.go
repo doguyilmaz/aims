@@ -307,7 +307,7 @@ aims add codex work --share settings     # keep conversations separate`,
 func newFailoverCmd() *cobra.Command {
 	var from, to, reason string
 	var minutes int
-	var resume bool
+	var resume, global bool
 	cmd := &cobra.Command{
 		Use:   "failover [tool]",
 		Short: "Mark the current account as limited and switch to the next",
@@ -344,7 +344,11 @@ aims failover codex --to work --minutes 90`,
 					return cancelled(r, err)
 				}
 			}
-			res, err := ops.Failover(ctx, a, from, to, time.Duration(minutes)*time.Minute, reason, "aims failover")
+			key, err := scopeKey(global)
+			if err != nil {
+				return err
+			}
+			res, err := ops.Failover(ctx, a, from, to, time.Duration(minutes)*time.Minute, reason, "aims failover", key)
 			if err != nil {
 				if errors.Is(err, ops.ErrNoTarget) {
 					err = fmt.Errorf("%w; add one with: aims login %s <name>", err, a.ID())
@@ -405,7 +409,8 @@ aims failover codex --to work --minutes 90`,
 		},
 	}
 	cmd.Flags().StringVar(&from, "from", "", "profile to mark (default: the one used last)")
-	cmd.Flags().StringVar(&to, "to", "", "make this profile active instead (default: the next usable one stands in while the mark lasts)")
+	cmd.Flags().StringVar(&to, "to", "", "make this profile first in this project instead (default: the next usable one stands in while the mark lasts)")
+	cmd.Flags().BoolVar(&global, "global", false, "with --to: first in every folder without an order of its own")
 	cmd.Flags().IntVar(&minutes, "minutes", 0, "rest period when the reset time is unknown")
 	cmd.Flags().StringVar(&reason, "reason", "", "limit (default) or login")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue the last conversation on the new account")

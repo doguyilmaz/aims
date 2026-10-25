@@ -84,6 +84,8 @@ type dashboard struct {
 	tips    []ops.Tip
 	// start says how to start a session aims moves at a limit.
 	start string
+	// project is the one aims runs in, whose order the keys change.
+	project string
 }
 
 type reportMsg struct {
@@ -119,7 +121,7 @@ func RunDashboard(ctx context.Context, version string) (*Launch, error) {
 	h.Styles.ShortSeparator, h.Styles.FullSeparator = Out.Dim, Out.Dim
 	m := &dashboard{
 		ctx: ctx, version: version, threshold: cfg.Failover.Threshold,
-		spin: sp, help: h, checking: map[string]bool{}, self: self,
+		spin: sp, help: h, checking: map[string]bool{}, self: self, project: config.Here(),
 	}
 	m.setReport(report)
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
@@ -223,7 +225,7 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, func() tea.Msg {
-			res, err := ops.Failover(m.ctx, tools.Get(c.toolID), c.name, "", 0, "limit", "the dashboard")
+			res, err := ops.Failover(m.ctx, tools.Get(c.toolID), c.name, "", 0, "limit", "the dashboard", m.project)
 			if err != nil {
 				return flashMsg{err.Error(), true}
 			}
@@ -253,10 +255,10 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, keys.Use):
 		return m, func() tea.Msg {
-			if _, err := ops.Use(tools.Get(sel.toolID), sel.name); err != nil {
+			if _, err := ops.Use(tools.Get(sel.toolID), sel.name, m.project); err != nil {
 				return flashMsg{err.Error(), true}
 			}
-			return flashMsg{fmt.Sprintf("New %s sessions use %s", tools.Get(sel.toolID).Title(), sel.name), false}
+			return flashMsg{OrderSummary(tools.Get(sel.toolID).Title(), m.project, []string{sel.name}, lipgloss.NewStyle()), false}
 		}
 	case key.Matches(msg, keys.Start):
 		// Not pinned to the row: aims picks the account and watches it.
@@ -300,11 +302,11 @@ func (m *dashboard) move(sel selection, by int) tea.Cmd {
 	names[i], names[j] = names[j], names[i]
 	a := tools.Get(sel.toolID)
 	return func() tea.Msg {
-		order, err := ops.SetOrder(a, names)
+		order, err := ops.SetOrder(a, names, m.project)
 		if err != nil {
 			return flashMsg{err.Error(), true}
 		}
-		return flashMsg{OrderSummary(a.Title(), order, lipgloss.NewStyle()), false}
+		return flashMsg{OrderSummary(a.Title(), m.project, order, lipgloss.NewStyle()), false}
 	}
 }
 
@@ -349,6 +351,9 @@ func (m *dashboard) View() string {
 	var b strings.Builder
 
 	title := s.Title.Render("aims") + s.Dim.Render("  accounts for "+strings.Join(titles(), " and "))
+	if m.project != "" {
+		title += s.Dim.Render(" · order for " + Where(m.project))
+	}
 	ver := s.Dim.Render(m.version)
 	b.WriteString("\n " + title + strings.Repeat(" ", max(1, w-lipgloss.Width(title)-lipgloss.Width(ver)-2)) + ver + "\n\n")
 

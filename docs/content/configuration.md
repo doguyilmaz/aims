@@ -68,6 +68,7 @@ Both JSON files are written atomically with owner-only permissions, under a lock
 | `hubEnv` | `CLAUDE_CONFIG_DIR` or `CODEX_HOME` as you had it set, if you did |
 | `active` | The profile new sessions get. aims keeps it first in `order`,, and `aims use` and `aims order` change it. |
 | `order` | Which profiles stand in, in turn, while the active one is limited or logged out |
+| `projects` | A project's own order, by its folder: the profiles listed come first there, then the rest of `order`. `aims use` and `aims order` inside a project write it; `--global` writes `active` and `order` instead. A project is a git repository (all its folders), or one folder outside a repository. |
 
 `failover` is described in [Limits and failover](../failover#settings). `statusline.chain` is the status line command you had before `aims setup`, which aims runs first.
 

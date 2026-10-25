@@ -48,13 +48,18 @@ type ProfileStatus struct {
 
 // ToolStatus is one tool in `aims status`.
 type ToolStatus struct {
-	ID        tool.ID         `json:"tool"`
-	Title     string          `json:"title"`
-	Installed bool            `json:"installed"`
-	Hub       string          `json:"hub,omitempty"`
-	Active    string          `json:"active,omitempty"`
-	Pinned    string          `json:"pinned,omitempty"`
-	Profiles  []ProfileStatus `json:"profiles"`
+	ID        tool.ID `json:"tool"`
+	Title     string  `json:"title"`
+	Installed bool    `json:"installed"`
+	Hub       string  `json:"hub,omitempty"`
+	Active    string  `json:"active,omitempty"`
+	Pinned    string  `json:"pinned,omitempty"`
+	// Project is the project aims runs in when it has its own order, which
+	// Active and the order of Profiles follow; Everywhere is the order of
+	// every other folder.
+	Project    string          `json:"project,omitempty"`
+	Everywhere []string        `json:"everywhere,omitempty"`
+	Profiles   []ProfileStatus `json:"profiles"`
 	// Sessions are the interactive sessions aims started that still run.
 	Sessions []profiles.OpenSession `json:"sessions,omitempty"`
 }
@@ -91,7 +96,10 @@ func Status(ctx context.Context, ids []tool.ID) ([]ToolStatus, error) {
 func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool.Adapter) ToolStatus {
 	id := a.ID()
 	t := cfg.Tools[id]
-	ts := ToolStatus{ID: id, Title: a.Title(), Installed: profiles.Bin(a) != "", Hub: t.Hub, Active: t.Active, Pinned: config.Pinned(id)}
+	ts := ToolStatus{ID: id, Title: a.Title(), Installed: profiles.Bin(a) != "", Hub: t.Hub, Active: t.Active, Pinned: config.Pinned(id), Project: t.Project}
+	if t.Project != "" {
+		ts.Everywhere = t.Everywhere
+	}
 	now := config.Now()
 	evs := profiles.EvaluateAll(ctx, cfg, st, a)
 	standIn, preferred := "", ""
