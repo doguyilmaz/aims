@@ -1,6 +1,8 @@
 package tool
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -147,5 +149,20 @@ func TestFollowEvents(t *testing.T) {
 	}
 	if evs := poll(); len(evs) != 0 {
 		t.Fatalf("read twice: %+v", evs)
+	}
+}
+
+// TailLines keeps a line the window starts exactly on, and drops one it
+// starts inside.
+func TestTailLines(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.jsonl")
+	if err := os.WriteFile(p, []byte("aaaa\nbbbb\ncccc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := TailLines(p, 10); len(got) != 2 || string(got[0]) != "bbbb" {
+		t.Errorf("on a line start: %q", got)
+	}
+	if got := TailLines(p, 8); len(got) != 1 || string(got[0]) != "cccc" {
+		t.Errorf("inside a line: %q", got)
 	}
 }

@@ -49,6 +49,9 @@ func TestSharedWriterLocks(t *testing.T) {
 	testutil.Write(t, privateLock, "")
 	before, _ := os.Stat(privateLock)
 	o.Dir = old
+	recheck := links.BusyRecheck
+	links.BusyRecheck = 0
+	t.Cleanup(func() { links.BusyRecheck = recheck })
 	ensure := func() links.Report {
 		for _, r := range links.Ensure(o) {
 			if r.Name == name {

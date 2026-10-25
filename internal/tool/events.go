@@ -68,7 +68,8 @@ func TailLines(path string, n int64) [][]byte {
 	if err != nil {
 		return nil
 	}
-	start := max(fi.Size()-n, 0)
+	// From one byte before the window, to tell whether it starts a line.
+	start := max(fi.Size()-n-1, 0)
 	if _, err := f.Seek(start, io.SeekStart); err != nil {
 		return nil
 	}

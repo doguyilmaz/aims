@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
@@ -42,8 +43,7 @@ type Report struct {
 	Name   string
 	Action Action
 	Detail string
-	// Quiet conflicts cannot be fixed automatically and are shown only by
-	// doctor and sync, not on every launch.
+	// Quiet conflicts are shown only by doctor and sync, not on every launch.
 	Quiet bool
 }
 
@@ -94,6 +94,30 @@ func sharedNames(o Options) []string {
 		}
 	}
 	return out
+}
+
+var (
+	busyMu sync.Mutex
+	busyAt = map[string]time.Time{}
+	// BusyRecheck is how long a lock folder found in use is not asked about
+	// again by the same process: a session that moves syncs on every restart.
+	BusyRecheck = 10 * time.Minute
+)
+
+// busyLocks is holding for a lock folder, remembered for BusyRecheck when
+// it is in use.
+func busyLocks(dir string) bool {
+	busyMu.Lock()
+	defer busyMu.Unlock()
+	if at, ok := busyAt[dir]; ok && time.Since(at) < BusyRecheck {
+		return true
+	}
+	if holding(dir) {
+		busyAt[dir] = time.Now()
+		return true
+	}
+	delete(busyAt, dir)
+	return false
 }
 
 // holding reports whether a process may have a file in dir open: true too
@@ -354,7 +378,7 @@ func ensureOne(o Options, name string) (Report, error) {
 			// Moving or deduplicating even an empty lock file changes its
 			// inode and can let two processes own the same conversation:
 			// only a folder no process has a file of open moves aside.
-			if !holding(link) {
+			if !busyLocks(link) {
 				aside := link + ".aims-" + o.Label + "-" + stamp()
 				if err := move(link, aside); err != nil {
 					return r, err

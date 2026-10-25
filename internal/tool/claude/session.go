@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -197,10 +198,12 @@ func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, 
 	setup := setupOf(r)
 	// An older claude may not know a flag, or a mode a hook reported.
 	for f, v := range setup {
-		if arity[f] == tool.ArgNone || (f == "--permission-mode" && !strings.Contains(help, `"`+v+`"`)) {
+		if arity[f] == tool.ArgNone || (f == "--permission-mode" && !strings.Contains(optionHelp(help, f), `"`+v+`"`)) {
 			delete(setup, f)
 		}
 	}
+	// A mode carried over replaces bypassing permissions from the start.
+	bypass := setup["--permission-mode"] != ""
 	var out []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -226,7 +229,7 @@ func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, 
 				}
 			}
 		}
-		if !slices.Contains(sessionFlags, name) && (setup[name] == "" || id == "") {
+		if !slices.Contains(sessionFlags, name) && (setup[name] == "" || id == "") && (name != "--dangerously-skip-permissions" || !bypass || id == "") {
 			out = append(out, args[i:end]...)
 		}
 		i = end - 1
@@ -264,18 +267,35 @@ func setupOf(r tool.Resume) map[string]string {
 	lines := tool.TailLines(r.Transcript, 1<<20)
 	for i := len(lines) - 1; i >= 0; i-- {
 		j := gjson.ParseBytes(lines[i])
-		if j.Get("type").String() != "assistant" || j.Get("isSidechain").Bool() {
+		// An error ending the turn (a limit) is written as an answer too.
+		if j.Get("type").String() != "assistant" || j.Get("isSidechain").Bool() || j.Get("isApiErrorMessage").Bool() {
 			continue
 		}
-		if m := j.Get("requestedModel").String(); m != "" && !strings.HasPrefix(m, "-") {
-			out["--model"] = m
+		m := j.Get("requestedModel").String()
+		if m == "" || strings.HasPrefix(m, "-") || strings.HasPrefix(m, "<") {
+			continue
 		}
+		out["--model"] = m
 		if e := j.Get("effort").String(); slices.Contains(efforts, e) {
 			out["--effort"] = e
 		}
 		break
 	}
 	return out
+}
+
+// optionHelp is the part of help about one option: its line and the ones
+// under it, up to the next option.
+func optionHelp(help, option string) string {
+	loc := regexp.MustCompile(`(?m)^\s+(-\w, )?` + regexp.QuoteMeta(option) + `\b`).FindStringIndex(help)
+	if loc == nil {
+		return ""
+	}
+	rest := help[loc[1]:]
+	if j := regexp.MustCompile(`\n\s{1,4}-`).FindStringIndex(rest); j != nil {
+		rest = rest[:j[0]]
+	}
+	return rest
 }
 
 // readHelp reads the installed claude's help: which options take a value,

@@ -66,11 +66,17 @@ func TestResumeArgs(t *testing.T) {
 	testutil.Write(t, transcript, `{"type":"assistant","requestedModel":"claude-opus-5-5","effort":"low"}
 {"type":"assistant","isSidechain":true,"requestedModel":"claude-haiku-5-5","effort":"max"}
 {"type":"user"}
+{"type":"assistant","isApiErrorMessage":true,"message":{"model":"<synthetic>"}}
 `)
 	start := []string{"hi", "--model", "sonnet", "--effort=high", "--permission-mode", "plan", "--add-dir", "a"}
 	got, _ := a.ResumeArgs(bin, start, tool.Resume{ID: "S", Transcript: transcript, Mode: "auto"})
 	if want := []string{"--add-dir", "a", "--model", "claude-opus-5-5", "--effort", "low", "--permission-mode", "auto", "--resume", "S"}; !slices.Equal(got, want) {
 		t.Errorf("as at the last turn:\n got %q\nwant %q", got, want)
+	}
+	// A mode carried over turns off bypassing permissions from the start.
+	got, _ = a.ResumeArgs(bin, []string{"--dangerously-skip-permissions"}, tool.Resume{ID: "S", Mode: "plan"})
+	if want := []string{"--permission-mode", "plan", "--resume", "S"}; !slices.Equal(got, want) {
+		t.Errorf("bypass turned off:\n got %q\nwant %q", got, want)
 	}
 	// A mode this claude does not list stays with the start's flags.
 	got, _ = a.ResumeArgs(bin, start, tool.Resume{ID: "S", Mode: "default"})

@@ -11,14 +11,14 @@ exec aims env codex work
 stdout 'export CODEX_SQLITE_HOME=.*\.codex'
 
 # personal hits its usage limit mid-session: aims stops codex and resumes the
-# same conversation on work. Codex restores its model and approvals itself,
-# so the options that set them up are not passed again.
+# same conversation on work. Codex restores its model itself, so -m is not
+# passed again; the sandbox stays as the session started.
 cp LIMITED $HOME/.codex/LIMITED
 exec aims codex -m gpt-5 -s workspace-write 'fix it'
 stdout 'codex interactive as default args=\["-m" "gpt-5" "-s" "workspace-write" "fix it"\]'
 stdout 'codex stopped as default'
 stderr 'codex: personal hit its usage limit; continuing this conversation on work'
-stdout 'codex interactive as work args=\["resume" "c-default" "--" "continue"\]'
+stdout 'codex interactive as work args=\["-s" "workspace-write" "resume" "c-default" "--" "continue"\]'
 ! stdout 'stopped as work'
 exec aims status codex
 stdout 'personal .*limited .*marked by a session'

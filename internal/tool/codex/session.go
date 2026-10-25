@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -65,8 +66,9 @@ var resumeFlags = []string{"--last", "--all", "--include-non-interactive"}
 // the prompt, or resume's or fork's conversation. Which options take a
 // value comes from the installed codex's help, and from valueFlags when
 // that cannot be read. A resumed conversation also drops the options that
-// set it up (setupFlags): codex restores the model, effort and approvals it
-// had at its last turn, which the options would override.
+// pick its model and effort (setupFlags): codex restores the ones it had at
+// its last turn, which the options would override. Sandbox and approvals
+// stay as the session started.
 func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, error) {
 	arity := optionArity(bin)
 	var out []string
@@ -108,10 +110,10 @@ func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, 
 	return out, nil
 }
 
-// setupFlags and setupKeys (of -c) set up the model, effort and approvals.
+// setupFlags and setupKeys (of -c) pick the model and effort.
 var (
-	setupFlags = []string{"-m", "--model", "-a", "--ask-for-approval", "-s", "--sandbox", "--full-auto", "--dangerously-bypass-approvals-and-sandbox", "--yolo"}
-	setupKeys  = []string{"model", "model_reasoning_effort", "model_reasoning_summary", "model_verbosity", "plan_mode_reasoning_effort", "approval_policy", "approvals_reviewer", "sandbox_mode", "service_tier"}
+	setupFlags = []string{"-m", "--model"}
+	setupKeys  = []string{"model", "model_reasoning_effort", "model_reasoning_summary", "model_verbosity", "plan_mode_reasoning_effort", "service_tier"}
 )
 
 // setsUp reports whether an option and its value set the conversation up.
@@ -137,12 +139,40 @@ func optionArity(bin string) map[string]tool.Arity {
 	if bin == "" {
 		return out
 	}
-	for _, args := range [][]string{{"--help"}, {"resume", "--help"}} {
-		if help, code, err := proc.Output(bin, args, nil, 10*time.Second); err == nil && code == 0 {
-			maps.Copy(out, tool.ParseOptions(help))
-		}
-	}
+	maps.Copy(out, tool.ParseOptions(helpOf(bin, "--help")))
+	maps.Copy(out, tool.ParseOptions(helpOf(bin, "resume", "--help")))
 	return out
+}
+
+var (
+	helpMu    sync.Mutex
+	helpCache = map[string]string{}
+)
+
+// helpOf is the output of codex args (default --help), read once per
+// binary and version of it.
+func helpOf(bin string, args ...string) string {
+	if bin == "" {
+		return ""
+	}
+	if len(args) == 0 {
+		args = []string{"--help"}
+	}
+	key := strings.Join(append([]string{bin}, args...), "\x00")
+	if fi, err := os.Stat(bin); err == nil {
+		key += fi.ModTime().String()
+	}
+	helpMu.Lock()
+	defer helpMu.Unlock()
+	if h, ok := helpCache[key]; ok {
+		return h
+	}
+	help, code, err := proc.Output(bin, args, nil, 10*time.Second)
+	if err != nil || code != 0 {
+		help = ""
+	}
+	helpCache[key] = help
+	return help
 }
 
 // noDaemon keeps the conversation in the codex process aims stops: a shared
@@ -155,10 +185,8 @@ func noDaemon(bin string, args []string) []string {
 	if tool.HasFlag(args, "--no-daemon") {
 		return nil
 	}
-	if bin != "" {
-		if help, code, err := proc.Output(bin, []string{"--help"}, nil, 10*time.Second); err == nil && code == 0 && strings.Contains(help, "--no-daemon") {
-			return []string{"--no-daemon"}
-		}
+	if strings.Contains(helpOf(bin), "--no-daemon") {
+		return []string{"--no-daemon"}
 	}
 	return []string{"-c", "features.daemon_auto_start=false"}
 }

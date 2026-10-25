@@ -31,10 +31,11 @@ func TestResumeArgs(t *testing.T) {
 	a := New()
 	cases := []struct{ in, want []string }{
 		{nil, []string{"resume", "S", "--", "continue"}},
-		// The conversation's model, effort and approvals are its own.
+		// The conversation's model and effort are its own; sandbox and
+		// approvals stay as the session started.
 		{[]string{"-m", "gpt-5", "--search", "fix it"}, []string{"--search", "resume", "S", "--", "continue"}},
-		{[]string{"resume", "--last", "-s", "read-only", "-c", "model_reasoning_effort=low", "-c", "features.x=true"}, []string{"-c", "features.x=true", "resume", "S", "--", "continue"}},
-		{[]string{"--full-auto", "--model=o5", "--config", "approvals_reviewer=\"auto_review\"", "-p", "work"}, []string{"-p", "work", "resume", "S", "--", "continue"}},
+		{[]string{"resume", "--last", "-s", "read-only", "-c", "model_reasoning_effort=low", "-c", "features.x=true"}, []string{"-s", "read-only", "-c", "features.x=true", "resume", "S", "--", "continue"}},
+		{[]string{"--full-auto", "--model=o5", "--config", "approvals_reviewer=\"auto_review\"", "-p", "work"}, []string{"--full-auto", "--config", "approvals_reviewer=\"auto_review\"", "-p", "work", "resume", "S", "--", "continue"}},
 		{[]string{"-C", "dir", "resume", "old-id", "go on"}, []string{"-C", "dir", "resume", "S", "--", "continue"}},
 		{[]string{"fork", "--all", "--", "-x"}, []string{"resume", "S", "--", "continue"}},
 	}

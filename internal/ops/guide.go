@@ -90,6 +90,9 @@ func sharingTips(cfg *config.Config) []Tip {
 					out = append(out, Tip{fmt.Sprintf("%s/%s takes no part in moves until no %s uses it; aims then shares its writer locks", id, n, tools.Get(id).Title()), "aims doctor"})
 				}
 			}
+			if !profiles.StateShared(cfg, tools.Get(id), n) {
+				continue
+			}
 			var size int64
 			entries, _ := os.ReadDir(dir)
 			for _, e := range entries {
@@ -99,7 +102,7 @@ func sharingTips(cfg *config.Config) []Tip {
 					}
 				}
 			}
-			if size >= 1<<20 && profiles.StateShared(cfg, tools.Get(id), n) {
+			if size >= 1<<20 {
 				out = append(out, Tip{fmt.Sprintf("%s/%s keeps unused database copies (%d MB) that can go", id, n, size>>20), "aims doctor"})
 			}
 		}

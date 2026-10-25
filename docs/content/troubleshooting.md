@@ -88,7 +88,7 @@ Use the profile's actual folder shown by aims; an account using the original log
 
 ### Private writer locks
 
-New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory, and aims warns about it on launch. A lock file is open for as long as Codex has the conversation open, so on the next launch (or `aims sync`, `aims doctor`) aims checks that no process has a file in the profile's directory open, sets the directory aside (as `thread-writer-locks.aims-<profile>-<time>`) and links the shared one. While any Codex still uses it, it stays, and `aims` lists the profile under Next: close every Codex using that profile, including the app and background daemons (`codex app-server daemon stop` with that profile's `CODEX_HOME`). Do not delete lock files to bypass an active writer.
+New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory; `aims` lists such a profile under Next. A lock file is open for as long as Codex has the conversation open, so on the next launch (or `aims sync`, `aims doctor`) aims checks that no process has a file in the profile's directory open, sets the directory aside (as `thread-writer-locks.aims-<profile>-<time>`) and links the shared one. While any Codex still uses it, it stays, and `aims` lists the profile under Next: close every Codex using that profile, including the app and background daemons (`codex app-server daemon stop` with that profile's `CODEX_HOME`). Do not delete lock files to bypass an active writer.
 
 ### "the tool uses the shared copy; delete this one to free its space"
 
