@@ -10,7 +10,7 @@ const bin = path.join(__dirname, key, process.platform === 'win32' ? 'aims.exe' 
 if (!fs.existsSync(bin)) {
   console.error(
     `aims: there is no build for ${key} in this package.\n` +
-      'See https://doguyilmaz.github.io/aims/installation/ for other ways to install.',
+      'See https://aims.apps.doguyilmaz.com/installation for other ways to install.',
   );
   process.exit(1);
 }

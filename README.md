@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://doguyilmaz.github.io/aims/">Documentation</a> ·
-  <a href="https://doguyilmaz.github.io/aims/installation/">Install</a> ·
-  <a href="https://doguyilmaz.github.io/aims/quick-start/">Quick start</a>
+  <a href="https://aims.apps.doguyilmaz.com">Documentation</a> ·
+  <a href="https://aims.apps.doguyilmaz.com/installation">Install</a> ·
+  <a href="https://aims.apps.doguyilmaz.com/quick-start">Quick start</a>
 </p>
 
 ---
@@ -44,7 +44,7 @@ npm install -g @doguyilmaz/aims
 go install github.com/doguyilmaz/aims/cmd/aims@latest
 ```
 
-On Windows: `irm https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.ps1 | iex`, or Scoop. See [Installation](https://doguyilmaz.github.io/aims/installation/).
+On Windows: `irm https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.ps1 | iex`, or Scoop. See [Installation](https://aims.apps.doguyilmaz.com/installation).
 
 ## Start
 
@@ -74,7 +74,7 @@ personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 
 ## How it works
 
-Claude Code and Codex read their state from one folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). aims gives each account its own folder holding only its login, and links everything else to your normal `~/.claude` and `~/.codex`. `aims claude` sets the variable and starts the real `claude`; aims is not a proxy and never sees your prompts. Details in [How it works](https://doguyilmaz.github.io/aims/how-it-works/).
+Claude Code and Codex read their state from one folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). aims gives each account its own folder holding only its login, and links everything else to your normal `~/.claude` and `~/.codex`. `aims claude` sets the variable and starts the real `claude`; aims is not a proxy and never sees your prompts. Details in [How it works](https://aims.apps.doguyilmaz.com/how-it-works).
 
 ## Development
 
@@ -84,7 +84,7 @@ go run ./cmd/aims status
 hugo server --source docs         # the documentation site
 ```
 
-Each supported CLI is an adapter in `internal/tool/<name>`; adding one is described in [Adding a tool](https://doguyilmaz.github.io/aims/how-it-works/#adding-a-tool).
+Each supported CLI is an adapter in `internal/tool/<name>`; adding one is described in [Adding a tool](https://aims.apps.doguyilmaz.com/how-it-works#adding-a-tool).
 
 ## License
 

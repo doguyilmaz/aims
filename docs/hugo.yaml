@@ -1,6 +1,6 @@
 # Hugo site config for the aims docs (Hextra theme, GitHub Pages).
 # Build:  hugo --source docs --minify     Serve:  hugo server --source docs
-baseURL: "https://doguyilmaz.github.io/aims/"
+baseURL: "https://aims.apps.doguyilmaz.com"
 title: aims
 
 enableRobotsTXT: true
