@@ -9,3 +9,6 @@ docs/resources/
 
 *.log
 .DS_Store
+
+# cf CLI local cache
+.cloudflare/

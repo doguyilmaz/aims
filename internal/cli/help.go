@@ -107,7 +107,7 @@ func renderHelp(w io.Writer, cmd *cobra.Command) {
 		b.WriteString("\n  " + s.Dim.Render("Run ") + s.Cmd.Render(cmd.CommandPath()+" <command> --help") + s.Dim.Render(" for details.") + "\n")
 	}
 	if !cmd.HasParent() {
-		b.WriteString("  " + s.Dim.Render("Docs: https://doguyilmaz.github.io/aims/") + "\n")
+		b.WriteString("  " + s.Dim.Render("Docs: https://aims.apps.doguyilmaz.com") + "\n")
 	}
 	fmt.Fprintln(w, b.String())
 }
