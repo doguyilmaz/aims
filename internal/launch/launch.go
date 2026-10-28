@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/proc"
@@ -72,6 +74,22 @@ func (o *Options) say(l Level, format string, args ...any) {
 func (o *Options) tell(l Level, format string, args ...any) {
 	o.say(l, format, args...)
 	proc.Notify(fmt.Sprintf(format, args...))
+}
+
+// startPause is how long a session started on another account than the
+// preferred one waits, so what aims said about it can be read before a tool
+// without a status line (tool.StatusLiner) covers the screen.
+const startPause = 2 * time.Second
+
+func (o *Options) pause() {
+	if _, line := o.Tool.(tool.StatusLiner); line {
+		return
+	}
+	if f, ok := o.Stderr.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
+		return
+	}
+	o.say(Hint, "%s starts in %ds", o.Tool.Layout().Bin, int(startPause.Seconds()))
+	time.Sleep(startPause)
 }
 
 // busyFor is how long a profile rests after a short-lived rate limit.
@@ -148,6 +166,9 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			if session {
 				explain(o, cfg, preferred, name, mode)
 				defer profiles.Untrack()
+				if name != preferred {
+					o.pause()
+				}
 			}
 			if mode == profiles.Watched {
 				return supervise(ctx, o, sv, bin, name)
