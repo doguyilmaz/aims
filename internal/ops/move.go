@@ -19,8 +19,8 @@ import (
 
 // ErrNotMoving means the process is not inside a session aims moves
 // between accounts.
-var ErrNotMoving = errors.New("this session was not started with `aims claude` or `aims codex` (without @profile), so aims cannot move it; " +
-	"aims use changes the account of new sessions")
+var ErrNotMoving = errors.New("aims move works inside a session started with `aims claude` or `aims codex` (without @profile): " +
+	"type `!aims move <profile>` there. This one was not started that way; aims use changes the account of new sessions")
 
 // MoveResult says where `aims move` sends the conversation.
 type MoveResult struct {
