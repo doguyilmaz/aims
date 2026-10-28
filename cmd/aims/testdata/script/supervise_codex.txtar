@@ -70,6 +70,15 @@ stdout 'codex goal paused as work'
 rm $HOME/.codex/GOAL
 rm $HOME/.codex/LIMITED
 
+# aims move asks Codex about an account that looks limited: a mark can
+# outlast the limit.
+exec aims clear codex personal
+exec aims failover codex --from work --minutes 90
+env FAKE_BEFORE_TURN='aims move work'
+exec aims codex resume c-default
+stdout 'codex interactive as work args=\["resume" "c-default"\]'
+env FAKE_BEFORE_TURN=
+
 # Other commands are not followed.
 exec aims codex login status
 stdout 'Logged in'

@@ -280,8 +280,7 @@ func sessionEnv(o Options, cfg *config.Config, name string) []string {
 func choose(ctx context.Context, o Options, cfg *config.Config, preferred string) string {
 	a := o.Tool
 	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
-	// A mark can be stale (a limit lifted early): ask where that is free.
-	if pick.Name == "" && liveCheck(ctx, cfg, a, nil) {
+	if pick.Name == "" && profiles.AskFree(ctx, cfg, a, cfg.Tools[a.ID()].Order) {
 		pick = profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
 	}
 	switch {

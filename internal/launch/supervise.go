@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
@@ -353,27 +352,16 @@ func onWait(ctx context.Context, o Options, name string, live bool) profiles.Pic
 	}
 	apart := profiles.Apart(cfg, a.ID(), name)
 	if live {
-		liveCheck(ctx, cfg, a, apart)
+		var names []string
+		for _, n := range cfg.Tools[a.ID()].Order {
+			if !slices.Contains(apart, n) {
+				names = append(names, n)
+			}
+		}
+		profiles.AskFree(ctx, cfg, a, names)
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
 	return profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
-}
-
-// liveCheck asks the provider about every account but those in exclude, and
-// records what it says, when asking costs nothing (tool.FreeProber). It
-// reports whether it asked.
-func liveCheck(ctx context.Context, cfg *config.Config, a tool.Adapter, exclude []string) bool {
-	if _, free := a.(tool.FreeProber); !free {
-		return false
-	}
-	var wg sync.WaitGroup
-	for _, n := range cfg.Tools[a.ID()].Order {
-		if !slices.Contains(exclude, n) {
-			wg.Go(func() { profiles.Live(ctx, cfg, a, n) })
-		}
-	}
-	wg.Wait()
-	return true
 }
 
 func tellWait(o Options, pick profiles.Pick) {
