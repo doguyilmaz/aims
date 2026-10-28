@@ -556,6 +556,21 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 	return record(cfg, a, name, a.Probe(ctx, Home(cfg, a, name)))
 }
 
+// AskFree asks the provider about the named accounts at once and records
+// what it says, when asking costs nothing (tool.FreeProber): a mark can be
+// stale, a limit lifted early. It reports whether it asked.
+func AskFree(ctx context.Context, cfg *config.Config, a tool.Adapter, names []string) bool {
+	if _, free := a.(tool.FreeProber); !free {
+		return false
+	}
+	var wg sync.WaitGroup
+	for _, n := range names {
+		wg.Go(func() { Live(ctx, cfg, a, n) })
+	}
+	wg.Wait()
+	return true
+}
+
 // RefreshDue is how close to running out a login's access token must be for
 // KeepAlive to renew it.
 const RefreshDue = 10 * time.Minute

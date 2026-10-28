@@ -166,6 +166,12 @@ type Reviver interface {
 	Revive(ctx context.Context, h Home, id string) error
 }
 
+// FreeProber is a tool whose Probe spends nothing, so aims asks it whenever
+// every account looks limited, and every few minutes while that lasts.
+type FreeProber interface {
+	FreeProbe()
+}
+
 // Diagnoser reports settings of the tool that keep aims from doing its job,
 // for aims doctor.
 type Diagnoser interface {

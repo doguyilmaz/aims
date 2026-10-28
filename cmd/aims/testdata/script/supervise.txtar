@@ -106,10 +106,10 @@ exec aims claude --version
 
 # Outside such a session there is nothing to move.
 ! exec aims move work
-stderr 'was not started with `aims claude` or `aims codex`'
+stderr 'aims move works inside a session started with `aims claude` or `aims codex`'
 env AIMS_SESSION_PROFILE=claude:personal
 env AIMS_RUN=$WORK
 ! exec aims move work
-stderr 'cannot move it'
+stderr 'This one was not started that way'
 
 -- LIMITED --

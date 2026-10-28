@@ -34,8 +34,15 @@ const (
 	// settle is how long a session must sit idle before a move aims chose
 	// restarts it, when no hook can hold the user's next prompt instead.
 	settle = 2 * time.Minute
-	// recheck is how often an idle session looks whether it should move.
+)
+
+var (
+	// recheck is how often an idle session, or one waiting for a reset,
+	// looks whether it should move.
 	recheck = 30 * time.Second
+	// waitProbe is how often a session waiting for a reset asks a provider
+	// that answers for free (tool.FreeProber) whether an account works.
+	waitProbe = 5 * time.Minute
 )
 
 // supervise runs an interactive session that moves between profiles: to the
@@ -64,6 +71,11 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	// asked is the profile `aims move` asked for; held is the one it moved
 	// to, which the conversation stays on while it works.
 	var asked, held string
+	// probed is when a session waiting for a reset last asked the provider.
+	// Each time a conversation sent on sooner hits the limit again (early),
+	// it asks half as often.
+	var probed time.Time
+	probeEvery, early := waitProbe, false
 	for launch := 1; ; launch++ {
 		cfg, err := config.LoadIn(o.Dir)
 		if err != nil {
@@ -152,10 +164,17 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				case ev.Failure != tool.FailNone:
 					running, held, chosen = false, "", ""
 					next, prompt, why, wake = onFailure(ctx, o, name, ev)
+					if early {
+						probeEvery = min(2*probeEvery, time.Hour)
+					}
+					// A mark can be stale (a limit lifted early): the wait
+					// below looks again right away.
+					early, checked = false, time.Time{}
 				default:
 					running, wake = false, nil
 					chosen, chosenWhy = onStop(ctx, o, name, held)
 					checked = time.Now()
+					probeEvery, early = waitProbe, false
 				}
 			}
 			// While the session sits idle, accounts can come back (a reset,
@@ -163,6 +182,29 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			if !running && session != "" && wake == nil && next == "" && time.Since(checked) >= recheck {
 				chosen, chosenWhy = onStop(ctx, o, name, held)
 				checked = time.Now()
+			}
+			// Waiting for a reset, an account can come back sooner (aims clear,
+			// a limit lifted early): look again now and then.
+			sooner, told := false, why == ""
+			if wake != nil && next == "" && time.Since(checked) >= recheck {
+				live := time.Since(probed) >= probeEvery
+				if live {
+					probed = time.Now()
+				}
+				switch pick := onWait(ctx, o, name, live); {
+				case pick.Name != "":
+					if why == "" {
+						why = pick.Name + " works again"
+					}
+					next, prompt, sooner = pick.Name, continuePrompt, true
+					why += "; continuing this conversation on " + next
+				case pick.Soonest != "" && (pick.Soonest != wake.Soonest || waitAt(pick) != waitAt(*wake)):
+					wake, told = &pick, false
+				}
+				checked = time.Now()
+			}
+			if !told && next == "" && wake != nil {
+				tellWait(o, *wake)
 			}
 			switch {
 			case next != "":
@@ -237,6 +279,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			if prompt == continuePrompt {
 				revive = id
 			}
+			early = sooner
 			break watch
 		}
 		ticker.Stop()
@@ -252,8 +295,8 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 }
 
 // onFailure handles a turn that ended on an error: it marks the profile and
-// names the profile to continue on, or what to wait for when every one is
-// limited.
+// names the profile to continue on, or, when every one is limited, what to
+// wait for and why.
 func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
 	a := o.Tool
 	cfg, err := config.LoadIn(o.Dir)
@@ -293,10 +336,46 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 	case pick.Name != "" && pick.Name != name:
 		return pick.Name, continuePrompt, name + " hit " + failureText(f) + "; continuing this conversation on " + pick.Name, nil
 	case pick.Name == "" && pick.Soonest != "":
-		o.tell(Warn, "%s: every account is limited; this conversation continues on %s at %s", a.ID(), pick.Soonest, pick.ReadyAt.Add(wakeAfter).Local().Format("15:04"))
-		return "", "", "", &pick
+		return "", "", name + " hit " + failureText(f), &pick
 	}
 	return "", "", "", nil
+}
+
+// onWait looks, while every account is limited, for one that works before
+// the soonest reset: its mark cleared (aims clear, a live check elsewhere)
+// or, with live, the provider saying so now.
+func onWait(ctx context.Context, o Options, name string, live bool) profiles.Pick {
+	a := o.Tool
+	cfg, err := config.LoadIn(o.Dir)
+	if err != nil {
+		return profiles.Pick{}
+	}
+	apart := profiles.Apart(cfg, a.ID(), name)
+	if live {
+		var names []string
+		for _, n := range cfg.Tools[a.ID()].Order {
+			if !slices.Contains(apart, n) {
+				names = append(names, n)
+			}
+		}
+		profiles.AskFree(ctx, cfg, a, names)
+	}
+	preferred, _ := cfg.Preferred(a.ID(), "")
+	return profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+}
+
+func tellWait(o Options, pick profiles.Pick) {
+	o.tell(Warn, "%s: every account is limited; this conversation continues on %s at %s", o.Tool.ID(), pick.Soonest, waitAt(pick))
+}
+
+// waitAt is when a conversation waiting for pick goes on: the time, with the
+// date when that is not today.
+func waitAt(pick profiles.Pick) string {
+	t, now := pick.ReadyAt.Add(wakeAfter).Local(), config.Now().Local()
+	if t.YearDay() == now.YearDay() && t.Year() == now.Year() {
+		return t.Format("15:04")
+	}
+	return t.Format("Jan 2 15:04")
 }
 
 // onStop names the profile a conversation should move to after a turn that

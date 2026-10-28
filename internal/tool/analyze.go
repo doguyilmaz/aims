@@ -72,13 +72,17 @@ func LimitWindow(text string) string {
 var (
 	epochRe   = regexp.MustCompile(`\|(\d{10})\b`)
 	clockRe   = regexp.MustCompile(`(?i)(?:resets?|try again)(?: at)? (\d{1,2})(?::(\d{2}))?\s*([ap]m)\b`)
+	dateRe    = regexp.MustCompile(`(?i)(?:resets?|try again)(?: at)? (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* (\d{1,2})(?:st|nd|rd|th)?,?(?: (\d{4}),?)? (\d{1,2})(?::(\d{2}))?\s*([ap]m)\b`)
 	durRe     = regexp.MustCompile(`(?i)try again in ((?:\d+\s*(?:days?|d|hours?|h|minutes?|mins?|m)\b[\s,]*(?:and\s+)?)+)`)
 	durPartRe = regexp.MustCompile(`(?i)(\d+)\s*(days?|d|hours?|h|minutes?|mins?|m)\b`)
 )
 
+const months = "janfebmaraprmayjunjulaugsepoctnovdec"
+
 // ResetTime reads when a limit lifts from a provider message: Claude Code's
-// "usage limit reached|<epoch>" and "resets 5pm", Codex's "try again at
-// 3:14 PM" and "try again in 2 days 3 hours". Zero when it says nothing.
+// "usage limit reached|<epoch>", "resets 5pm" and "resets Oct 9, 11am",
+// Codex's "try again at 3:14 PM", "try again at Nov 2nd, 2026 3:14 PM" and
+// "try again in 2 days 3 hours". Zero when it says nothing.
 func ResetTime(text string, now time.Time) time.Time {
 	if m := epochRe.FindStringSubmatch(text); m != nil {
 		if sec, err := strconv.ParseInt(m[1], 10, 64); err == nil {
@@ -87,14 +91,26 @@ func ResetTime(text string, now time.Time) time.Time {
 			}
 		}
 	}
-	if m := clockRe.FindStringSubmatch(text); m != nil {
-		h, _ := strconv.Atoi(m[1])
-		mins, _ := strconv.Atoi(m[2])
-		if h >= 1 && h <= 12 && mins < 60 {
-			h %= 12
-			if strings.EqualFold(m[3], "pm") {
-				h += 12
+	if m := dateRe.FindStringSubmatch(text); m != nil {
+		day, _ := strconv.Atoi(m[2])
+		if h, mins, ok := clock(m[4], m[5], m[6]); ok && day >= 1 && day <= 31 {
+			local := now.Local()
+			year, _ := strconv.Atoi(m[3])
+			if year == 0 {
+				year = local.Year()
 			}
+			month := time.Month(strings.Index(months, strings.ToLower(m[1]))/3 + 1)
+			t := time.Date(year, month, day, h, mins, 0, 0, local.Location())
+			if m[3] == "" && !t.After(now) {
+				t = t.AddDate(1, 0, 0)
+			}
+			if t.After(now) {
+				return t
+			}
+		}
+	}
+	if m := clockRe.FindStringSubmatch(text); m != nil {
+		if h, mins, ok := clock(m[1], m[2], m[3]); ok {
 			local := now.Local()
 			t := time.Date(local.Year(), local.Month(), local.Day(), h, mins, 0, 0, local.Location())
 			if !t.After(now) {
@@ -121,6 +137,20 @@ func ResetTime(text string, now time.Time) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// clock reads a 12-hour time: "3", "14", "PM" is 15:14.
+func clock(h, m, ampm string) (hour, mins int, ok bool) {
+	hour, _ = strconv.Atoi(h)
+	mins, _ = strconv.Atoi(m)
+	if hour < 1 || hour > 12 || mins > 59 {
+		return 0, 0, false
+	}
+	hour %= 12
+	if strings.EqualFold(ampm, "pm") {
+		hour += 12
+	}
+	return hour, mins, true
 }
 
 // Activity says whether a run demonstrably did something with side effects.

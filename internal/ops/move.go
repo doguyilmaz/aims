@@ -19,8 +19,8 @@ import (
 
 // ErrNotMoving means the process is not inside a session aims moves
 // between accounts.
-var ErrNotMoving = errors.New("this session was not started with `aims claude` or `aims codex` (without @profile), so aims cannot move it; " +
-	"aims use changes the account of new sessions")
+var ErrNotMoving = errors.New("aims move works inside a session started with `aims claude` or `aims codex` (without @profile): " +
+	"type `!aims move <profile>` there. This one was not started that way; aims use changes the account of new sessions")
 
 // MoveResult says where `aims move` sends the conversation.
 type MoveResult struct {
@@ -51,6 +51,9 @@ func Move(ctx context.Context, to string) (MoveResult, error) {
 	apart := profiles.Apart(cfg, id, from)
 	if to == "" {
 		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, "", append(apart, from))
+		if pick.Name == "" && profiles.AskFree(ctx, cfg, a, others(cfg, id, append(apart, from))) {
+			pick = profiles.Choose(ctx, cfg, config.LoadState(), a, "", append(apart, from))
+		}
 		if pick.Name == "" {
 			var why []string
 			for _, s := range pick.Skipped {
@@ -66,8 +69,23 @@ func Move(ctx context.Context, to string) (MoveResult, error) {
 	case slices.Contains(apart, res.To):
 		return res, fmt.Errorf("%s and %s do not fully share history; check sharing settings and run `aims doctor` before moving this conversation", from, res.To)
 	}
-	if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To); !ev.Usable && res.To != from {
+	ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To)
+	if !ev.Usable && res.To != from && profiles.AskFree(ctx, cfg, a, []string{res.To}) {
+		ev = profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To)
+	}
+	if !ev.Usable && res.To != from {
 		return res, fmt.Errorf("%s cannot be used now: %s", res.To, strings.Join(ev.Reasons, ", "))
 	}
 	return res, fsx.WriteFile(filepath.Join(dir, launch.MoveFile), []byte(res.To+"\n"), 0o600)
+}
+
+// others is the tool's accounts in order, but those in exclude.
+func others(cfg *config.Config, id tool.ID, exclude []string) []string {
+	var out []string
+	for _, n := range cfg.Tools[id].Order {
+		if !slices.Contains(exclude, n) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
