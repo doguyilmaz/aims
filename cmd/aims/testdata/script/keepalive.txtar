@@ -34,6 +34,11 @@ rm $HOME/.aims/profiles/claude/work/EXPIRED
 [darwin] exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
 [darwin] grep '<string>keepalive</string>' $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
 [darwin] grep '<key>PATH</key>' $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+# brew upgrade removes it through the cask: the next aims command, whatever
+# it is, sets it up again.
+[darwin] rm $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+[darwin] exec aims status claude
+[darwin] exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
 [darwin] exec aims keepalive off
 [darwin] ! exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
 [linux] exec aims keepalive on

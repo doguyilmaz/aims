@@ -323,9 +323,7 @@ aims run claude -p "explain this error"`,
 }
 
 func runTool(ctx context.Context, a tool.Adapter, profile string, args []string) error {
-	if err := ops.Refresh(ctx, a); err != nil {
-		ui.Warn("The login keepalive is gone and could not be set up again (%v): aims keepalive on", err)
-	}
+	ops.Refresh(ctx, a)
 	res, err := launch.Run(ctx, launch.Options{Tool: a, Profile: profile, Args: args, Notify: notify})
 	if err != nil && res.Code > 1 {
 		// An unknown profile (2) or a missing tool (127): say why, keep the code.
