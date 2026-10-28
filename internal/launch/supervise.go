@@ -109,7 +109,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		var checked time.Time
 		_, gated := sv.(tool.Hooker)
 		ticker := time.NewTicker(pollEvery)
-		var next, prompt, why string
+		var next, prompt, why, revive string
 		var resume []string
 	watch:
 		for {
@@ -233,11 +233,20 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				return Result{Code: child.Code(), Profile: name}, nil
 			default:
 			}
+			// A limit stopped the conversation: what it was set to do goes on too.
+			if prompt == continuePrompt {
+				revive = id
+			}
 			break watch
 		}
 		ticker.Stop()
 		child.Stop(stopGrace)
 		o.tell(Info, "%s: %s", a.ID(), why)
+		if r, ok := sv.(tool.Reviver); ok && revive != "" {
+			if err := r.Revive(ctx, profiles.Home(cfg, a, next), revive); err != nil {
+				o.tell(Warn, "%s: this conversation's goal stays paused (%v); /goal resume picks it up", a.ID(), err)
+			}
+		}
 		args, name = resume, next
 	}
 }

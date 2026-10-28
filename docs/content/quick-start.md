@@ -84,12 +84,12 @@ aims status
 
 ```text
 Claude Code  ~/.claude
-  ● personal   me@gmail.com     pro    ready           5h [......]    –   7d [......]    –  default login
-    work       me@company.com   max    ready           5h [......]    –   7d [......]    –
+  ● personal   me@gmail.com     pro    ready           5h ━━━━━━    –   7d ━━━━━━    –  default login
+    work       me@company.com   max    ready           5h ━━━━━━    –   7d ━━━━━━    –
 
 Codex  ~/.codex
-  ● personal   me@gmail.com     plus   ready           5h [......]    –   7d [......]    –
-    work       no login                not logged in   5h [......]    –   7d [......]    –
+  ● personal   me@gmail.com     plus   ready           5h ━━━━━━    –   7d ━━━━━━    –
+    work       no login                not logged in   5h ━━━━━━    –   7d ━━━━━━    –
 
 Next
   → codex/work is not logged in  aims login codex work

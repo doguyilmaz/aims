@@ -9,6 +9,8 @@
 //	BUSY         claude runs fail with a short-lived rate limit (429)
 //	TOOL_FIRST   runs call a tool (appended to $FAKE_SIDE_EFFECTS) before failing
 //	USAGE        "pct" for the rate limits the codex app-server reports
+//	GOAL         the status of the codex conversation's goal, in the
+//	             database folder ($CODEX_SQLITE_HOME) when it is set
 //
 // $FAKE_SIDE_EFFECTS names a file that collects what they did, and with
 // $FAKE_RECORD_ARGS set, the arguments of each headless claude run.
@@ -447,6 +449,10 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 	if c := os.Getenv("FAKE_BEFORE_TURN"); c != "" {
 		_ = exec.Command("sh", "-c", c).Run()
 	}
+	goal := goalFile(dir)
+	if b, err := os.ReadFile(goal); err == nil {
+		fmt.Printf("codex goal %s as %s\n", strings.TrimSpace(string(b)), label)
+	}
 	id := "c-" + label
 	if i := slices.Index(args, "resume"); i >= 0 && i+1 < len(args) {
 		id = args[i+1]
@@ -471,6 +477,9 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 		end["error"] = map[string]any{"message": "Your access token could not be refreshed", "codex_error_info": "unauthorized"}
 	case has("LIMITED"):
 		end["error"] = map[string]any{"message": "You've hit your usage limit. Try again at 5:00 PM.", "codex_error_info": "usage_limit_exceeded"}
+		if b, _ := os.ReadFile(goal); strings.TrimSpace(string(b)) == "active" {
+			_ = os.WriteFile(goal, []byte("usageLimited\n"), 0o644)
+		}
 	}
 	line, _ := json.Marshal(map[string]any{"type": "event_msg", "payload": end})
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
@@ -489,7 +498,16 @@ func codexTurn(dir, label string, args []string, has func(string) bool) {
 	}
 }
 
-// appServer answers the two JSON-RPC calls aims makes.
+// goalFile holds the status of the conversation's goal, in the database
+// folder profiles share.
+func goalFile(dir string) string {
+	if d := os.Getenv("CODEX_SQLITE_HOME"); d != "" {
+		dir = d
+	}
+	return filepath.Join(dir, "GOAL")
+}
+
+// appServer answers the JSON-RPC calls aims makes.
 func appServer(loggedIn, limited bool, dir, label string) int {
 	pct := 12.0
 	if b, err := os.ReadFile(filepath.Join(dir, "USAGE")); err == nil {
@@ -500,6 +518,9 @@ func appServer(loggedIn, limited bool, dir, label string) int {
 		var req struct {
 			ID     *int   `json:"id"`
 			Method string `json:"method"`
+			Params struct {
+				Status string `json:"status"`
+			} `json:"params"`
 		}
 		if json.Unmarshal(sc.Bytes(), &req) != nil || req.ID == nil {
 			continue
@@ -522,6 +543,14 @@ func appServer(loggedIn, limited bool, dir, label string) int {
 				limits["rateLimitReachedType"] = "usage_limit_reached"
 			}
 			reply["result"] = map[string]any{"rateLimits": limits}
+		case "thread/goal/get":
+			reply["result"] = map[string]any{"goal": nil}
+			if b, err := os.ReadFile(goalFile(dir)); err == nil {
+				reply["result"] = map[string]any{"goal": map[string]any{"status": strings.TrimSpace(string(b))}}
+			}
+		case "thread/goal/set":
+			_ = os.WriteFile(goalFile(dir), []byte(req.Params.Status+"\n"), 0o644)
+			reply["result"] = map[string]any{"goal": map[string]any{"status": req.Params.Status}}
 		default:
 			reply["error"] = map[string]any{"code": -32601, "message": "unknown method"}
 		}
