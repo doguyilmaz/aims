@@ -125,8 +125,12 @@ func TestResetTime(t *testing.T) {
 		"5-hour limit reached ∙ resets 9:15am":                           time.Date(2026, 6, 2, 9, 15, 0, 0, loc),
 		"You've hit your usage limit. Try again at 3:14 PM.":             time.Date(2026, 6, 1, 15, 14, 0, 0, loc),
 		"You've hit your usage limit. Try again in 2 days 3 hours 5 min": now.Add(51*time.Hour + 5*time.Minute),
-		"You've hit your usage limit.":                                   {},
-		"Claude AI usage limit reached|1000000000":                       {}, // in the past
+		"You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 2nd, 2026 3:14 PM.": time.Date(2026, 11, 2, 15, 14, 0, 0, loc),
+		"Opus weekly limit reached ∙ resets Oct 9, 11am":                   time.Date(2026, 10, 9, 11, 0, 0, 0, loc),
+		"Weekly limit reached ∙ resets Jan 3, 9:30am (Europe/Istanbul)":    time.Date(2027, 1, 3, 9, 30, 0, 0, loc),
+		"You've hit your usage limit. Try again at May 2nd, 2026 3:14 PM.": {}, // in the past
+		"You've hit your usage limit.":                                     {},
+		"Claude AI usage limit reached|1000000000":                         {}, // in the past
 	}
 	for in, want := range cases {
 		if got := ResetTime(in, now); !got.Equal(want) {

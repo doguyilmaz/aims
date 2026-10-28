@@ -165,3 +165,14 @@ func TestBusyBackoff(t *testing.T) {
 		t.Fatalf("again: %v", ps.Until)
 	}
 }
+
+// Codex names the day a weekly limit lifts: the account rests until then,
+// not for the default cooldown.
+func TestOnFailureDatedReset(t *testing.T) {
+	o := setup(t)
+	ev := tool.SessionEvent{Session: "s", Failure: tool.FailLimit, Text: "You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at Jun 8th, 2026 3:14 PM."}
+	onFailure(t.Context(), o, "a", ev)
+	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(time.Date(2026, 6, 8, 15, 14, 0, 0, time.Local)) {
+		t.Fatalf("until %v", ps.Until.Local())
+	}
+}
