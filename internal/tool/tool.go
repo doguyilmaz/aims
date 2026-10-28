@@ -159,6 +159,13 @@ type Hooker interface {
 // hook then holds the user's next prompt for it.
 const HoldFile = "hold"
 
+// Reviver sets back to work what a limit stopped in a conversation, which
+// the tool would otherwise ask about when it resumes it.
+type Reviver interface {
+	// Revive runs once the tool has stopped, with the home it restarts in.
+	Revive(ctx context.Context, h Home, id string) error
+}
+
 // Diagnoser reports settings of the tool that keep aims from doing its job,
 // for aims doctor.
 type Diagnoser interface {

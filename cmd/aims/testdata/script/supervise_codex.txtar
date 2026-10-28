@@ -53,6 +53,21 @@ stdout 'codex interactive as default'
 stderr 'codex: personal hit its usage limit; continuing this conversation on work'
 stdout 'codex interactive as work args=\["resume" "c-old" "--" "continue"\]'
 env FAKE_TUI_RESUME=
+
+# The goal a limit stopped goes on with the conversation, where codex would
+# ask whether to resume it. One the user paused stays paused.
+exec aims clear codex personal
+cp ACTIVE $HOME/.codex/GOAL
+exec aims codex resume c-default
+stdout 'codex goal active as default'
+stdout 'codex interactive as work args=\["resume" "c-default" "--" "continue"\]'
+stdout 'codex goal active as work'
+! stdout 'goal usageLimited'
+exec aims clear codex personal
+cp PAUSED $HOME/.codex/GOAL
+exec aims codex resume c-default
+stdout 'codex goal paused as work'
+rm $HOME/.codex/GOAL
 rm $HOME/.codex/LIMITED
 
 # Other commands are not followed.
@@ -64,3 +79,7 @@ stdout 'Logged in'
 -- old-rollout --
 {"type":"session_meta","payload":{"id":"c-old","cwd":"/elsewhere","originator":"codex-tui","thread_source":"user","timestamp":"2020-01-02T00:00:00Z"}}
 {"type":"event_msg","payload":{"type":"task_complete","completed_at":1577923200,"error":{"message":"old limit","codex_error_info":"usage_limit_exceeded"}}}
+-- ACTIVE --
+active
+-- PAUSED --
+paused
