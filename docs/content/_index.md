@@ -21,12 +21,29 @@ aims does the bookkeeping. It gives every account its own folder, links the shar
 ```text
 $ aims status
 Claude Code  ~/.claude
-  ● personal   me@gmail.com     pro    ready           5h [##....]  38%   7d [#.....]  12%
-    work       me@company.com   max    limited 2h10m   5h [######] 100%   7d [####..]  64%   5h resets 2h10m
+  order of this project (~/code/client-app); elsewhere personal → work
+  ● personal   me@gmail.com     pro        login expired   5h ━━━━━━    –   7d ━━━━━━  37%  marked by a session
+    work       me@company.com   team       ready           5h ━━━━━━   2%   7d ━━━━━━  84%   7d resets 4d  default login, standing in for personal
 
 Codex  ~/.codex
-  ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
-    work       me@company.com   team   ready           5h [......]    –   7d [......]    –
+  ● personal   me@gmail.com     plus       ready           5h ━━━━━━   9%   7d ━━━━━━  31%
+    work       me@company.com   business   ready           5h ━━━━━━    –   7d ━━━━━━    –  default login
+
+Open sessions
+  Claude Code  work      auto  ~/code/client-app · 12h59m ago
+  Claude Code  work      auto  ~/code/api · 2h4m ago
+  Codex        personal  auto  ~/code/blog · 6m ago
+
+Next
+  → claude/personal is not logged in  aims login claude personal
+  → codex/personal keeps unused database copies (51 MB) that can go  aims doctor
+
+How it works
+  claude and codex start on personal. At a limit or a dead login the
+  conversation continues on work, and goes back to personal once it works again.
+  claude/personal cannot be used now (login expired); new claude sessions start
+  on work.
+  aims claude@work keeps a session on work and never moves it.
 ```
 
 ```bash

@@ -10,12 +10,12 @@ aliases: ["/docs/dashboard/"]
  aims  accounts for Claude Code and Codex                                                  v0.1.3
 
  Claude Code                                                                            ~/.claude
- ▸ ● personal   me@gmail.com     pro    ready           5h [##....]  38%   7d [#.....]  12%
-     work       me@company.com   max    limited 2h10m   5h [######] 100%   7d [####..]  64%   5h resets 2h10m
+ ▸ ● personal   me@gmail.com     pro    ready           5h ━━━━━━  38%   7d ━━━━━━  12%
+     work       me@company.com   max    limited 2h10m   5h ━━━━━━ 100%   7d ━━━━━━  64%   5h resets 2h10m
 
  Codex                                                                                   ~/.codex
-   ● personal   me@gmail.com     plus   ready           5h [#.....]   9%   7d [##....]  31%
-     work       me@company.com   team   ready           5h [......]    –   7d [......]    –
+   ● personal   me@gmail.com     plus   ready           5h ━━━━━━   9%   7d ━━━━━━  31%
+     work       me@company.com   team   ready           5h ━━━━━━    –   7d ━━━━━━    –
      new sessions: personal (auto → work)
 
  Open sessions
@@ -33,8 +33,8 @@ aliases: ["/docs/dashboard/"]
  │ folder    ~/.claude                                                          │
  │ account   me@gmail.com · pro                                                 │
  │ state     ready                                                              │
- │ 5h        [#########...............]  38%  resets in 3h12m                   │
- │ 7d        [###.....................]  12%  resets in 4d                      │
+ │ 5h        ━━━━━━━━━━━━━━━━━━━━━━━━  38%  resets in 3h12m                     │
+ │ 7d        ━━━━━━━━━━━━━━━━━━━━━━━━  12%  resets in 4d                        │
  │ measured  4m ago                                                             │
  │ last used 4m ago                                                             │
  ╰──────────────────────────────────────────────────────────────────────────────╯
