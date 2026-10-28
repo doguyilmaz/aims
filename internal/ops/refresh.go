@@ -13,22 +13,25 @@ import (
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
-// Refresh brings the integrations already installed for a tool up to this
-// version of aims: the keepalive job, the skill's text, and the settings of
-// the MCP server entry. It runs before a session starts, so an upgrade needs
-// no setup again. Only the aims on PATH does it, so two copies of different
-// versions do not rewrite each other's files back and forth. The error is a
-// keepalive that could not be set up again, told once.
-func Refresh(ctx context.Context, a tool.Adapter) error {
+// OnPath reports whether this is the aims on PATH. Only that one brings
+// what is installed up to its version, so two copies of different versions
+// do not rewrite each other's files back and forth.
+func OnPath() bool {
 	onPath, err := exec.LookPath("aims")
 	self, err2 := os.Executable()
-	if err != nil || err2 != nil || fsx.Real(onPath) != fsx.Real(self) {
-		return nil
+	return err == nil && err2 == nil && fsx.Real(onPath) == fsx.Real(self)
+}
+
+// Refresh brings the integrations already installed for a tool up to this
+// version of aims: the skill's text and the settings of the MCP server entry.
+// It runs before a session starts, so an upgrade needs no setup again.
+func Refresh(ctx context.Context, a tool.Adapter) {
+	if !OnPath() {
+		return
 	}
-	healErr := HealKeepAlive()
 	cfg, err := config.Load()
 	if err != nil || cfg.Tools[a.ID()].Hub == "" {
-		return healErr
+		return
 	}
 	for _, h := range homes(cfg, a) {
 		if dir := a.Layout().SkillsDir; dir != "" {
@@ -46,5 +49,4 @@ func Refresh(ctx context.Context, a tool.Adapter) error {
 			}
 		}
 	}
-	return healErr
 }

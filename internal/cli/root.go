@@ -16,6 +16,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/launch"
+	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 	"github.com/doguyilmaz/aims/internal/ui"
@@ -160,7 +161,20 @@ aims               # status and next steps`,
 	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
+	// Commands that run for a tool, or that set the keepalive up themselves.
+	noHeal := []string{"statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		top := cmd
+		for top.HasParent() && top.Parent() != root {
+			top = top.Parent()
+		}
+		// The cask removes the keepalive on every upgrade: the first command
+		// after one sets it up again.
+		if !slices.Contains(noHeal, top.Name()) && ops.OnPath() {
+			if err := ops.HealKeepAlive(); err != nil {
+				ui.Warn("The login keepalive is gone and could not be set up again (%v): aims keepalive on", err)
+			}
+		}
 		if !slices.Contains(needAccounts, cmd.Name()) || cmd.Parent() != root {
 			return nil
 		}
