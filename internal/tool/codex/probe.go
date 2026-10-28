@@ -17,6 +17,8 @@ import (
 // rate limits. Neither call spends tokens.
 func (*Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe { return probe(ctx, h, false) }
 
+func (*Adapter) FreeProbe() {}
+
 // Refresh is Probe that first makes codex renew the login.
 func (*Adapter) Refresh(ctx context.Context, h tool.Home) tool.Probe { return probe(ctx, h, true) }
 

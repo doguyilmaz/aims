@@ -3,6 +3,7 @@ package launch
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,6 +167,101 @@ func TestBusyBackoff(t *testing.T) {
 	}
 }
 
+// While every account is limited, an account whose mark was cleared, or
+// one the provider says works, is used before the soonest reset.
+func TestOnWait(t *testing.T) {
+	o := setup(t)
+	testutil.Fakes(t)
+	for _, n := range []string{"a", "b", "c"} {
+		limit(t, n, time.Hour)
+	}
+	if p := onWait(t.Context(), o, "a", false); p.Name != "" || p.Soonest == "" {
+		t.Fatalf("all limited: %+v", p)
+	}
+	_ = profiles.Clear("codex", "b")
+	if p := onWait(t.Context(), o, "a", false); p.Name != "b" {
+		t.Fatalf("b cleared: %+v", p)
+	}
+	limit(t, "b", time.Hour)
+	cfg, _ := config.Load()
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "a"), "LIMITED"), "")
+	if p := onWait(t.Context(), o, "a", false); p.Name != "" {
+		t.Fatalf("asked the provider without live: %+v", p)
+	}
+	if p := onWait(t.Context(), o, "a", true); p.Name != "b" {
+		t.Fatalf("live: a is still limited, b works: %+v", p)
+	}
+	if ps := config.LoadState().Get("codex", "a"); !ps.Until.After(now) {
+		t.Fatalf("a's mark was lifted: %+v", ps)
+	}
+}
+
+// When every account looks limited, a free live check right away finds the
+// one whose mark is stale, and the conversation goes on there.
+func TestWaitGoesOnSooner(t *testing.T) {
+	o := setup(t)
+	testutil.Fakes(t)
+	oldRecheck, oldProbe := recheck, waitProbe
+	recheck, waitProbe = 50*time.Millisecond, time.Hour
+	t.Cleanup(func() { recheck, waitProbe = oldRecheck, oldProbe })
+	t.Setenv("FAKE_LINGER", "5s")
+	limit(t, "b", 3*time.Hour)
+	limit(t, "c", time.Hour)
+	cfg, _ := config.Load()
+	for _, n := range []string{"a", "b", "c"} {
+		profiles.Sync(cfg, o.Tool, n, false)
+	}
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "a"), "LIMITED"), "")
+	var said []string
+	o.Dir = t.TempDir()
+	o.Notify = func(_ Level, msg string) { said = append(said, msg) }
+	res, err := supervise(t.Context(), o, o.Tool.(tool.Supervisor), profiles.Bin(o.Tool), "a")
+	if err != nil || res.Profile != "b" {
+		t.Fatalf("ended on %q (%v): %q", res.Profile, err, said)
+	}
+	if len(said) != 1 || said[0] != "codex: a hit its usage limit; continuing this conversation on b" {
+		t.Fatalf("said: %q", said)
+	}
+}
+
+// Between live checks, a waiting session goes on once aims learns that an
+// account works again.
+func TestWaitAfterClear(t *testing.T) {
+	o := setup(t)
+	testutil.Fakes(t)
+	oldRecheck, oldProbe := recheck, waitProbe
+	recheck, waitProbe = 50*time.Millisecond, time.Hour
+	t.Cleanup(func() { recheck, waitProbe = oldRecheck, oldProbe })
+	t.Setenv("FAKE_LINGER", "5s")
+	cfg, _ := config.Load()
+	for _, n := range []string{"a", "b", "c"} {
+		profiles.Sync(cfg, o.Tool, n, false)
+		testutil.Write(t, filepath.Join(cfg.Dir("codex", n), "LIMITED"), "")
+		if n != "a" {
+			limit(t, n, time.Hour)
+		}
+	}
+	var said []string
+	o.Dir = t.TempDir()
+	o.Notify = func(_ Level, msg string) {
+		said = append(said, msg)
+		if strings.Contains(msg, "every account is limited") {
+			// What a live check elsewhere (aims status --live) records.
+			_ = os.Remove(filepath.Join(cfg.Dir("codex", "c"), "LIMITED"))
+			_ = profiles.RecordUsage("codex", "c", []tool.Window{{Label: "5h", Percent: 3}}, "live")
+			_ = profiles.Clear("codex", "c")
+		}
+	}
+	res, err := supervise(t.Context(), o, o.Tool.(tool.Supervisor), profiles.Bin(o.Tool), "a")
+	if err != nil || res.Profile != "c" {
+		t.Fatalf("ended on %q (%v): %q", res.Profile, err, said)
+	}
+	if len(said) != 2 || !strings.HasPrefix(said[0], "codex: every account is limited; this conversation continues on ") ||
+		said[1] != "codex: c works again; continuing this conversation on c" {
+		t.Fatalf("said: %q", said)
+	}
+}
+
 // Codex names the day a weekly limit lifts: the account rests until then,
 // not for the default cooldown.
 func TestOnFailureDatedReset(t *testing.T) {
@@ -174,5 +270,25 @@ func TestOnFailureDatedReset(t *testing.T) {
 	onFailure(t.Context(), o, "a", ev)
 	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(time.Date(2026, 6, 8, 15, 14, 0, 0, time.Local)) {
 		t.Fatalf("until %v", ps.Until.Local())
+	}
+}
+
+// A session starting while every account looks limited asks first, where
+// that is free, and starts on one whose mark was stale.
+func TestChooseAsksWhenAllLimited(t *testing.T) {
+	o := setup(t)
+	testutil.Fakes(t)
+	for _, n := range []string{"a", "b", "c"} {
+		limit(t, n, time.Hour)
+	}
+	cfg, _ := config.Load()
+	testutil.Write(t, filepath.Join(cfg.Dir("codex", "a"), "LIMITED"), "")
+	var said []string
+	o.Notify = func(_ Level, msg string) { said = append(said, msg) }
+	if got := choose(t.Context(), o, cfg, "a"); got != "b" {
+		t.Fatalf("started on %q: %q", got, said)
+	}
+	if len(said) == 0 || !strings.HasPrefix(said[0], "codex: using b while a") {
+		t.Fatalf("said: %q", said)
 	}
 }
