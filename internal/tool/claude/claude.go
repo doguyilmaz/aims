@@ -33,10 +33,10 @@ type Adapter struct{}
 func New() *Adapter { return &Adapter{} }
 
 var (
-	_ tool.Adapter     = (*Adapter)(nil)
-	_ tool.Seeder      = (*Adapter)(nil)
-	_ tool.MCPSyncer   = (*Adapter)(nil)
-	_ tool.StatusLiner = (*Adapter)(nil)
+	_ tool.Adapter        = (*Adapter)(nil)
+	_ tool.Seeder         = (*Adapter)(nil)
+	_ tool.SettingsSharer = (*Adapter)(nil)
+	_ tool.StatusLiner    = (*Adapter)(nil)
 )
 
 func (*Adapter) ID() tool.ID   { return ID }
@@ -318,23 +318,6 @@ var (
 	seedKeys        = []string{"theme", "editorMode", "mcpServers", "autoUpdates", "verbose", "preferredNotifChannel"}
 	seedProjectKeys = []string{"allowedTools", "mcpServers", "enabledMcpjsonServers", "disabledMcpjsonServers", "hasTrustDialogAccepted", "hasCompletedProjectOnboarding"}
 )
-
-func (*Adapter) SyncMCP(hub tool.Home, profile tool.Home) ([]string, error) {
-	src, err := os.ReadFile(claudeJSON(hub))
-	if err != nil {
-		return nil, nil
-	}
-	path := claudeJSON(profile)
-	dst, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil // the profile has not been set up yet
-	}
-	out, added, err := mergeMCPServers(src, dst)
-	if err != nil || len(added) == 0 {
-		return nil, err
-	}
-	return added, fsx.WriteFile(path, out, 0o600)
-}
 
 func (*Adapter) InstallStatusLine(home, command string) (string, error) {
 	path := filepath.Join(home, "settings.json")

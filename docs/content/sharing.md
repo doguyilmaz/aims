@@ -31,7 +31,7 @@ aims login codex sandbox --share none
 | `settings.json`, `keybindings.json`, `CLAUDE.md` | your settings and global instructions | |
 | `commands/`, `agents/`, `skills/`, `output-styles/`, `hooks/`, `plugins/`, `rules/` | your customizations | |
 
-Private to each profile: `.credentials.json` (or the macOS keychain entry) and `.claude.json`, which holds the account, per-project trust and the MCP servers you added with `claude mcp add`. A new profile starts with a copy of your MCP servers and project trust from the hub's `.claude.json`, without the account fields; `aims sync` copies servers you add later.
+Private to each profile: `.credentials.json` (or the macOS keychain entry) and `.claude.json`, which holds the account, per-project trust and the MCP servers you added with `claude mcp add`. aims keeps the settings in it the same across your accounts: user MCP servers, and per project the trust, allowed tools, MCP servers and `.mcp.json` approvals. Before each launch and each move to another account, what you added, changed or removed in one account reaches the others. When two accounts changed the same setting, the newer edit wins, and trust given in one account is never taken back by another. aims takes Claude Code's own lock on the file and edits only these keys; the account fields are never read or copied. Log in to OAuth MCP servers (Atlassian, Figma, Slack) once per account: those tokens are kept with each login.
 
 ## Codex
 
@@ -43,6 +43,7 @@ Private to each profile: `.credentials.json` (or the macOS keychain entry) and `
 | `memories/`, `state_*.sqlite`, `goals_*.sqlite` and similar | memory and session databases; aims also sets `CODEX_SQLITE_HOME` to the hub, so a database a new Codex adds is shared from its start | yes |
 | `config.toml` | settings, MCP servers, profiles | |
 | `AGENTS.md`, `prompts/`, `skills/`, `rules/`, `plugins/` | your instructions and customizations | |
+| `.hook-trust/` | hooks you reviewed, so a moved session does not ask again | |
 
 Private to each profile: `auth.json` (or the OS keyring entry). Daemon processes and their control sockets also remain private: sharing history does not mean sharing an authenticated running server.
 

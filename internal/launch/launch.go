@@ -264,6 +264,13 @@ func sessionEnv(o Options, cfg *config.Config, name string) []string {
 			o.say(Warn, "%s/%s: shared %q: %s (aims doctor)", a.ID(), name, r.Name, r.Detail)
 		}
 	}
+	changed, err := profiles.ShareSettings(cfg, a)
+	if err != nil {
+		o.say(Warn, "%s: could not share settings between accounts: %v", a.ID(), err)
+	}
+	if len(changed) > 0 {
+		o.say(Info, "shared between your %s accounts: %s", a.Title(), strings.Join(changed, ", "))
+	}
 	env, dropped := profiles.Env(cfg, a, name, os.Environ())
 	env = append(strip(env, o.StripEnv), o.ExtraEnv...)
 	if len(dropped) > 0 {

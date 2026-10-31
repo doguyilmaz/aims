@@ -56,10 +56,12 @@ type Seeder interface {
 	Seed(hub Home, profileDir string) error
 }
 
-// MCPSyncer copies user-level MCP servers from the hub's login into a profile
-// whose tool stores them per login.
-type MCPSyncer interface {
-	SyncMCP(hub Home, profile Home) (added []string, err error)
+// SettingsSharer keeps the settings a tool stores in each login's own file
+// (MCP servers, project trust) the same across homes. base is a file of
+// aims' own that remembers what each home held, so a removal is told from a
+// setting the home never had.
+type SettingsSharer interface {
+	ShareSettings(homes []Home, base string) (changed []string, err error)
 }
 
 // StatusLiner installs aims as the tool's status line command.

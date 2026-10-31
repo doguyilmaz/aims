@@ -209,9 +209,10 @@ func newWipeCmd() *cobra.Command {
 func newSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync [tool]",
-		Short: "Repair shared folders and copy new MCP servers into profiles",
+		Short: "Repair shared folders and share MCP servers and project trust between accounts",
 		Long: "Runs on every launch for the profile being started; this does it for all of\n" +
-			"them at once, and copies Claude Code MCP servers added to your main login.",
+			"them at once. Claude Code MCP servers, project trust and allowed tools\n" +
+			"added in one account reach the others; the logins stay apart.",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeTools,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -235,16 +236,17 @@ func newSyncCmd() *cobra.Command {
 				return err
 			}
 			for _, id := range ids {
+				a := tools.Get(id)
 				for _, n := range cfg.Tools[id].Order {
-					reportLinks(id, n, profiles.Sync(cfg, tools.Get(id), n, false))
+					reportLinks(id, n, profiles.Sync(cfg, a, n, false))
 				}
-			}
-			added, err := ops.SyncMCP(cmd.Context())
-			for p, names := range added {
-				ui.Info("%s: added MCP servers %s", p, strings.Join(names, ", "))
-			}
-			if err != nil {
-				return err
+				changed, err := profiles.ShareSettings(cfg, a)
+				if len(changed) > 0 {
+					ui.Info("%s: shared between accounts: %s", a.Title(), strings.Join(changed, ", "))
+				}
+				if err != nil {
+					return err
+				}
 			}
 			ui.Done("shared folders are in order")
 			return nil
