@@ -148,6 +148,9 @@ func newDoctorCmd(version string) *cobra.Command {
 					bad("%s are the same account", strings.Join(names, " and "))
 					fix1("aims login " + string(id) + " " + names[len(names)-1])
 				}
+				if work, personal, what := mixedSharing(cfg, id, evaluations); work != "" {
+					fmt.Println("  " + s.Dim.Render(fmt.Sprintf("%s/%s (a work plan) and %s/%s share %s with each other; if your company keeps them apart, set \"share\": \"settings\" (own conversations) or \"none\" (nothing shared) for %s in %s", id, work, id, personal, what, work, fsx.Tildify(filepath.Join(config.Home(), "config.json")))))
+				}
 			}
 
 			section("Integrations")
@@ -236,4 +239,33 @@ func duplicateAccounts(evaluations []profiles.Evaluation) [][]string {
 		}
 	}
 	return duplicates
+}
+
+// mixedSharing finds a work account and a personal one of the same tool that
+// share with each other, and says what they share.
+func mixedSharing(cfg *config.Config, id tool.ID, evs []profiles.Evaluation) (work, personal, what string) {
+	modes := map[string]string{}
+	for _, ev := range evs {
+		p := cfg.Tools[id].Profiles[ev.Name]
+		if p == nil || p.ShareMode() == config.ShareNone || ev.Account.Plan == "" {
+			continue
+		}
+		switch {
+		case tool.WorkPlan(ev.Account.Plan) && work == "":
+			work = ev.Name
+		case !tool.WorkPlan(ev.Account.Plan) && personal == "":
+			personal = ev.Name
+		default:
+			continue
+		}
+		modes[ev.Name] = p.ShareMode()
+	}
+	if work == "" || personal == "" {
+		return "", "", ""
+	}
+	what = "settings, skills, MCP servers and project trust"
+	if modes[work] == config.ShareAll && modes[personal] == config.ShareAll {
+		what = "conversations, " + what
+	}
+	return work, personal, what
 }
