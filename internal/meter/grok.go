@@ -33,9 +33,13 @@ func (grok) Read(ctx context.Context, bin string) Reading {
 // acpCall starts an ACP agent, initializes it and returns the result of one
 // method call.
 func acpCall(ctx context.Context, bin string, args []string, method string) (json.RawMessage, error) {
+	dir, err := workDir()
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = os.Environ()
-	cmd.Dir = os.TempDir()
+	cmd.Dir = dir
 	cmd.WaitDelay = time.Second
 	in, err := cmd.StdinPipe()
 	if err != nil {
