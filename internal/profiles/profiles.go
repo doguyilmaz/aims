@@ -146,6 +146,27 @@ func Home(cfg *config.Config, a tool.Adapter, name string) tool.Home {
 	}
 }
 
+// ShareSettings brings the settings a tool keeps in each login's own file in
+// line across the hub and every profile that shares settings, and names what
+// changed.
+func ShareSettings(cfg *config.Config, a tool.Adapter) ([]string, error) {
+	s, ok := a.(tool.SettingsSharer)
+	if !ok {
+		return nil, nil
+	}
+	homes := []tool.Home{HubHome(cfg, a)}
+	t := cfg.Tools[a.ID()]
+	for _, n := range t.Order {
+		if p := t.Profiles[n]; p != nil && !p.Existing && p.ShareMode() != config.ShareNone {
+			homes = append(homes, Home(cfg, a, n))
+		}
+	}
+	if len(homes) < 2 {
+		return nil, nil
+	}
+	return s.ShareSettings(homes, filepath.Join(config.Home(), string(a.ID())+"-settings.json"))
+}
+
 // HubHome describes the login that lives in the tool's own home, whether or
 // not a profile adopted it.
 func HubHome(cfg *config.Config, a tool.Adapter) tool.Home {

@@ -29,6 +29,11 @@ menu:
       url: "https://github.com/doguyilmaz/aims"
       params:
         icon: github
+    - name: npm
+      weight: 4
+      url: "https://www.npmjs.com/package/@doguyilmaz/aims"
+      params:
+        icon: npm
 
 params:
   description: "Several Claude Code and Codex accounts on one machine: switch instantly, share history and settings, and fail over when an account hits its limit."

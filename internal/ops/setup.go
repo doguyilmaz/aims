@@ -250,37 +250,6 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 	return steps, nil
 }
 
-// SyncMCP copies MCP servers added to the hub's login into each profile of
-// tools that keep them per login.
-func SyncMCP(ctx context.Context) (map[string][]string, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-	out := map[string][]string{}
-	for _, a := range tools.All() {
-		s, ok := a.(tool.MCPSyncer)
-		if !ok {
-			continue
-		}
-		hub := profiles.HubHome(cfg, a)
-		for _, n := range cfg.Tools[a.ID()].Order {
-			p := cfg.Tools[a.ID()].Profiles[n]
-			if p.Existing || p.ShareMode() == config.ShareNone {
-				continue
-			}
-			added, err := s.SyncMCP(hub, profiles.Home(cfg, a, n))
-			if err != nil {
-				return out, err
-			}
-			if len(added) > 0 {
-				out[string(a.ID())+"/"+n] = added
-			}
-		}
-	}
-	return out, nil
-}
-
 func idsOrAll(ids []tool.ID) []tool.ID {
 	if len(ids) == 0 {
 		return tools.IDs()

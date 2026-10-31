@@ -48,30 +48,6 @@ func seedJSON(src []byte) ([]byte, error) {
 	return pretty.PrettyOptions(out, &pretty.Options{Indent: "  ", Width: 80, SortKeys: false}), nil
 }
 
-// mergeMCPServers adds the hub's user MCP servers that dst lacks.
-func mergeMCPServers(src, dst []byte) ([]byte, []string, error) {
-	if !gjson.ValidBytes(src) || !gjson.ValidBytes(dst) {
-		return nil, nil, fmt.Errorf("a .claude.json is not valid JSON")
-	}
-	have := gjson.GetBytes(dst, "mcpServers")
-	var added []string
-	out := dst
-	var err error
-	gjson.GetBytes(src, "mcpServers").ForEach(func(k, v gjson.Result) bool {
-		name := k.String()
-		if have.Get(escapeKey(name)).Exists() {
-			return true
-		}
-		out, err = sjson.SetRawBytes(out, "mcpServers."+escapeKey(name), []byte(v.Raw))
-		added = append(added, name)
-		return err == nil
-	})
-	if err != nil || len(added) == 0 {
-		return out, added, err
-	}
-	return pretty.PrettyOptions(out, &pretty.Options{Indent: "  ", Width: 80}), added, nil
-}
-
 // setStatusLine points settings.json's statusLine at command and returns the
 // command it replaced (unless that was aims' own).
 func setStatusLine(settings []byte, command string) ([]byte, string, error) {

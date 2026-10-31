@@ -43,8 +43,9 @@ func (*Adapter) Layout() tool.Layout {
 			"sessions", "thread-writer-locks", // shared rollouts need shared writer ownership
 			"archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "AGENTS.override.md",
 			"prompts", "skills", "rules", "plugins", "memories", "session_index.jsonl", "packages",
+			".hook-trust",
 		), tool.Entry{Pattern: regexp.MustCompile(`^(state|memories|goals|queue|thread_history)_\d+\.sqlite$`)}),
-		SharedDirs:     []string{"sessions", "archived_sessions", "prompts", "skills", "thread-writer-locks"},
+		SharedDirs:     []string{"sessions", "archived_sessions", "prompts", "skills", "thread-writer-locks", ".hook-trust"},
 		LockDirs:       []string{"thread-writer-locks"},
 		StateEnv:       "CODEX_SQLITE_HOME",
 		Disposable:     []tool.Entry{{Pattern: regexp.MustCompile(`^(thread_history|logs)_\d+\.sqlite$`)}},

@@ -157,7 +157,7 @@ When a new version of aims can add something you were never asked about, the nex
 
 ### `aims sync [tool]`
 
-Repairs shared links for every profile (each launch does this for the profile it starts) and copies MCP servers added to your main Claude Code login into the other logins.
+Repairs shared links for every profile (each launch does this for the profile it starts) and shares Claude Code MCP servers and project trust between your accounts.
 
 ### `aims shell-init [shell]`
 

@@ -109,24 +109,6 @@ func TestSeedJSON(t *testing.T) {
 	}
 }
 
-func TestMergeMCPServers(t *testing.T) {
-	src := `{"mcpServers":{"a":{"command":"a"},"b.c":{"command":"bc"}}}`
-	dst := `{"z":1,"mcpServers":{"a":{"command":"mine"}}}`
-	out, added, err := mergeMCPServers([]byte(src), []byte(dst))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(added, ",") != "b.c" {
-		t.Fatalf("added %v", added)
-	}
-	if gjson.GetBytes(out, "mcpServers.a.command").String() != "mine" || !gjson.GetBytes(out, `mcpServers.b\.c`).Exists() {
-		t.Fatalf("merge:\n%s", out)
-	}
-	if strings.Index(string(out), `"z"`) > strings.Index(string(out), `"mcpServers"`) {
-		t.Error("key order changed")
-	}
-}
-
 func TestStatusLine(t *testing.T) {
 	cmd := "/opt/aims statusline"
 	in := `{"model":"opus","statusLine":{"type":"command","command":"~/line.sh","padding":2}}`
