@@ -4,7 +4,8 @@ weight: 12
 aliases: ["/docs/security/"]
 ---
 
-aims handles the logins of your personal and work accounts, so it is built to touch as little as possible.
+aims handles the logins of your personal and work accounts, so it is built to touch as little as possible. What aims is for, and what it is not, is under [Fair use](../#fair-use).
+
 
 ## Logins
 
