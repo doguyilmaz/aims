@@ -40,9 +40,11 @@ aims login codex work -- --device-auth
 
 Every account with its login, plan usage and marks. Alias: `aims ls`.
 
+Under **Other tools** are the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. aims asks each tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. The numbers are from the last `aims keepalive` or `--live`.
+
 | Flag | |
 | --- | --- |
-| `--live` | Ask the providers first. Free for Codex; costs a few tokens for Claude Code. |
+| `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
 | `--json` | Machine-readable output |
 
 ### `aims use [tool] <profile>`

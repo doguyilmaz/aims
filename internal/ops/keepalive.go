@@ -12,6 +12,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/meter"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/schedule"
 	"github.com/doguyilmaz/aims/internal/tool"
@@ -142,5 +143,6 @@ func KeepAlive(ctx context.Context) ([]KeepAliveResult, error) {
 			out = append(out, KeepAliveResult{Tool: a.ID(), Profile: n, Renewed: renewed, Probe: p, Expires: acct.Expires, LoggedIn: acct.LoggedIn})
 		}
 	}
+	meter.Refresh(ctx)
 	return out, nil
 }

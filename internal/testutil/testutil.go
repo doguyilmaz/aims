@@ -22,8 +22,12 @@ var cleared = []string{
 // Missing tool binaries: a test that forgets to install a fake finds no
 // tool rather than the real one on PATH.
 var missing = map[string]string{
-	"AIMS_CLAUDE_BIN": "aims-test-no-claude",
-	"AIMS_CODEX_BIN":  "aims-test-no-codex",
+	"AIMS_CLAUDE_BIN":   "aims-test-no-claude",
+	"AIMS_CODEX_BIN":    "aims-test-no-codex",
+	"AIMS_AGY_BIN":      "aims-test-no-agy",
+	"AIMS_GROK_BIN":     "aims-test-no-grok",
+	"AIMS_KIRO_BIN":     "aims-test-no-kiro",
+	"AIMS_OPENCODE_BIN": "aims-test-no-opencode",
 }
 
 // Main runs a package's tests with HOME in a temporary directory, so a test

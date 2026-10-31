@@ -13,6 +13,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/launch"
+	"github.com/doguyilmaz/aims/internal/meter"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/shell"
@@ -49,7 +50,7 @@ aims status --json`,
 			return printStatus(cmd.Context(), cmd, ids, asJSON)
 		},
 	}
-	cmd.Flags().BoolVar(&live, "live", false, "ask the providers (Codex: free account API; Claude: a one-word prompt)")
+	cmd.Flags().BoolVar(&live, "live", false, "ask the providers (Codex: free account API; Claude: a one-word prompt; other tools: their usage commands)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print JSON")
 	return cmd
 }
@@ -59,7 +60,8 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 	if err != nil {
 		return err
 	}
-	if len(ids) == 0 {
+	everything := len(ids) == 0
+	if everything {
 		ids = tools.IDs()
 	}
 	for _, id := range ids {
@@ -78,6 +80,13 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 			if !quiet && p.Status != tool.ProbeOK {
 				ui.Warn("%s/%s: %s%s", id, n, p.Status, suffix(p.Detail))
 			}
+		}
+	}
+	if everything {
+		if quiet || !ui.Interactive() {
+			meter.Refresh(ctx)
+		} else {
+			ui.Spin("checking other tools", func() { meter.Refresh(ctx) })
 		}
 	}
 	return nil
@@ -107,6 +116,11 @@ func printStatus(ctx context.Context, cmd *cobra.Command, ids []tool.ID, asJSON 
 	}
 	s := ui.NewStyles(out)
 	fmt.Fprint(out, ui.RenderStatus(s, report, cfg))
+	if len(ids) == 0 {
+		if m := ui.RenderMeters(s, meter.Load(), cfg.Failover.Threshold); m != "" {
+			fmt.Fprint(out, "\n"+m)
+		}
+	}
 	return nil
 }
 
