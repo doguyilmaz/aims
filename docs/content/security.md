@@ -4,11 +4,8 @@ weight: 12
 aliases: ["/docs/security/"]
 ---
 
-aims handles the logins of your personal and work accounts, so it is built to touch as little as possible.
+aims handles the logins of your personal and work accounts, so it is built to touch as little as possible. What aims is for, and what it is not, is under [Fair use](../#fair-use).
 
-## Fair use
-
-aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs only your own accounts, on your own machine. It starts sessions with the official Claude Code and Codex CLIs, and reads the limits of Antigravity, Grok, Kiro and OpenCode through each tool's own CLI and login (for Kiro, the same usage request `kiro-cli` makes). It is not a service: no one else's account passes through it, and it never shares, pools or resells access. It doesn't disguise itself or send the providers anything their own CLIs wouldn't. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
 
 ## Logins
 

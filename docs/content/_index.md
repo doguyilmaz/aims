@@ -81,7 +81,13 @@ The details are in [How it works](how-it-works).
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Plan usage comes from its status line |
 | [Codex CLI](https://github.com/openai/codex) | `auth.json`, or the OS keyring | Plan usage comes from its account API |
 
+`aims status` also shows the limits of Antigravity, Grok, Kiro and OpenCode, read through each tool's own CLI; aims does not run sessions on them yet.
+
 Other CLIs can be added: each tool is one adapter behind a small interface. See [Adding a tool](how-it-works#adding-a-tool).
+
+## Fair use
+
+aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs only your own accounts, on your own machine. It starts sessions with the official Claude Code and Codex CLIs, and reads the limits of Antigravity, Grok, Kiro and OpenCode through each tool's own CLI and login (for Kiro, the same usage request `kiro-cli` makes). It is not a service: no one else's account passes through it, and it never shares, pools or resells access. It doesn't disguise itself or send the providers anything their own CLIs wouldn't. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
 
 ## Where next
 
