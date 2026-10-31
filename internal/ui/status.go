@@ -93,9 +93,14 @@ var usageSlots = []string{"5h", "7d"}
 // Usage renders the usage windows as small bars: always 5h and 7d (a dash
 // when unknown), then any other window, then when the fullest one resets.
 func Usage(s *Styles, ws []tool.Window, threshold float64) string {
+	return usage(s, ws, threshold, usageSlots)
+}
+
+// usage is Usage with the windows that always show given.
+func usage(s *Styles, ws []tool.Window, threshold float64, slots []string) string {
 	const cells = 6
 	byLabel := map[string]tool.Window{}
-	labels := slices.Clone(usageSlots)
+	labels := slices.Clone(slots)
 	for _, w := range ws {
 		byLabel[w.Label] = w
 		if !slices.Contains(labels, w.Label) {
