@@ -330,5 +330,8 @@ func (*Adapter) Diagnose(h tool.Home) []string {
 	if b, err := os.ReadFile(managedSettings()); err == nil && (gjson.GetBytes(b, "allowManagedHooksOnly").Bool() || gjson.GetBytes(b, "disableAllHooks").Bool()) {
 		out = append(out, "your organization's Claude Code policy blocks other hooks, so sessions do not move between accounts by themselves")
 	}
+	if b, err := os.ReadFile(claudeJSON(h)); err == nil {
+		out = append(out, plainSecrets(b)...)
+	}
 	return out
 }

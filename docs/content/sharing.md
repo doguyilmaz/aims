@@ -47,6 +47,12 @@ Private to each profile: `.credentials.json` (or the macOS keychain entry) and `
 
 Private to each profile: `auth.json` (or the OS keyring entry). Daemon processes and their control sockets also remain private: sharing history does not mean sharing an authenticated running server.
 
+## Work and personal accounts
+
+By default a work and a personal account share everything above: conversations, settings, skills, MCP servers and project trust. `aims doctor` points out such a pair. If your company's rules keep work data out of a personal account, give the work profile `"share": "settings"` (its own conversations, everything else shared) or `"none"` (nothing shared) in `~/.aims/config.json`; see [Changing the mode later](#changing-the-mode-later).
+
+Shared MCP servers reach every account with their settings, so keep tokens out of them: `${NAME}` in Claude Code's `.claude.json`, `env_vars` or `bearer_token_env_var` in Codex's `config.toml`. `aims doctor` names a server that has one written out.
+
 ## Keeping one entry private
 
 To share everything except, say, Claude Code's `settings.json` for one account, list it under `exclude` in the config file:

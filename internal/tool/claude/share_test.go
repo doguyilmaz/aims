@@ -3,6 +3,7 @@ package claude
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,5 +157,15 @@ func TestShareSettingsSkipsAHomeWithoutAFile(t *testing.T) {
 	f.share()
 	if _, err := os.Stat(claudeJSON(f.homes[1])); err == nil {
 		t.Error("created a login file")
+	}
+}
+
+func TestPlainSecretsInClaudeJSON(t *testing.T) {
+	got := plainSecrets([]byte(`{"mcpServers":{
+		"coolify":{"type":"http","url":"https://c","headers":{"Authorization":"Bearer ${COOLIFY_TOKEN}"}},
+		"jira":{"command":"jira","env":{"JIRA_API_TOKEN":"abc","JIRA_URL":"https://j"}}},
+	  "projects":{"/code/app":{"mcpServers":{"db":{"command":"db","env":{"DB_PASSWORD":"hunter2"}}}}}}`))
+	if len(got) != 2 || !strings.Contains(got[0]+got[1], "jira has env JIRA_API_TOKEN") || !strings.Contains(got[0]+got[1], "db (/code/app) has env DB_PASSWORD") {
+		t.Fatalf("%q", got)
 	}
 }

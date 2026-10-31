@@ -2,10 +2,14 @@ package claude
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/pretty"
 	"github.com/tidwall/sjson"
+
+	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/tool"
 )
 
 // Edits go through gjson/sjson: aims adds or replaces only the keys it owns,
@@ -114,4 +118,35 @@ func escapeKey(k string) string {
 		}
 	}
 	return string(b)
+}
+
+// plainSecrets names the MCP servers in a .claude.json whose env or headers
+// hold a credential written out. aims shares these servers with every
+// account.
+func plainSecrets(doc []byte) []string {
+	var out []string
+	check := func(where string, servers gjson.Result) {
+		servers.ForEach(func(name, srv gjson.Result) bool {
+			for _, field := range []string{"env", "headers"} {
+				srv.Get(field).ForEach(func(k, v gjson.Result) bool {
+					if tool.PlainSecret(k.String(), v.String()) {
+						out = append(out, fmt.Sprintf("MCP server %s%s has %s %s written out in .claude.json, and aims shares it with every account; use ${%s} so the value stays in your environment", name.String(), where, field, k.String(), envName(k.String())))
+					}
+					return true
+				})
+			}
+			return true
+		})
+	}
+	check("", gjson.GetBytes(doc, "mcpServers"))
+	gjson.GetBytes(doc, "projects").ForEach(func(p, v gjson.Result) bool {
+		check(" ("+fsx.Tildify(p.String())+")", v.Get("mcpServers"))
+		return true
+	})
+	return out
+}
+
+// envName suggests an environment variable for a header or env key.
+func envName(k string) string {
+	return strings.ToUpper(strings.NewReplacer("-", "_", " ", "_").Replace(k))
 }

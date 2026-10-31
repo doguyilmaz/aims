@@ -176,10 +176,32 @@ type FreeProber interface {
 	FreeProbe()
 }
 
-// Diagnoser reports settings of the tool that keep aims from doing its job,
-// for aims doctor.
+// Diagnoser reports problems in the tool's settings for aims doctor: what
+// keeps aims from doing its job, and credentials written into settings every
+// account shares.
 type Diagnoser interface {
 	Diagnose(h Home) []string
+}
+
+var secretNameRe = regexp.MustCompile(`(?i)token|secret|passw|api[_-]?key|apikey|auth|bearer|credential|private[_-]?key`)
+
+// PlainSecret reports whether a setting named name holds a credential written
+// out rather than taken from the environment.
+func PlainSecret(name, value string) bool {
+	v := strings.TrimSpace(value)
+	return v != "" && !strings.Contains(v, "${") && !strings.HasPrefix(v, "$") && secretNameRe.MatchString(name)
+}
+
+// WorkPlan reports whether a plan is an organization's (team, enterprise,
+// business, edu) rather than one person's.
+func WorkPlan(plan string) bool {
+	p := strings.ToLower(plan)
+	for _, k := range []string{"team", "enterprise", "business", "edu"} {
+		if strings.Contains(p, k) {
+			return true
+		}
+	}
+	return false
 }
 
 // Refresher renews a login through the tool's own refresh, without a paid
