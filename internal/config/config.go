@@ -86,6 +86,9 @@ type Failover struct {
 	CooldownMinutes int `json:"cooldownMinutes"`
 	// Threshold is the usage percentage treated as "limited".
 	Threshold float64 `json:"threshold"`
+	// TrustHooks runs Codex's hooks without its review on the restarts aims
+	// makes itself.
+	TrustHooks bool `json:"trustHooks,omitempty"`
 }
 
 // Config is ~/.aims/config.json.

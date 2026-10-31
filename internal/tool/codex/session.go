@@ -100,6 +100,9 @@ func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, 
 			i++
 		}
 	}
+	if r.TrustHooks && !tool.HasFlag(out, bypassHookTrust) && strings.Contains(helpOf(bin), bypassHookTrust) {
+		out = append(out, bypassHookTrust)
+	}
 	if r.ID == "" {
 		return out, nil
 	}
@@ -109,6 +112,9 @@ func (*Adapter) ResumeArgs(bin string, args []string, r tool.Resume) ([]string, 
 	}
 	return out, nil
 }
+
+// bypassHookTrust skips codex's review of new or changed hooks.
+const bypassHookTrust = "--dangerously-bypass-hook-trust"
 
 // setupFlags and setupKeys (of -c) pick the model and effort.
 var (

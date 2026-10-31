@@ -3,6 +3,7 @@ package codex
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -325,5 +326,33 @@ func TestTail(t *testing.T) {
 	b, _ := os.ReadFile(p)
 	if off <= 0 || off%int64(len(line)) != 0 || int64(len(b))-off > tailRead {
 		t.Fatalf("tail at %d of %d", off, len(b))
+	}
+}
+
+func TestResumeArgsTrustHooks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stands in for codex with a shell script")
+	}
+	dir := t.TempDir()
+	help := filepath.Join(dir, "help")
+	testutil.Write(t, help, "Options:\n      --dangerously-bypass-hook-trust\n          Run enabled hooks without review\n")
+	bin := filepath.Join(dir, "codex")
+	testutil.Write(t, bin, "#!/bin/sh\ncat "+help+"\n")
+	_ = os.Chmod(bin, 0o755)
+	a := New()
+	trust := tool.Resume{ID: "S", TrustHooks: true}
+	if got, _ := a.ResumeArgs(bin, []string{"-s", "read-only"}, trust); !slices.Equal(got, []string{"-s", "read-only", bypassHookTrust, "resume", "S"}) {
+		t.Errorf("trusted: %q", got)
+	}
+	if got, _ := a.ResumeArgs(bin, []string{bypassHookTrust}, trust); !slices.Equal(got, []string{bypassHookTrust, "resume", "S"}) {
+		t.Errorf("given once: %q", got)
+	}
+	if got, _ := a.ResumeArgs(bin, nil, tool.Resume{ID: "S"}); !slices.Equal(got, []string{"resume", "S"}) {
+		t.Errorf("off: %q", got)
+	}
+	testutil.Write(t, help, "Options:\n")
+	_ = os.Chtimes(bin, time.Now(), time.Now().Add(time.Hour))
+	if got, _ := a.ResumeArgs(bin, nil, trust); !slices.Equal(got, []string{"resume", "S"}) {
+		t.Errorf("a codex without the flag: %q", got)
 	}
 }
