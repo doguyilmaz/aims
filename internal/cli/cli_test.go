@@ -109,6 +109,10 @@ func TestUnoffered(t *testing.T) {
 	if got := unoffered(cfg, ops.Integrations{}, true); len(got) != 0 {
 		t.Fatalf("offered once: %q", got)
 	}
+	cfg.Tools["codex"].Hub = "/c"
+	if got := unoffered(cfg, ops.Integrations{}, true); len(got) != 1 || !strings.Contains(got[0], "Codex sessions") {
+		t.Fatalf("Codex hooks once Codex is set up: %q", got)
+	}
 	cfg = &config.Config{Tools: map[tool.ID]*config.Tool{"claude": {}}}
 	if got := unoffered(cfg, ops.Integrations{}, false); len(got) != 2 {
 		t.Fatalf("no status line without Claude Code, no shell without an rc file: %q", got)

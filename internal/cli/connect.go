@@ -23,7 +23,7 @@ import (
 )
 
 func newSetupCmd() *cobra.Command {
-	var all, noSkill, noMCP, statusLine, keepAlive bool
+	var all, noSkill, noMCP, statusLine, keepAlive, trustHooks bool
 	var sh, only string
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -33,7 +33,9 @@ func newSetupCmd() *cobra.Command {
 			"With flags: the aims skill and MCP server let Claude Code and Codex check and\n" +
 			"switch accounts themselves. --statusline shows the account and plan usage in\n" +
 			"Claude Code; --shell makes plain `claude` and `codex` follow the active account;\n" +
-			"--keepalive renews logins before they lapse unused (see aims keepalive).",
+			"--keepalive renews logins before they lapse unused (see aims keepalive).\n" +
+			"--trust-hooks runs Codex's hooks without its review when aims restarts a\n" +
+			"session on its own (not part of --all: trusted hooks run outside the sandbox).",
 		Example: `aims setup --all
 aims setup --statusline --shell zsh
 aims setup --tools codex --no-skill`,
@@ -56,7 +58,7 @@ aims setup --tools codex --no-skill`,
 			if err != nil {
 				return err
 			}
-			in := ops.Integrations{Skill: !noSkill, MCP: !noMCP, StatusLine: statusLine || all, KeepAlive: keepAlive || all}
+			in := ops.Integrations{Skill: !noSkill, MCP: !noMCP, StatusLine: statusLine || all, KeepAlive: keepAlive || all, TrustHooks: trustHooks}
 			if sh != "" || all {
 				s := shell.Detect()
 				if sh != "" && sh != "auto" {
@@ -77,6 +79,7 @@ aims setup --tools codex --no-skill`,
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "everything: skill, MCP server, status line, shell integration and keepalive")
 	cmd.Flags().BoolVar(&keepAlive, "keepalive", false, "renew logins before they lapse unused")
+	cmd.Flags().BoolVar(&trustHooks, "trust-hooks", false, "run Codex's hooks without review when aims restarts a session on its own")
 	cmd.Flags().BoolVar(&noSkill, "no-skill", false, "skip the skill")
 	cmd.Flags().BoolVar(&noMCP, "no-mcp", false, "skip the MCP server")
 	cmd.Flags().BoolVar(&statusLine, "statusline", false, "show account and plan usage in Claude Code's status line")

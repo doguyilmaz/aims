@@ -401,9 +401,14 @@ func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.I
 	}
 	opts = append(opts, ui.Option{Label: "Keep logins alive while an account is not used", Value: "keepalive",
 		Hint: "an hourly check renews a login only when it runs out (Claude Code: a one-word prompt)", Short: "login keepalive"})
+	hasCodex := slices.ContainsFunc(inst, func(f found) bool { return f.a.ID() == "codex" })
+	if hasCodex {
+		opts = append(opts, ui.Option{Label: "Run Codex hooks when aims restarts a session on its own", Value: "trusthooks",
+			Hint: "skips Codex's hook review, which stalls a restart nobody watches; trusted hooks run outside the sandbox", Short: "Codex hooks on restarts"})
+	}
 	var picked []string
 	for _, o := range opts {
-		on := current == nil
+		on := current == nil && o.Value != "trusthooks"
 		if current != nil {
 			switch o.Value {
 			case "mcp":
@@ -414,6 +419,8 @@ func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.I
 				on = current.Shell != ""
 			case "keepalive":
 				on = current.KeepAlive
+			case "trusthooks":
+				on = current.TrustHooks
 			}
 		}
 		if on {
@@ -424,7 +431,10 @@ func askIntegrations(r *ui.Rail, inst []found, current *ops.Integrations) (ops.I
 		return ops.Integrations{}, err
 	}
 	markOffered()
-	in := ops.Integrations{Skill: slices.Contains(picked, "mcp"), MCP: slices.Contains(picked, "mcp"), StatusLine: slices.Contains(picked, "statusline"), KeepAlive: slices.Contains(picked, "keepalive")}
+	in := ops.Integrations{Skill: slices.Contains(picked, "mcp"), MCP: slices.Contains(picked, "mcp"), StatusLine: slices.Contains(picked, "statusline"), KeepAlive: slices.Contains(picked, "keepalive"), TrustHooks: slices.Contains(picked, "trusthooks")}
+	if !hasCodex && current != nil {
+		in.TrustHooks = current.TrustHooks
+	}
 	if slices.Contains(picked, "shell") {
 		in.Shell = sh
 	}
@@ -436,6 +446,7 @@ func unwanted(current, picked ops.Integrations) ops.Integrations {
 	out := ops.Integrations{
 		Skill: current.Skill && !picked.Skill, MCP: current.MCP && !picked.MCP,
 		StatusLine: current.StatusLine && !picked.StatusLine, KeepAlive: current.KeepAlive && !picked.KeepAlive,
+		TrustHooks: current.TrustHooks && !picked.TrustHooks,
 	}
 	if current.Shell != "" && picked.Shell == "" {
 		out.Shell = current.Shell
@@ -444,7 +455,7 @@ func unwanted(current, picked ops.Integrations) ops.Integrations {
 }
 
 func applyIntegrations(ctx context.Context, r *ui.Rail, in ops.Integrations) {
-	if !in.Skill && !in.MCP && !in.StatusLine && in.Shell == "" && !in.KeepAlive {
+	if !in.Skill && !in.MCP && !in.StatusLine && in.Shell == "" && !in.KeepAlive && !in.TrustHooks {
 		return
 	}
 	var steps []ops.Step
@@ -604,7 +615,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 	opts := []ui.Option{
 		{Label: "Add an account", Value: "add"},
 		{Label: "Go through setup again", Value: "again", Hint: "keeps accounts and logins"},
-		{Label: "Change what aims connects", Value: "connect", Hint: "MCP server and skill, status line, shell, login keepalive"},
+		{Label: "Change what aims connects", Value: "connect", Hint: "MCP server and skill, status line, shell, login keepalive, Codex hooks"},
 		{Label: "Nothing, show my accounts", Value: "status"},
 	}
 	if err := r.Select("What would you like to do?", "", opts, &choice); err != nil {
@@ -754,9 +765,11 @@ func parseIntegrations(list string) (ops.Integrations, error) {
 			in.Shell = shell.Detect()
 		case "keepalive":
 			in.KeepAlive = true
+		case "trusthooks":
+			in.TrustHooks = true
 		case "none", "":
 		default:
-			return in, fmt.Errorf("unknown integration %q (skill, mcp, statusline, shell, all or none)", part)
+			return in, fmt.Errorf("unknown integration %q (skill, mcp, statusline, shell, keepalive, trusthooks, all or none)", part)
 		}
 	}
 	return in, nil

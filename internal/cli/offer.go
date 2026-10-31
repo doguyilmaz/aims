@@ -22,6 +22,7 @@ var integrations = []integration{
 	{"statusline", "the account and its usage in Claude Code's status line", func(in ops.Integrations) bool { return in.StatusLine }},
 	{"shell", "plain `claude` and `codex` use the active account", func(in ops.Integrations) bool { return in.Shell != "" }},
 	{"keepalive", "logins kept alive while an account is not used", func(in ops.Integrations) bool { return in.KeepAlive }},
+	{"trusthooks", "Codex sessions aims restarts on their own run hooks without stopping for review", func(in ops.Integrations) bool { return in.TrustHooks }},
 }
 
 // markOffered records that the user has seen every integration.
@@ -65,7 +66,7 @@ func unoffered(cfg *config.Config, current ops.Integrations, hasRC bool) []strin
 		if slices.Contains(cfg.Offered, i.name) || i.on(current) {
 			continue
 		}
-		if (i.name == "statusline" && cfg.Tools["claude"].Hub == "") || (i.name == "shell" && !hasRC) {
+		if (i.name == "statusline" && cfg.Tools["claude"].Hub == "") || (i.name == "shell" && !hasRC) || (i.name == "trusthooks" && (cfg.Tools["codex"] == nil || cfg.Tools["codex"].Hub == "")) {
 			continue
 		}
 		out = append(out, i.what)

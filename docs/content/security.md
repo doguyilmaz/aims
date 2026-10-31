@@ -36,6 +36,8 @@ Everything else, including your prompts and conversations, goes from the tools t
 
 The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, switch the account for new sessions, and run a prompt with another account. It cannot log in, read logins or change the account of the running session. `aims_run` is read-only unless the call asks for `write`, so a restricted session cannot use it to edit files; see [AI integration](../ai-integration#mcp-server).
 
+Codex reviews new or changed hooks before they run. aims skips that review only on the restarts it makes itself, and only when you turn on `failover.trustHooks` (`aims setup --trust-hooks`); see [Failover](../failover#codex-hooks).
+
 If one account must never see another's conversations, give it `share: settings` or `none`. See [What accounts share](../sharing).
 
 ## Reporting a problem

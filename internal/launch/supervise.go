@@ -258,7 +258,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 				}
 			}
 			var err error
-			if resume, err = sv.ResumeArgs(bin, o.Args, tool.Resume{ID: id, Prompt: prompt, Transcript: transcript, Mode: mode}); err != nil {
+			if resume, err = sv.ResumeArgs(bin, o.Args, tool.Resume{ID: id, Prompt: prompt, Transcript: transcript, Mode: mode, TrustHooks: cfg.Failover.TrustHooks}); err != nil {
 				wake = nil
 				continue // stay: a resume that cannot be built would lose the conversation
 			}

@@ -60,6 +60,9 @@ type Integrations struct {
 	// KeepAlive schedules `aims keepalive`, which renews logins before they
 	// lapse unused.
 	KeepAlive bool
+	// TrustHooks runs Codex's hooks without review on the restarts aims
+	// makes itself (config failover.trustHooks).
+	TrustHooks bool
 }
 
 // Step is one change made (or attempted) by Setup or Uninstall.
@@ -148,7 +151,16 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		path, err := InstallKeepAlive()
 		steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 	}
+	if in.TrustHooks {
+		steps = append(steps, setTrustHooks(true))
+	}
 	return steps, nil
+}
+
+// setTrustHooks turns failover.trustHooks on or off.
+func setTrustHooks(on bool) Step {
+	_, err := config.Update(func(c *config.Config) error { c.Failover.TrustHooks = on; return nil })
+	return Step{Tool: "codex", What: "hooks without review on aims restarts", Target: "failover.trustHooks", Err: err}
 }
 
 // Installed says which integrations are set up now, in any tool.
@@ -174,6 +186,7 @@ func Installed() Integrations {
 		in.Shell = sh
 	}
 	_, in.KeepAlive = schedule.Installed(KeepAliveName)
+	in.TrustHooks = cfg.Failover.TrustHooks
 	return in
 }
 
@@ -223,6 +236,9 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 		if path, found, err := UninstallKeepAlive(); found || err != nil {
 			steps = append(steps, Step{What: "login keepalive", Target: fsx.Tildify(path), Err: err})
 		}
+	}
+	if in.TrustHooks && cfg.Failover.TrustHooks {
+		steps = append(steps, setTrustHooks(false))
 	}
 	if in.Shell != "" {
 		for _, sh := range shell.All {

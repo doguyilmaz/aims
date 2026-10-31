@@ -97,6 +97,8 @@ type Resume struct {
 	// Transcript is its file, when the tool said; Mode its permission mode
 	// at the last hook, "" when unknown.
 	Transcript, Mode string
+	// TrustHooks runs the tool's hooks without asking to review them first.
+	TrustHooks bool
 }
 
 // Watch describes a supervised run.

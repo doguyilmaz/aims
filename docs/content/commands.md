@@ -21,7 +21,7 @@ Sets up your accounts step by step: finds the tools and your current logins, nam
 | `--current` | `personal` | Name for the login you already have |
 | `--second` | `work` | Name for the other account |
 | `--share` | `all` | `all`, `settings` or `none`. See [What accounts share](../sharing). |
-| `--integrations` | `all` | `skill`, `mcp`, `statusline`, `shell`, `keepalive` (comma-separated), `all` or `none` |
+| `--integrations` | `all` | `skill`, `mcp`, `statusline`, `shell`, `keepalive`, `trusthooks` (comma-separated), `all` (all but `trusthooks`) or `none` |
 
 ### `aims login [tool] [profile] [-- tool flags]`
 
@@ -141,7 +141,7 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 
 ### `aims setup`
 
-Connects aims to the tools. On a terminal without flags it lists what aims can add (MCP server and skill, status line, shell integration, login keepalive), one line each on what it does, with what is set up now selected; it adds or removes what you change. Flags do the same in a script. See [AI integration](../ai-integration).
+Connects aims to the tools. On a terminal without flags it lists what aims can add (MCP server and skill, status line, shell integration, login keepalive, Codex hooks on restarts), one line each on what it does, with what is set up now selected; it adds or removes what you change. Flags do the same in a script. See [AI integration](../ai-integration).
 
 When a new version of aims can add something you were never asked about, the next command you run says so once, and `aims setup` is where you choose.
 
@@ -152,6 +152,7 @@ When a new version of aims can add something you were never asked about, the nex
 | `--statusline` | Show the account and plan usage in Claude Code's status line |
 | `--shell [name]` | Add the shell integration to your shell's startup file |
 | `--keepalive` | Renew logins in the background; see [`aims keepalive`](#aims-keepalive-onoff) |
+| `--trust-hooks` | Run Codex's hooks without its review when aims restarts a session; see [Failover](../failover#codex-hooks) |
 | `--tools` | Only these tools |
 
 ### `aims sync [tool]`

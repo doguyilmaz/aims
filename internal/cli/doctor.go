@@ -164,6 +164,14 @@ func newDoctorCmd(version string) *cobra.Command {
 				fmt.Println("  " + s.Dim.Render("no login keepalive (a login unused for days can lapse)"))
 				fix1("aims keepalive on")
 			}
+			switch {
+			case cfg.Tools["codex"].Hub == "":
+			case cfg.Failover.TrustHooks:
+				ok("Codex hooks run without review when aims restarts a session")
+			default:
+				fmt.Println("  " + s.Dim.Render("Codex's hook review can stop a session aims restarts while you are away"))
+				fix1("aims setup --trust-hooks")
+			}
 			for _, a := range tools.All() {
 				hub := cfg.Tools[a.ID()].Hub
 				if hub == "" {
