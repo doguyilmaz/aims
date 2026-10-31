@@ -101,6 +101,9 @@ func Refresh(ctx context.Context) []Status {
 		})
 	}
 	wg.Wait()
+	if len(got) == 0 {
+		return nil
+	}
 	_ = fsx.WithLock(path(), func() error {
 		cache := map[string]Reading{}
 		fsx.ReadJSONLenient(path(), &cache)
