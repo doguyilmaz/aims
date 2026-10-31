@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -438,15 +439,21 @@ func ensureOne(o Options, name string) (Report, error) {
 			return r, makeLink(target, link, false)
 		}
 		if hfi != nil && o.StateShared && o.Layout.IsDisposable(name) {
-			if !o.Fix || holding(filepath.Dir(link)) {
-				r.Action, r.Detail = Unused, "the tool uses the shared copy; `aims doctor --fix` deletes this one"
+			r.Action, r.Detail = Unused, "the tool uses the shared copy; `aims doctor --fix` deletes this one"
+			held, known := proc.Holding(fsx.Real(filepath.Dir(link)))
+			// Windows cannot list open files, but refuses to delete one that is open.
+			if !o.Fix || held || !known && runtime.GOOS != "windows" {
 				return r, nil
 			}
 			for _, s := range append([]string{""}, sqliteSidecars...) {
 				if err := os.Remove(link + s); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					if s == "" {
+						return r, nil
+					}
 					return r, err
 				}
 			}
+			r.Detail = ""
 			r.Action = Removed
 			return r, makeLink(target, link, false)
 		}

@@ -24,7 +24,7 @@ func TestOutlook(t *testing.T) {
 		{[]ProfileStatus{ready("personal"), out("work", 3*time.Hour)}, true, "a session at its limit has nowhere to move"},
 		{[]ProfileStatus{out("personal", 2*time.Hour), ready("work")}, true, "new sessions start on work"},
 		{[]ProfileStatus{out("personal", 2*time.Hour), ready("work")}, false, ""},
-		{[]ProfileStatus{out("personal", 2*time.Hour+30*time.Second), out("work", 72*time.Hour)}, false, "no account works now; sessions wait 2h"},
+		{[]ProfileStatus{out("personal", 2*time.Hour+10*time.Second), out("work", 72*time.Hour)}, false, "no account works now; sessions wait 2h"},
 	} {
 		ts := ToolStatus{Active: "personal", Profiles: c.profiles}
 		if got := ts.Outlook(c.auto); got != c.want {
