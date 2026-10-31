@@ -33,7 +33,7 @@ aims tells the 5-hour limit from the weekly one by the provider's message ("sess
 
 A limit mark lasts until the reset time the provider gave ("resets 5pm", "try again in 2 hours") or the last usage report shows, and for 5 hours when neither says. `aims failover --minutes 90` sets it yourself.
 
-Every mark remembers who set it and the provider's message. `aims status` and the dashboard show it, and the line aims prints when it skips an account names it, with the command that removes it:
+Every mark remembers who set it and the provider's message. The dashboard's card and `aims status --json` show it, and the line aims prints when it skips an account names it, with the command that removes it:
 
 ```text
 › claude: skipping "work" (5h limit for 4h53m, marked by a live check), using "personal"
@@ -104,10 +104,10 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 | Tool | Source | Cost |
 | --- | --- | --- |
 | Claude Code | The status line: Claude Code passes the current account's usage to it while you work. | none |
-| Claude Code | `aims status --live`: a one-word prompt to the smallest model, to verify the login | a few tokens |
-| Codex | `aims status --live`: Codex's local app server reports the account and its rate limits | none |
+| Claude Code | `aims usage --live`: a one-word prompt to the smallest model, to verify the login | a few tokens |
+| Codex | `aims usage --live`: Codex's local app server reports the account and its rate limits | none |
 
-`aims status` shows the last report and how old it is; `r` in the dashboard runs the live check.
+`aims usage` shows the last report with every window and its reset; `aims status` shows the window that decides each account's state. `r` in the dashboard runs the live check.
 
 ## Order
 
@@ -151,7 +151,7 @@ claude/personal: fresh for 1h12m
 codex/work: the login has lapsed (...)
 ```
 
-Codex renews without a request to the model (its app server reads the account with a refresh). Claude Code has no such way, so aims sends a one-word prompt to its smallest model, the same check as `aims status --live`.
+Codex renews without a request to the model (its app server reads the account with a refresh). Claude Code has no such way, so aims sends a one-word prompt to its smallest model, the same check as `aims usage --live`.
 
 `aims keepalive on` runs it every hour in the background and `aims keepalive off` stops it:
 

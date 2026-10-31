@@ -12,7 +12,9 @@ stdout '"result":"answer from work: hello"'
 stderr 'claude/personal hit its usage limit before doing anything, retrying with "work"'
 exec aims status claude
 # The mark lasts until the reset the message names (5pm), and says who set it.
-stdout 'personal .*limited [0-9hm]+ .*marked by a failed run'
+stdout 'personal .*limited [0-9hm]+'
+exec aims status claude --json
+stdout '"markedBy": "a failed run"'
 
 # The next run goes to work straight away.
 exec aims claude -p -- again

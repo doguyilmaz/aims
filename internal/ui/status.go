@@ -188,22 +188,27 @@ func Next(id tool.ID, p ops.ProfileStatus) string {
 	return ""
 }
 
-// RenderStatus is the output of `aims status`: the accounts, what a new
-// session does with them, the sessions open now, and what is left to set up.
-func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string {
+// RenderStatus is the output of `aims status`: each account's state, what a
+// session does now, the sessions open now and what is left to set up.
+// others names the tools whose limits only `aims usage` shows.
+func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config, others []string) string {
 	threshold := cfg.Failover.Threshold
 	var b strings.Builder
-	l := NewLayout(s, report)
+	var l struct{ name, plan, state int }
+	for _, t := range report {
+		for _, p := range t.Profiles {
+			l.name = max(l.name, lipgloss.Width(p.Name))
+			l.plan = max(l.plan, lipgloss.Width(ShortPlan(p.Plan)))
+			l.state = max(l.state, lipgloss.Width(State(s, p)))
+		}
+	}
 	for i, t := range report {
 		if i > 0 {
 			b.WriteString("\n")
 		}
 		head := s.Bold.Render(t.Title)
-		switch {
-		case !t.Installed:
+		if !t.Installed {
 			head += "  " + s.Dim.Render("not installed")
-		case t.Hub != "":
-			head += "  " + s.Dim.Render(fsx.Tildify(t.Hub))
 		}
 		b.WriteString(head + "\n")
 		if len(t.Profiles) == 0 {
@@ -214,36 +219,18 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string
 			b.WriteString("  " + s.Dim.Render("order of "+Where(t.Project)+"; elsewhere "+strings.Join(t.Everywhere, " → ")) + "\n")
 		}
 		for _, p := range t.Profiles {
-			mark := "  "
-			name := p.Name
+			mark, name := "  ", p.Name
 			if p.Active {
-				mark = s.Accent.Render("● ")
-				name = s.Bold.Render(name)
+				mark, name = s.Accent.Render("● "), s.Bold.Render(name)
 			}
-			line := "  " + mark + l.Row(s, p, name, State(s, p), threshold)
-			var tags []string
-			if p.Existing {
-				tags = append(tags, "default login")
-			}
-			switch p.Share {
-			case "none":
-				tags = append(tags, "isolated")
-			case "settings":
-				tags = append(tags, "own history")
-			}
-			if p.Pinned {
-				tags = append(tags, "pinned in this terminal")
-			}
-			if p.StandsIn != "" {
-				tags = append(tags, "standing in for "+p.StandsIn)
-			}
-			if p.MarkedBy != "" {
-				tags = append(tags, "marked by "+p.MarkedBy)
-			}
-			if len(tags) > 0 {
+			line := "  " + mark + Pad(name, l.name) + "  " + Pad(s.Dim.Render(ShortPlan(p.Plan)), l.plan) + "  " + Pad(State(s, p), l.state) + "  " + Key(s, p, threshold)
+			if tags := Tags(p); len(tags) > 0 {
 				line += "  " + s.Dim.Render(strings.Join(tags, ", "))
 			}
 			b.WriteString(strings.TrimRight(line, " ") + "\n")
+		}
+		if o := t.Outlook(cfg.Failover.Auto); o != "" {
+			b.WriteString("  " + s.Warn.Render(o) + "\n")
 		}
 	}
 	if lines := Sessions(s, report); len(lines) > 0 {
@@ -258,15 +245,53 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config) string
 			b.WriteString("  " + Tip(s, t) + "\n")
 		}
 	}
-	if lines := ops.Explain(cfg, report); len(lines) > 0 {
-		b.WriteString("\n" + s.Bold.Render("How it works") + "\n")
-		for _, l := range lines {
-			for _, w := range wrap(l, 78) {
-				b.WriteString("  " + s.Dim.Render(w) + "\n")
-			}
+	what := "Every limit and when it resets"
+	if len(others) > 0 {
+		what += ", also for " + strings.Join(others[:len(others)-1], ", ")
+		if len(others) > 1 {
+			what += " and "
+		}
+		what += others[len(others)-1]
+	}
+	b.WriteString("\n" + s.Dim.Render(what+": ") + Kbd(s, "aims usage") + "\n")
+	return b.String()
+}
+
+// Key is the usage window that decides a profile's state: the one that
+// keeps it out, or else the fullest.
+func Key(s *Styles, p ops.ProfileStatus, threshold float64) string {
+	var key *tool.Window
+	for _, w := range p.Usage {
+		if !p.Usable && slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.HasPrefix(r, w.Label+" ") }) {
+			key = &w
+			break
+		}
+		if key == nil || w.Percent > key.Percent {
+			key = &w
 		}
 	}
-	return b.String()
+	if key == nil {
+		return ""
+	}
+	return s.Dim.Render(key.Label+" ") + Level(s, key.Percent, threshold).Render(fmt.Sprintf("%.0f%%", key.Percent))
+}
+
+// Tags are what changes how aims treats a profile.
+func Tags(p ops.ProfileStatus) []string {
+	var tags []string
+	switch p.Share {
+	case "none":
+		tags = append(tags, "isolated")
+	case "settings":
+		tags = append(tags, "own history")
+	}
+	if p.Pinned {
+		tags = append(tags, "pinned in this terminal")
+	}
+	if p.StandsIn != "" {
+		tags = append(tags, "standing in for "+p.StandsIn)
+	}
+	return tags
 }
 
 // Sessions describes the sessions aims started that still run, one line
@@ -278,7 +303,6 @@ func Sessions(s *Styles, report []ops.ToolStatus) []string {
 			var mode string
 			switch o.Mode {
 			case profiles.Watched:
-				mode = s.OK.Render("auto")
 			case profiles.Pinned:
 				mode = s.Warn.Render("pinned")
 			default:
@@ -295,7 +319,11 @@ func Sessions(s *Styles, report []ops.ToolStatus) []string {
 	}
 	out := make([]string, len(rows))
 	for i, r := range rows {
-		out[i] = Pad(r[0], w[0]) + "  " + Pad(r[1], w[1]) + "  " + Pad(r[2], w[2]) + "  " + r[3]
+		out[i] = Pad(r[0], w[0]) + "  " + Pad(r[1], w[1]) + "  "
+		if w[2] > 0 {
+			out[i] += Pad(r[2], w[2]) + "  "
+		}
+		out[i] += r[3]
 	}
 	return out
 }

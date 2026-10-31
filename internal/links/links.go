@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ const (
 	Merged   Action = "merged"   // both had content; combined in the hub
 	Skipped  Action = "skipped"  // nothing to link yet
 	Unused   Action = "unused"   // the profile's own copy, which the tool no longer reads
+	Removed  Action = "removed"  // an unused copy deleted and linked to the hub
 	Detached Action = "detached" // stopped sharing
 	Conflict Action = "conflict" // needs a person
 )
@@ -437,8 +439,23 @@ func ensureOne(o Options, name string) (Report, error) {
 			return r, makeLink(target, link, false)
 		}
 		if hfi != nil && o.StateShared && o.Layout.IsDisposable(name) {
-			r.Action, r.Detail = Unused, "the tool uses the shared copy; delete this one to free its space: "+link
-			return r, nil
+			r.Action, r.Detail = Unused, "the tool uses the shared copy; `aims doctor --fix` deletes this one"
+			held, known := proc.Holding(fsx.Real(filepath.Dir(link)))
+			// Windows cannot list open files, but refuses to delete one that is open.
+			if !o.Fix || held || !known && runtime.GOOS != "windows" {
+				return r, nil
+			}
+			for _, s := range append([]string{""}, sqliteSidecars...) {
+				if err := os.Remove(link + s); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					if s == "" {
+						return r, nil
+					}
+					return r, err
+				}
+			}
+			r.Detail = ""
+			r.Action = Removed
+			return r, makeLink(target, link, false)
 		}
 		r.Action, r.Quiet = Conflict, hfi != nil
 		if hfi != nil {

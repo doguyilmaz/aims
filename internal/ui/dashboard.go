@@ -17,6 +17,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/meter"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
@@ -29,15 +30,15 @@ type Launch struct {
 }
 
 type keymap struct {
-	Up, Down, MoveUp, MoveDown, Use, Everywhere, Reset, Start, Login, Failover, Clear, Refresh, Add, Help, Quit key.Binding
+	Up, Down, MoveUp, MoveDown, Use, Everywhere, Reset, Start, Login, Failover, Clear, Refresh, Add, Usage, Help, Quit key.Binding
 }
 
 func (k keymap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Start, k.Use, k.Login, k.Add, k.Help, k.Quit}
+	return []key.Binding{k.Start, k.Use, k.Login, k.Add, k.Usage, k.Help, k.Quit}
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Everywhere, k.Reset}, {k.Failover, k.Clear, k.Refresh}, {k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Everywhere, k.Reset}, {k.Failover, k.Clear, k.Refresh}, {k.Usage, k.Help, k.Quit}}
 }
 
 var keys = keymap{
@@ -54,9 +55,19 @@ var keys = keymap{
 	Clear:      key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear marks")),
 	Refresh:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "check live")),
 	Add:        key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add account")),
+	Usage:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "usage")),
 	Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "more")),
 	Quit:       key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
 }
+
+// usageKeys are the keys of the usage view.
+type usageKeys struct{}
+
+func (usageKeys) ShortHelp() []key.Binding {
+	return []key.Binding{key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accounts")), keys.Refresh, keys.Quit}
+}
+
+func (u usageKeys) FullHelp() [][]key.Binding { return [][]key.Binding{u.ShortHelp()} }
 
 type row struct {
 	tool    int
@@ -88,6 +99,9 @@ type dashboard struct {
 	start string
 	// project is the one aims runs in, whose order the keys change.
 	project string
+	// usage shows every limit instead of the accounts.
+	usage  bool
+	meters []meter.Status
 }
 
 type reportMsg struct {
@@ -138,7 +152,7 @@ func (m *dashboard) setReport(r []ops.ToolStatus) {
 	if p, ok := m.selected(); ok {
 		sel = string(p.toolID) + "/" + p.name
 	}
-	m.report = r
+	m.report, m.meters = r, meter.Load()
 	if cfg, err := config.Load(); err == nil {
 		m.auto, m.tips = cfg.Failover.Auto, ops.Tips(cfg, r)
 	}
@@ -236,6 +250,24 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return flashMsg{fmt.Sprintf("%s rests (%s); new sessions use %s until then", res.From, Until(res.Until), res.To), false}
 		}
+	}
+	if key.Matches(msg, keys.Usage) {
+		m.usage = !m.usage
+		return m, nil
+	}
+	if m.usage {
+		switch {
+		case key.Matches(msg, keys.Quit):
+			return m, tea.Quit
+		case key.Matches(msg, keys.Refresh):
+			k := "meters"
+			m.checking[k] = true
+			return m, tea.Batch(m.checkAll(), func() tea.Msg {
+				meter.Refresh(m.ctx)
+				return liveDoneMsg{k}
+			})
+		}
+		return m, nil
 	}
 	sel, ok := m.selected()
 	switch {
@@ -375,6 +407,17 @@ func (m *dashboard) View() string {
 	}
 	ver := s.Dim.Render(m.version)
 	b.WriteString("\n " + title + strings.Repeat(" ", max(1, w-lipgloss.Width(title)-lipgloss.Width(ver)-2)) + ver + "\n\n")
+
+	if m.usage {
+		if len(m.checking) > 0 {
+			b.WriteString(" " + m.spin.View() + s.Dim.Render(" checking") + "\n\n")
+		}
+		for _, line := range strings.Split(strings.TrimRight(RenderUsage(s, m.report, m.meters, m.threshold, w-1), "\n"), "\n") {
+			b.WriteString(" " + line + "\n")
+		}
+		b.WriteString("\n" + s.Renderer().NewStyle().PaddingLeft(1).Render(m.help.View(usageKeys{})) + "\n")
+		return b.String()
+	}
 
 	i := 0
 	l := NewLayout(s, m.report)

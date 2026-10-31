@@ -15,10 +15,11 @@ stdout 'claude stopped as default'
 stderr 'claude: personal hit its usage limit; continuing this conversation on work'
 stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
 ! stdout 'stopped as work'
+exec aims status claude --json
+stdout '"markedBy": "a session"'
 exec aims status claude
-stdout 'personal .*limited .*marked by a session'
-stdout 'claude starts on personal\. At a limit or a dead login the'
-stdout 'claude/personal cannot be used now \(5h limit for .*\); new claude sessions'
+stdout 'personal +max +limited '
+stdout 'new sessions start on work'
 
 # Once personal works again, the conversation goes back to it with the
 # user's next prompt, which the hook holds back so nothing is lost.
@@ -76,8 +77,8 @@ stdout '● personal'
 env FAKE_BEFORE_TURN='aims failover claude --minutes 30'
 exec aims claude
 stderr 'moving this conversation to work, as asked'
-exec aims status claude
-stdout 'personal .*limited .*marked by aims failover'
+exec aims status claude --json
+stdout '"markedBy": "aims failover"'
 env FAKE_BEFORE_TURN=
 exec aims clear claude
 

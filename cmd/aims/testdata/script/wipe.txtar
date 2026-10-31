@@ -16,8 +16,8 @@ stderr 'forgot ~/.aims/config.json'
 exists $HOME/.aims/profiles/claude/personal/.credentials.json
 exists $HOME/.claude/projects/t.jsonl
 exec aims init --yes --tools claude --current work --second personal --integrations none
-exec aims status claude
-stdout 'personal .*personal@example.com'
+exec aims status claude --json
+stdout '"email": "personal@example.com"'
 
 # wipe logs out and deletes the folders aims made; nothing in ~/.claude goes.
 ! exec aims wipe

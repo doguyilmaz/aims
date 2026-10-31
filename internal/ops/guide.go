@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
@@ -103,7 +104,7 @@ func sharingTips(cfg *config.Config) []Tip {
 				}
 			}
 			if size >= 1<<20 {
-				out = append(out, Tip{fmt.Sprintf("%s/%s keeps unused database copies (%d MB) that can go", id, n, size>>20), "aims doctor"})
+				out = append(out, Tip{fmt.Sprintf("%s/%s keeps %d MB of unused database copies", id, n, size>>20), "aims doctor --fix"})
 			}
 		}
 	}
@@ -142,75 +143,34 @@ func (t ToolStatus) Plan(auto bool) string {
 	return "new sessions: " + t.Active + " (auto → " + profiles.Names(others, ", ") + ")"
 }
 
-// Explain says in words what aims does with a new session, and what keeps
-// an account out right now: the end of `aims status`.
-func Explain(cfg *config.Config, report []ToolStatus) []string {
-	type group struct {
-		bins                 []string
-		first, others, names string
-	}
-	var groups []*group
-	var now []string
-	pin := ""
-	for _, t := range report {
-		if !t.Installed || len(t.Profiles) == 0 {
-			continue
-		}
-		bin := tools.Get(t.ID).Layout().Bin
-		var others, usable []string
-		for _, p := range t.Profiles {
-			if p.Name != t.Active {
-				others = append(others, p.Name)
-			}
-			if p.Usable {
-				usable = append(usable, p.Name)
-			}
-		}
-		g := &group{first: t.Active, others: strings.Join(others, ","), names: profiles.Names(others, ", then ")}
-		if i := slices.IndexFunc(groups, func(o *group) bool { return o.first == g.first && o.others == g.others }); i >= 0 {
-			g = groups[i]
-		} else {
-			groups = append(groups, g)
-		}
-		g.bins = append(g.bins, bin)
-		if pin == "" && len(others) > 0 {
-			pin = fmt.Sprintf("aims %s@%s keeps a session on %s and never moves it.", bin, others[0], others[0])
-		}
-		for _, p := range t.Profiles {
-			if p.Usable {
-				continue
-			}
-			out := fmt.Sprintf("%s/%s cannot be used now (%s)", t.ID, p.Name, strings.Join(p.Reasons, ", "))
-			switch {
-			case !cfg.Failover.Auto:
-			case len(usable) == 0:
-				out += "; no " + bin + " account can, so a session waits"
-			case p.Name == t.Active:
-				out += "; new " + bin + " sessions start on " + usable[0]
-			case len(usable) == 1 && usable[0] == t.Active:
-				out += "; a " + bin + " session at its limit has nowhere to move"
-			}
-			now = append(now, out+".")
-		}
-	}
-	var out []string
-	for _, g := range groups {
-		who, starts := g.bins[0], "starts"
-		if len(g.bins) > 1 {
-			who, starts = strings.Join(g.bins, " and "), "start"
-		}
+// Outlook says what a session of the tool does now that an account is out:
+// waits, has nowhere to move, or starts on another one. "" when nothing is.
+func (t ToolStatus) Outlook(auto bool) string {
+	var usable []string
+	var soonest time.Time
+	out := false
+	for _, p := range t.Profiles {
 		switch {
-		case g.others == "":
-			out = append(out, fmt.Sprintf("%s %s on %s, the only account; at a limit a session waits for the reset.", who, starts, g.first))
-		case !cfg.Failover.Auto:
-			out = append(out, fmt.Sprintf("%s %s on %s and stays there; auto moves are off.", who, starts, g.first))
+		case p.Usable:
+			usable = append(usable, p.Name)
 		default:
-			out = append(out, fmt.Sprintf("%s %s on %s. At a limit or a dead login the conversation continues on %s, and goes back to %s once it works again.", who, starts, g.first, g.names, g.first))
+			out = true
+			if !p.ReadyAt.IsZero() && (soonest.IsZero() || p.ReadyAt.Before(soonest)) {
+				soonest = p.ReadyAt
+			}
 		}
 	}
-	out = append(out, now...)
-	if pin != "" {
-		out = append(out, pin)
+	switch {
+	case !out || !auto && len(usable) > 0:
+		return ""
+	case len(usable) == 0 && !soonest.IsZero():
+		return "no account works now; sessions wait " + profiles.Duration(time.Until(soonest))
+	case len(usable) == 0:
+		return "no account works now; sessions wait"
+	case !slices.Contains(usable, t.Active):
+		return "new sessions start on " + usable[0]
+	case len(usable) == 1 && len(t.Profiles) > 1:
+		return "a session at its limit has nowhere to move"
 	}
-	return out
+	return ""
 }

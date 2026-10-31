@@ -154,7 +154,7 @@ aims               # status and next steps`,
 	for _, a := range tools.All() {
 		add("daily", newToolCmd(a))
 	}
-	add("daily", newStatusCmd())
+	add("daily", newStatusCmd(), newUsageCmd())
 	add("accounts", newOrderCmd(), newUseCmd(), newAddCmd(), newLogoutCmd(), newRemoveCmd())
 	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd())
 	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))

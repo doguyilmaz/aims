@@ -19,7 +19,7 @@ aliases: ["/docs/dashboard/"]
      new sessions: personal (auto → work)
 
  Open sessions
-     Claude Code  personal  auto    ~/src/app · 2h
+     Claude Code  personal          ~/src/app · 2h
      Codex        work      pinned  ~/src/api · 20m
 
  Next
@@ -39,7 +39,7 @@ aliases: ["/docs/dashboard/"]
  │ last used 4m ago                                                             │
  ╰──────────────────────────────────────────────────────────────────────────────╯
 
- s start a session • enter make first • l log in • a add account • ? more • q quit
+ s start a session • enter make first • l log in • a add account • tab usage • ? more • q quit
 ```
 
 ## Keys
@@ -57,11 +57,14 @@ aliases: ["/docs/dashboard/"]
 | `c` | Clear the selected account's marks |
 | `r` | Check every account live with its provider (see [costs](../failover#where-usage-numbers-come-from)) |
 | `a` | Add an account (runs the setup) |
+| `tab` | Switch to the usage view and back |
 | `?` | Show all keys |
 | `q`, `esc` | Quit |
 
-**Open sessions** are the sessions aims started that still run, with `auto` (moves at a limit) or `pinned` (stays). **Next** lists what is still missing for sessions to move on their own (a second account, a login, plain `claude` going through aims), each with the command that does it.
+**Open sessions** are the sessions aims started that still run; `pinned` or `auto off` marks one that stays on its account at a limit. **Next** lists what is still missing for sessions to move on their own (a second account, a login, plain `claude` going through aims), each with the command that does it.
 
 The bars turn yellow at 70% and red at the failover threshold. The card under the list shows the selected account's folder, usage windows with their reset times, and when aims last heard from it.
+
+`tab` switches to the usage view: the same table as [`aims usage`](../commands#aims-usage-tool), every window with its reset time, also for Antigravity, Grok, Kiro and OpenCode. `r` there checks every account and tool live; `tab` goes back.
 
 When the output is not a terminal, `aims` prints the same information as `aims status` instead.
