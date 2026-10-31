@@ -59,7 +59,7 @@ func TestSharingTips(t *testing.T) {
 	testutil.Write(t, filepath.Join(cfg.Dir("codex", "a"), "thread-writer-locks", "x.lock"), "")
 	testutil.Write(t, filepath.Join(cfg.Dir("codex", "b"), "thread_history_1.sqlite"), strings.Repeat("x", 2<<20))
 	tips := sharingTips(cfg)
-	if len(tips) != 2 || !strings.Contains(tips[0].Text, "codex/a takes no part in moves") || !strings.Contains(tips[1].Text, "codex/b keeps unused database copies (2 MB)") {
+	if len(tips) != 2 || !strings.Contains(tips[0].Text, "codex/a takes no part in moves") || !strings.Contains(tips[1].Text, "codex/b keeps 2 MB of unused database copies") {
 		t.Fatalf("tips: %+v", tips)
 	}
 }

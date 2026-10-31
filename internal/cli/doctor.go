@@ -121,7 +121,7 @@ func newDoctorCmd(version string) *cobra.Command {
 							conflicts = append(conflicts, r)
 						case links.Unused:
 							unused = append(unused, r)
-						case links.Merged, links.Adopted, links.Detached:
+						case links.Merged, links.Adopted, links.Detached, links.Removed:
 							fmt.Println("    " + s.Dim.Render("repaired "+r.Name+": "+string(r.Action)))
 						}
 					}

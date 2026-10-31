@@ -1,17 +1,19 @@
 # A profile's own copy of a database next to the shared one is not a
 # problem: Codex reads the shared one (CODEX_SQLITE_HOME). Doctor names the
-# copy that is left over, and --fix deletes neither.
+# copy that is left over, and --fix deletes it and links the shared one.
 exec codex login
 exec aims init --yes --tools codex --integrations none
 exec aims login codex work
 cp HUB $HOME/.codex/thread_history_1.sqlite
 cp PRIVATE $HOME/.aims/profiles/codex/work/thread_history_1.sqlite
 exec aims doctor
-stdout 'thread_history_1.sqlite: the tool uses the shared copy; delete this one to free its space'
+stdout 'thread_history_1.sqlite: the tool uses the shared copy; `aims doctor --fix` deletes this one'
 ! stdout 'history sharing is incomplete'
-exec aims doctor --fix
-cmp $HOME/.codex/thread_history_1.sqlite HUB
 cmp $HOME/.aims/profiles/codex/work/thread_history_1.sqlite PRIVATE
+exec aims doctor --fix
+stdout 'repaired thread_history_1.sqlite: removed'
+cmp $HOME/.codex/thread_history_1.sqlite HUB
+cmp $HOME/.aims/profiles/codex/work/thread_history_1.sqlite HUB
 
 # A database with data of its own (goals) is kept in use and still reported.
 cp HUB $HOME/.codex/goals_1.sqlite

@@ -103,7 +103,7 @@ func sharingTips(cfg *config.Config) []Tip {
 				}
 			}
 			if size >= 1<<20 {
-				out = append(out, Tip{fmt.Sprintf("%s/%s keeps unused database copies (%d MB) that can go", id, n, size>>20), "aims doctor"})
+				out = append(out, Tip{fmt.Sprintf("%s/%s keeps %d MB of unused database copies", id, n, size>>20), "aims doctor --fix"})
 			}
 		}
 	}
