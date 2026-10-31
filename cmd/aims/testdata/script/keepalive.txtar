@@ -9,6 +9,7 @@ exec aims keepalive
 stderr 'claude/personal: login age unknown, left alone'
 stderr 'aims keepalive on'
 ! exists $WORK/side-effects
+! exists $HOME/.aims/meters.json
 
 # A fresh access token is left alone; one that ran out is renewed through
 # the tool, and only that one.

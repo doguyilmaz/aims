@@ -8,6 +8,7 @@ import (
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/doguyilmaz/aims/internal/cli"
+	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/testutil/fake"
 )
 
@@ -34,6 +35,9 @@ func TestScripts(t *testing.T) {
 			e.Setenv("SHELL", "/bin/zsh")
 			e.Setenv("AIMS_NO_UPDATE_CHECK", "1")
 			e.Setenv("FAKE_SIDE_EFFECTS", filepath.Join(e.WorkDir, "side-effects"))
+			for k, v := range testutil.Unmetered {
+				e.Setenv(k, v)
+			}
 			return os.MkdirAll(home, 0o755)
 		},
 	})

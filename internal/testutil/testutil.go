@@ -19,15 +19,20 @@ var cleared = []string{
 	"ZDOTDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "SHELL", "NO_COLOR",
 }
 
-// Missing tool binaries: a test that forgets to install a fake finds no
-// tool rather than the real one on PATH.
-var missing = map[string]string{
-	"AIMS_CLAUDE_BIN":   "aims-test-no-claude",
-	"AIMS_CODEX_BIN":    "aims-test-no-codex",
+// Unmetered are the binaries of tools aims only reads limits from; no test
+// may run the real ones.
+var Unmetered = map[string]string{
 	"AIMS_AGY_BIN":      "aims-test-no-agy",
 	"AIMS_GROK_BIN":     "aims-test-no-grok",
 	"AIMS_KIRO_BIN":     "aims-test-no-kiro",
 	"AIMS_OPENCODE_BIN": "aims-test-no-opencode",
+}
+
+// missing are claude and codex: a test that forgets to install a fake finds
+// no tool rather than the real one on PATH.
+var missing = map[string]string{
+	"AIMS_CLAUDE_BIN": "aims-test-no-claude",
+	"AIMS_CODEX_BIN":  "aims-test-no-codex",
 }
 
 // Main runs a package's tests with HOME in a temporary directory, so a test
@@ -95,6 +100,9 @@ func isolate(home string, set func(k, v string) error, unset func(k string) erro
 		_ = unset(k)
 	}
 	for k, v := range missing {
+		_ = set(k, v)
+	}
+	for k, v := range Unmetered {
 		_ = set(k, v)
 	}
 }
