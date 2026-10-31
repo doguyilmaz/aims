@@ -133,10 +133,24 @@ func label(window string) string {
 	return window
 }
 
-// run runs a tool's CLI from the temporary folder, outside any project.
+// workDir is an empty folder only this user can write: these CLIs load
+// MCP servers, hooks and plugins from the folder they run in.
+func workDir() (string, error) {
+	d := filepath.Join(config.Home(), "meter")
+	if err := os.MkdirAll(d, 0o700); err != nil {
+		return "", err
+	}
+	return d, os.Chmod(d, 0o700)
+}
+
+// run runs a tool's CLI in workDir.
 func run(ctx context.Context, bin string, args ...string) ([]byte, error) {
+	dir, err := workDir()
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = os.TempDir()
+	cmd.Dir = dir
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if ctx.Err() != nil {

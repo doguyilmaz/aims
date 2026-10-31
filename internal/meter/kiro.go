@@ -41,7 +41,7 @@ func kiroDB() string {
 func (k kiro) Read(ctx context.Context, bin string) Reading {
 	r, expired := k.read(ctx)
 	if expired {
-		_, _, _ = proc.Output(bin, []string{"whoami"}, os.Environ(), 20*time.Second)
+		_, _ = run(ctx, bin, "whoami")
 		r, _ = k.read(ctx)
 	}
 	return r
