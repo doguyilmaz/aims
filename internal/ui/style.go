@@ -121,17 +121,23 @@ func Bar(s *Styles, pct, threshold float64, width int) string {
 	if pct > 0 && filled == 0 {
 		filled = 1
 	}
-	st := s.OK
-	switch {
-	case pct >= threshold:
-		st = s.Bad
-	case pct >= 70:
-		st = s.Warn
-	}
+	st := Level(s, pct, threshold)
 	if !s.Color() {
 		return "[" + strings.Repeat("#", filled) + strings.Repeat(".", width-filled) + "]"
 	}
 	return st.Render(strings.Repeat("━", filled)) + s.Track.Render(strings.Repeat("━", width-filled))
+}
+
+// Level is the colour of a usage percentage: fine, getting close, at the
+// threshold.
+func Level(s *Styles, pct, threshold float64) lipgloss.Style {
+	switch {
+	case pct >= threshold:
+		return s.Bad
+	case pct >= 70:
+		return s.Warn
+	}
+	return s.OK
 }
 
 // Pad right-pads s to w visible columns.

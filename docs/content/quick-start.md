@@ -83,26 +83,22 @@ aims status
 ```
 
 ```text
-Claude Code  ~/.claude
-  ● personal   me@gmail.com     pro    ready           5h ━━━━━━    –   7d ━━━━━━    –  default login
-    work       me@company.com   max    ready           5h ━━━━━━    –   7d ━━━━━━    –
+Claude Code
+  ● personal  pro   ready
+    work      max   ready
 
-Codex  ~/.codex
-  ● personal   me@gmail.com     plus   ready           5h ━━━━━━    –   7d ━━━━━━    –
-    work       no login                not logged in   5h ━━━━━━    –   7d ━━━━━━    –
+Codex
+  ● personal  plus  ready
+    work            not logged in
+  a session at its limit has nowhere to move
 
 Next
   → codex/work is not logged in  aims login codex work
 
-How it works
-  claude and codex start on personal. At a limit or a dead login the
-  conversation continues on work, and goes back to personal once it works again.
-  codex/work cannot be used now (not logged in); a codex session at its limit
-  has nowhere to move.
-  aims claude@work keeps a session on work and never moves it.
+Every limit and when it resets: aims usage
 ```
 
-`●` marks the account sessions start on. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up. **How it works** says in words what a new session does and what keeps an account out right now.
+`●` marks the account sessions start on. The line under a tool says what a session does while an account is out. **Next** lists what is still missing, each with the command that does it; when it is empty, aims is fully set up. `aims usage` shows every limit with its reset time.
 
 ## 3. Use it
 

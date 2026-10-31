@@ -11,8 +11,8 @@ stderr 'log in: aims login claude work'
 exists $HOME/.aims/profiles/claude/work/projects
 ! exists $HOME/.aims/profiles/claude/work/.credentials.json
 exec aims status claude
-stdout '● personal +me@gmail.com +max +ready .*default login'
-stdout 'work +no login +not logged in'
+stdout '● personal +max +ready'
+stdout 'work +not logged in'
 stdout '→ claude/work is not logged in  aims login claude work'
 
 # Logging in records the account and warns about a duplicate.

@@ -38,14 +38,35 @@ aims login codex work -- --device-auth
 
 ### `aims status [tool]`
 
-Every account with its login, plan usage and marks. Alias: `aims ls`.
+What is going on, in a few lines. Alias: `aims ls`.
 
-Under **Other tools** are the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. aims asks each tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. The numbers are from the last `aims keepalive` or `--live`.
+- **Each account:** the plan, its state (`ready`, `limited 2h10m`, `login expired`, `not logged in`) and the usage window that decides that state. `●` marks the account sessions start on. A tag says when an account is `standing in for` the active one, `pinned in this terminal`, `isolated` or keeps its `own history`.
+- **Under each tool,** when an account is out: what a session does now (`new sessions start on work`, `a session at its limit has nowhere to move`, `no account works now; sessions wait 1h23m`).
+- **Open sessions:** the sessions aims started that still run, with their account, folder and age; `pinned` or `auto off` when they will not move at a limit.
+- **Next:** what is left to set up, each with the command that does it. Empty once aims is fully set up. It can say:
+  - an account is not logged in, is logged in to the same account as another, or has out-of-date details: `aims login <tool> <profile>`
+  - a tool has one account, so there is nothing to move to: `aims login <tool> <name>`
+  - plain `claude` and `codex` skip aims: `aims setup --shell <shell>`
+  - a session is pinned to an account: the command that restarts it on auto
+  - the login keepalive is gone: `aims keepalive on`
+  - auto moves are off: the setting that turns them on
+  - an account takes no part in moves until no instance of the tool uses it: `aims doctor`
+  - an account keeps unused database copies: `aims doctor --fix`
 
 | Flag | |
 | --- | --- |
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
-| `--json` | Machine-readable output |
+| `--json` | Everything, as JSON: emails, every usage window, marks and who set them |
+
+### `aims usage [tool]`
+
+Every usage window of every account with its bar and when it resets, and under them the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. Columns line up across all of them, and on a narrow terminal the windows wrap under each other.
+
+aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. The numbers are from the last `aims keepalive` or `--live`.
+
+| Flag | |
+| --- | --- |
+| `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
 
 ### `aims use [tool] <profile>`
 
@@ -177,7 +198,7 @@ Checks the tools, each profile's login and shared folders, and the integrations 
 
 ### `aims keepalive [on|off]`
 
-Renews every login whose access token has run out or is within 10 minutes of it, through the tool itself. A fresh login costs nothing. Codex renews without a request to the model; Claude Code gets a one-word prompt to its smallest model, the same check as `aims status --live`.
+Renews every login whose access token has run out or is within 10 minutes of it, through the tool itself. A fresh login costs nothing. Codex renews without a request to the model; Claude Code gets a one-word prompt to its smallest model, the same check as `aims usage --live`.
 
 `on` runs it every hour in the background (launchd, a systemd user timer or the Windows Task Scheduler); `off` removes that. See [Keeping logins alive](../failover#keeping-logins-alive).
 

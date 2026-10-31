@@ -14,7 +14,7 @@ The profile that adopted your existing login is special. It runs with the variab
 
 An editor extension, a desktop app, a script, a cron job, or plain `claude` in a terminal without the [shell integration](../everyday#plain-claude-and-codex) starts the tool without aims. Unless `CLAUDE_CONFIG_DIR` or `CODEX_HOME` is set, it uses the tool's own folder, which is why aims leaves your existing login there:
 
-- It runs as the account `aims init` adopted (tagged `default login` in `aims status`), whatever `aims use` says, and without failover.
+- It runs as the account `aims init` adopted (tagged `default login` in the dashboard), whatever `aims use` says, and without failover.
 - It sees every shared conversation, setting and skill, because those live in that folder. Tools that read `~/.claude/projects` or `~/.codex/sessions`, such as usage trackers, see the conversations of every account that shares history.
 - The other accounts live in `~/.aims/profiles` and are used only by what aims starts. A program started from a terminal pinned with `aims env` inherits the variable and uses that account too.
 

@@ -21,7 +21,7 @@ aims itself makes these requests:
 | Request | When | Sends |
 | --- | --- | --- |
 | `github.com/doguyilmaz/aims/releases/latest` | at most once a day, on a terminal; and `aims upgrade` | nothing beyond a plain HTTPS request. Off with `AIMS_NO_UPDATE_CHECK=1`. |
-| The tools' own providers | `aims status --live`, or `r` in the dashboard | through the tools themselves: Codex's account API, and a one-word Claude Code prompt |
+| The tools' own providers | `aims usage --live` or `aims status --live`, or `r` in the dashboard | through the tools themselves: Codex's account API, and a one-word Claude Code prompt |
 | The tools' own providers | `aims keepalive`, hourly in the background after `aims keepalive on` | the same, and only for a login whose access token has run out |
 
 Everything else, including your prompts and conversations, goes from the tools to their providers as it would without aims. aims has no server and collects nothing.

@@ -4,14 +4,16 @@
 exec aims init --yes --tools codex --share settings --integrations none
 stderr 'codex/personal ~/.aims/profiles/codex/personal'
 exec aims status codex
-stdout 'personal +no login +not logged in .*own history'
+stdout 'personal +not logged in +own history'
 
 env FAKE_EMAIL=me@gmail.com
 exec aims login codex personal
 env FAKE_EMAIL=work@corp.com
 exec aims login codex work
 exec aims status codex
-stdout '● personal +me@gmail.com +plus +ready .*own history'
+stdout '● personal +plus +ready .*own history'
+exec aims status codex --json
+stdout '"email": "me@gmail.com"'
 
 # settings share config.toml with ~/.codex but keep their own sessions.
 cp config.toml $HOME/.codex/config.toml
@@ -39,7 +41,9 @@ stderr 'not retried'
 exec aims clear codex
 exec aims status --live codex
 stdout 'personal .*limited'
-stdout 'work .*ready .*5h \[#'
+stdout 'work .*ready +5h 12%'
+exec aims usage codex
+stdout 'work +plus +5h +\[#.....\] +12%'
 exec aims status --json codex
 stdout '"label": "5h"'
 stdout '"pct": 12'

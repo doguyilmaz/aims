@@ -632,7 +632,7 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 		if err != nil {
 			return err
 		}
-		fmt.Print(ui.RenderStatus(ui.Out, report, cfg))
+		fmt.Print(ui.RenderStatus(ui.Out, report, cfg, otherTools()))
 		return nil
 	}
 

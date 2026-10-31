@@ -20,8 +20,8 @@ stdout 'codex stopped as default'
 stderr 'codex: personal hit its usage limit; continuing this conversation on work'
 stdout 'codex interactive as work args=\["-s" "workspace-write" "resume" "c-default" "--" "continue"\]'
 ! stdout 'stopped as work'
-exec aims status codex
-stdout 'personal .*limited .*marked by a session'
+exec aims status codex --json
+stdout '"markedBy": "a session"'
 
 # Once personal works again, Codex, which has no hook to hold the next
 # prompt, is not restarted right after a turn: only once it sits idle.

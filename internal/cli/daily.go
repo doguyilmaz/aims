@@ -114,14 +114,66 @@ func printStatus(ctx context.Context, cmd *cobra.Command, ids []tool.ID, asJSON 
 	if err != nil {
 		return err
 	}
-	s := ui.NewStyles(out)
-	fmt.Fprint(out, ui.RenderStatus(s, report, cfg))
-	if len(ids) == 0 {
-		if m := ui.RenderMeters(s, meter.Load(), cfg.Failover.Threshold); m != "" {
-			fmt.Fprint(out, "\n"+m)
-		}
-	}
+	fmt.Fprint(out, ui.RenderStatus(ui.NewStyles(out), report, cfg, otherTools()))
 	return nil
+}
+
+// otherTools names the installed tools aims reads the limits of.
+func otherTools() []string {
+	var out []string
+	for _, m := range meter.Load() {
+		out = append(out, m.Title)
+	}
+	return out
+}
+
+func newUsageCmd() *cobra.Command {
+	var live bool
+	cmd := &cobra.Command{
+		Use:   "usage [tool]",
+		Short: "Show every limit and when it resets, also for Antigravity, Grok, Kiro and OpenCode",
+		Example: `aims usage
+aims usage --live
+aims usage codex`,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeTools,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var ids []tool.ID
+			if len(args) == 1 {
+				a, err := parseTool(args[0])
+				if err != nil {
+					return err
+				}
+				ids = []tool.ID{a.ID()}
+			}
+			if live {
+				if err := checkLive(cmd.Context(), ids, false); err != nil {
+					return err
+				}
+			}
+			report, err := ops.Status(cmd.Context(), ids)
+			if err != nil {
+				return err
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			var ms []meter.Status
+			if len(ids) == 0 {
+				ms = meter.Load()
+			}
+			out := cmd.OutOrStdout()
+			width := 0
+			if ui.IsTerminal(os.Stdout) {
+				width = ui.Width()
+			}
+			fmt.Fprint(out, ui.RenderUsage(ui.NewStyles(out), report, ms, cfg.Failover.Threshold, width))
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&live, "live", false, "ask the providers first (Codex: free account API; Claude: a one-word prompt; other tools: their usage commands)")
+	return cmd
 }
 
 func newUseCmd() *cobra.Command {

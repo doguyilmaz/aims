@@ -60,7 +60,7 @@ The [shell integration](../everyday#plain-claude-and-codex) is missing or not lo
 
 ### A profile shows "limited" but works again
 
-The limit reset early, or the mark was a mistake. `aims clear claude work` removes it, and `aims status --live` checks with the provider.
+The limit reset early, or the mark was a mistake. `aims clear claude work` removes it, and `aims usage --live` checks with the provider.
 
 ### A login lapsed after weeks of not using an account
 
