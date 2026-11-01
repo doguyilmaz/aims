@@ -288,7 +288,7 @@ func TestChooseAsksWhenAllLimited(t *testing.T) {
 	if got := choose(t.Context(), o, cfg, "a"); got != "b" {
 		t.Fatalf("started on %q: %q", got, said)
 	}
-	if len(said) == 0 || !strings.HasPrefix(said[0], "codex: using b while a") {
+	if len(said) == 0 || !strings.HasPrefix(said[0], "codex: a is at its limit (") || !strings.HasSuffix(said[0], "so this session uses b") {
 		t.Fatalf("said: %q", said)
 	}
 }
