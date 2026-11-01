@@ -103,8 +103,10 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 		homeVar := a.Layout().HomeEnv
 		if reset {
 			lines = append(lines, unset(sh, config.PinVar(id)))
-			if v := a.Layout().StateEnv; v != "" {
-				lines = append(lines, unset(sh, v))
+			for _, v := range []string{a.Layout().StateEnv, a.Layout().MemoryEnv} {
+				if v != "" {
+					lines = append(lines, unset(sh, v))
+				}
 			}
 			if hub := cfg.Tools[id].HubEnv; hub != "" {
 				lines = append(lines, set(sh, homeVar, hub))
@@ -136,6 +138,13 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 			lines = append(lines, set(sh, stateVar, v))
 		default:
 			lines = append(lines, unset(sh, stateVar))
+		}
+		if memVar := a.Layout().MemoryEnv; memVar != "" {
+			if v := profiles.MemoryHome(cfg, a, name); v != "" {
+				lines = append(lines, set(sh, memVar, v))
+			} else {
+				lines = append(lines, unset(sh, memVar))
+			}
 		}
 	}
 	return strings.Join(lines, "\n") + "\n", nil

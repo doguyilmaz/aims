@@ -55,6 +55,8 @@ func (*Adapter) Layout() tool.Layout {
 			"commands", "agents", "skills", "output-styles", "hooks", "plugins", "rules",
 		),
 		SharedDirs:     []string{"projects", "file-history", "todos", "plans", "commands", "agents", "skills"},
+		MemoryEnv:      "CLAUDE_CODE_REMOTE_MEMORY_DIR",
+		MemoryDir:      "projects",
 		History:        tool.Names("projects", "file-history", "todos", "plans", "tasks", "history.jsonl"),
 		ConflictingEnv: []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"},
 		SkillsDir:      "skills",
