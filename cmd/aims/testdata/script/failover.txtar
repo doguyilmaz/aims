@@ -19,7 +19,7 @@ stdout '"markedBy": "a failed run"'
 # The next run goes to work straight away.
 exec aims claude -p -- again
 stdout 'answer from work: again'
-stderr 'claude: using work while personal is out \(5h limit for [0-9hm]+, marked by a failed run\)'
+stderr 'claude: personal is at its limit \(5h limit for [0-9hm]+, marked by a failed run\), so this session uses work'
 stderr 'personal works again\? aims clear claude personal'
 
 # A run that already called a tool is not repeated, even with a profile to spare.
@@ -99,7 +99,7 @@ stdout '● personal .*limited 1h30m'
 stdout 'work .*ready .*standing in for personal'
 exec aims claude
 stdout 'claude interactive as work'
-stderr 'claude: using work while personal is out \(limit for 1h30m, marked by aims failover\)'
+stderr 'claude: personal is at its limit \(limit for 1h30m, marked by aims failover\), so this session uses work'
 exec aims clear claude personal
 exec aims claude
 stdout 'claude interactive as default'

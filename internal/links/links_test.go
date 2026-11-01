@@ -410,3 +410,30 @@ func TestFixRemovesUnusedCopy(t *testing.T) {
 		t.Fatal("copy not replaced by a link to the shared one")
 	}
 }
+
+func TestFixRemovesUnsharedDisposableCopy(t *testing.T) {
+	hub, dir := dirs(t)
+	l := layout
+	l.Disposable = []tool.Entry{{Pattern: regexp.MustCompile(`^logs_\d+\.sqlite$`)}}
+	testutil.Write(t, filepath.Join(hub, "logs_2.sqlite"), "shared")
+	testutil.Write(t, filepath.Join(dir, "logs_2.sqlite"), "old")
+	testutil.Write(t, filepath.Join(dir, "logs_2.sqlite-wal"), "old wal")
+	report := func(fix bool) Report {
+		for _, r := range Ensure(Options{Hub: hub, Dir: dir, Layout: l, StateShared: true, Fix: fix}) {
+			if r.Name == "logs_2.sqlite" {
+				return r
+			}
+		}
+		t.Fatal("no report")
+		return Report{}
+	}
+	if r := report(false); r.Action != Unused || testutil.Read(t, filepath.Join(dir, "logs_2.sqlite")) != "old" {
+		t.Fatalf("deleted without fix: %+v", r)
+	}
+	if r := report(true); r.Action != Removed {
+		t.Fatalf("%+v", r)
+	}
+	if fsx.Lstat(filepath.Join(dir, "logs_2.sqlite")) != nil || fsx.Lstat(filepath.Join(dir, "logs_2.sqlite-wal")) != nil || testutil.Read(t, filepath.Join(hub, "logs_2.sqlite")) != "shared" {
+		t.Fatal("unused copy not deleted, or the shared one touched")
+	}
+}

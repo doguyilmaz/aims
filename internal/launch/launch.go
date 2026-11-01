@@ -294,12 +294,12 @@ func choose(ctx context.Context, o Options, cfg *config.Config, preferred string
 	case pick.Name == preferred:
 		return preferred
 	case pick.Name != "":
-		o.say(Info, "%s: using %s while %s", a.ID(), pick.Name, describe(pick.Skipped))
+		o.say(Info, "%s: %s, so this session uses %s", a.ID(), describe(cfg, pick.Skipped), pick.Name)
 	case pick.Soonest != "":
 		o.say(Warn, "%s: every account is limited; using %s, the first back (in %s)", a.ID(), pick.Soonest, profiles.Duration(time.Until(pick.ReadyAt)))
 		return pick.Soonest
 	default:
-		o.say(Warn, "%s: no account looks usable (%s); trying %s anyway", a.ID(), describe(pick.Skipped), preferred)
+		o.say(Warn, "%s: no account looks usable: %s; trying %s anyway", a.ID(), describe(cfg, pick.Skipped), preferred)
 		return preferred
 	}
 	hints(o, pick.Skipped)
@@ -350,7 +350,7 @@ func explain(o Options, cfg *config.Config, preferred, name string, mode profile
 	case mode == profiles.Pinned:
 		o.say(Hint, "this session stays on %s; plain aims %s moves on at a limit. More: aims status", name, bin)
 	case name != preferred:
-		o.say(Hint, "%s is out, so this session runs on %s and goes back once %s works. More: aims status", preferred, name, preferred)
+		o.say(Hint, "%s can't be used now, so this session runs on %s and goes back once %s works. More: aims status", preferred, name, preferred)
 	case len(others) > 0:
 		o.say(Hint, "at a limit this conversation continues on %s and comes back to %s. More: aims status", others[0], name)
 	}
@@ -421,16 +421,34 @@ func strip(env, keys []string) []string {
 	return out
 }
 
-// describe says why profiles were passed over: "work is limited (5h at
-// 100% for 2h10m)".
-func describe(evs []profiles.Evaluation) string {
+// describe says why profiles were passed over: "work is at its limit (7d
+// at 98% for 1h26m; aims stops at 95%)".
+func describe(cfg *config.Config, evs []profiles.Evaluation) string {
 	parts := make([]string, len(evs))
 	for i, e := range evs {
 		why := strings.Join(e.Reasons, ", ")
 		if e.State != nil && e.State.MarkedBy != "" {
 			why += ", marked by " + e.State.MarkedBy
 		}
-		parts[i] = fmt.Sprintf("%s is out (%s)", e.Name, why)
+		early := false
+		if e.State != nil && e.State.Usage != nil {
+			for _, w := range e.State.Usage.Windows {
+				early = early || w.Percent >= cfg.Failover.Threshold && w.Percent < 100
+			}
+		}
+		if early {
+			why += fmt.Sprintf("; aims stops at %.0f%%", cfg.Failover.Threshold)
+		}
+		state := "can't be used"
+		switch {
+		case e.Account.LoggedIn != nil && !*e.Account.LoggedIn, e.State != nil && e.State.NeedsLogin:
+			state = "needs a login"
+		case e.Busy():
+			state = "is busy"
+		case !e.ReadyAt.IsZero() || early:
+			state = "is at its limit"
+		}
+		parts[i] = fmt.Sprintf("%s %s (%s)", e.Name, state, why)
 	}
 	return strings.Join(parts, ", ")
 }
