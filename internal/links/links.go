@@ -331,7 +331,53 @@ func Ensure(o Options) []Report {
 		}
 		out = append(out, r)
 	}
+	// Disposable databases that are not shared (Codex logs) get no link: with
+	// shared state the tool writes them to the hub, so the profile copy is dead.
+	if o.StateShared {
+		entries, _ := os.ReadDir(o.Dir)
+		for _, e := range entries {
+			name := e.Name()
+			if !e.Type().IsRegular() || !o.Layout.IsDisposable(name) || o.Layout.IsShared(name) || fsx.Stat(filepath.Join(o.Hub, name)) == nil {
+				continue
+			}
+			r, err := dropUnused(o, name)
+			if err != nil {
+				r = Report{Name: name, Action: Conflict, Detail: err.Error()}
+			}
+			out = append(out, r)
+		}
+	}
 	return out
+}
+
+// dropUnused deletes a profile's own copy of a database the tool reads from
+// the hub, with its sidecars, when Fix is set and nothing has the folder open.
+func dropUnused(o Options, name string) (Report, error) {
+	link := filepath.Join(o.Dir, name)
+	r := Report{Name: name, Action: Unused, Detail: "the tool uses the shared copy; `aims doctor --fix` deletes this one"}
+	if !o.Fix {
+		return r, nil
+	}
+	held, known := proc.Holding(fsx.Real(o.Dir))
+	// Windows cannot list open files, but refuses to delete one that is open.
+	switch {
+	case held:
+		r.Detail = "a running session has this profile's folder open; close it and run `aims doctor --fix` again"
+		return r, nil
+	case !known && runtime.GOOS != "windows":
+		r.Detail = "aims cannot tell whether a session has this folder open, so it keeps the copy"
+		return r, nil
+	}
+	for _, s := range append([]string{""}, sqliteSidecars...) {
+		if err := os.Remove(link + s); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			if s == "" {
+				return r, nil
+			}
+			return r, err
+		}
+	}
+	r.Action, r.Detail = Removed, ""
+	return r, nil
 }
 
 func ensureOne(o Options, name string) (Report, error) {
@@ -439,22 +485,10 @@ func ensureOne(o Options, name string) (Report, error) {
 			return r, makeLink(target, link, false)
 		}
 		if hfi != nil && o.StateShared && o.Layout.IsDisposable(name) {
-			r.Action, r.Detail = Unused, "the tool uses the shared copy; `aims doctor --fix` deletes this one"
-			held, known := proc.Holding(fsx.Real(filepath.Dir(link)))
-			// Windows cannot list open files, but refuses to delete one that is open.
-			if !o.Fix || held || !known && runtime.GOOS != "windows" {
-				return r, nil
+			r, err := dropUnused(o, name)
+			if err != nil || r.Action != Removed {
+				return r, err
 			}
-			for _, s := range append([]string{""}, sqliteSidecars...) {
-				if err := os.Remove(link + s); err != nil && !errors.Is(err, fs.ErrNotExist) {
-					if s == "" {
-						return r, nil
-					}
-					return r, err
-				}
-			}
-			r.Detail = ""
-			r.Action = Removed
 			return r, makeLink(target, link, false)
 		}
 		r.Action, r.Quiet = Conflict, hfi != nil
