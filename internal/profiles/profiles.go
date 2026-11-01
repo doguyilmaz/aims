@@ -127,6 +127,13 @@ func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []
 			delete(m, l.StateEnv)
 		}
 	}
+	if l.MemoryEnv != "" {
+		if v := MemoryHome(cfg, a, name); v != "" {
+			m[l.MemoryEnv] = v
+		} else {
+			delete(m, l.MemoryEnv)
+		}
+	}
 	for k, v := range p.Env {
 		m[k] = v
 	}
@@ -227,6 +234,17 @@ func StateHome(cfg *config.Config, a tool.Adapter, name, inherited string) (valu
 		return inherited, false
 	}
 	return cfg.EnsureHub(a.ID()), false
+}
+
+// MemoryHome is what a profile's MemoryEnv should be: the hub when the
+// profile shares MemoryDir, "" (unset) otherwise.
+func MemoryHome(cfg *config.Config, a tool.Adapter, name string) string {
+	l := a.Layout()
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if l.MemoryEnv == "" || p == nil || cfg.HomeEnv(a.ID(), name) == "" || Private(p, l)(l.MemoryDir) {
+		return ""
+	}
+	return cfg.EnsureHub(a.ID())
 }
 
 // StateShared reports whether a profile reads its databases from the same

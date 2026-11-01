@@ -280,6 +280,45 @@ func TestEnvDatabases(t *testing.T) {
 	}
 }
 
+// A Claude profile that shares projects reaches its memory through the hub's
+// real path; any other profile drops a value it inherited.
+func TestEnvMemory(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		for _, n := range []string{"a", "b", "c", "d"} {
+			c.Tools["claude"].Profiles[n] = &config.Profile{}
+			c.Tools["claude"].Order = append(c.Tools["claude"].Order, n)
+		}
+		c.Tools["claude"].Profiles["b"].Share = config.ShareSettings
+		c.Tools["claude"].Profiles["c"].Exclude = []string{"projects"}
+		c.Tools["claude"].Profiles["d"].Existing = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := tools.Get("claude")
+	hub := cfg.EnsureHub("claude")
+	get := func(name string) string {
+		env, _ := Env(cfg, a, name, []string{"CLAUDE_CODE_REMOTE_MEMORY_DIR=/stale"})
+		for _, kv := range env {
+			if v, ok := strings.CutPrefix(kv, "CLAUDE_CODE_REMOTE_MEMORY_DIR="); ok {
+				return v
+			}
+		}
+		return "unset"
+	}
+	for name, want := range map[string]string{"a": hub, "b": "unset", "c": "unset", "d": "unset"} {
+		if v := get(name); v != want {
+			t.Errorf("%s: %q, want %q", name, v, want)
+		}
+	}
+	cfg.Tools["claude"].Profiles["a"].Env = map[string]string{"CLAUDE_CODE_REMOTE_MEMORY_DIR": "/mine"}
+	if v := get("a"); v != "/mine" {
+		t.Errorf("the profile's own value: %q", v)
+	}
+}
+
 func TestDuration(t *testing.T) {
 	for d, want := range map[time.Duration]string{
 		0: "now", 20 * time.Second: "1m", 45 * time.Minute: "45m", 2 * time.Hour: "2h",

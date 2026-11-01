@@ -230,6 +230,10 @@ type Layout struct {
 	// StateEnv points the tool's databases (its *.sqlite entries) at another
 	// folder; profiles that share history get the hub.
 	StateEnv string
+	// MemoryEnv points the tool's memory at another home; a profile that
+	// shares MemoryDir gets the hub, so memory is written by its real path.
+	// The tool asks before every write that goes through a link.
+	MemoryEnv, MemoryDir string
 	// Disposable databases hold nothing the tool cannot do without: an index
 	// it rebuilds from shared files, or logs.
 	Disposable []Entry
