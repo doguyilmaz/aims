@@ -19,7 +19,7 @@ import (
 
 // continuePrompt is sent when a conversation moves on after a limit cut a
 // turn short.
-const continuePrompt = "continue"
+const continuePrompt = "continue. This session just restarted on another account: MCP tools may take a few seconds to reconnect, so retry a missing tool before asking the user."
 
 const (
 	pollEvery = time.Second

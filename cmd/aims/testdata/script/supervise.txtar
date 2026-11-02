@@ -13,7 +13,7 @@ stdout 'claude interactive as default args=\["--model" "opus" "--add-dir" "a" "b
 stderr 'claude: personal \(auto → work\)'
 stdout 'claude stopped as default'
 stderr 'claude: personal hit its usage limit; continuing this conversation on work'
-stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue"\]'
+stdout 'claude interactive as work args=\["--model" "opus" "--add-dir" "a" "b" "--resume" "s-default" "--" "continue\. This session[^"]*"\]'
 ! stdout 'stopped as work'
 exec aims status claude --json
 stdout '"markedBy": "a session"'
@@ -40,7 +40,7 @@ env FAKE_NEXT_PROMPT=
 cp LIMITED $HOME/.claude/EXPIRED
 exec aims claude
 stderr 'claude: personal hit a login error; continuing this conversation on work'
-stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue\. This session[^"]*"\]'
 exec aims status claude
 stdout 'personal .*login expired'
 rm $HOME/.claude/EXPIRED
@@ -58,7 +58,7 @@ rm $HOME/.aims/profiles/claude/work/LIMITED
 cp LIMITED $HOME/.claude/LIMITED
 exec aims claude --settings '{"model":"haiku"}'
 stderr 'continuing this conversation on work'
-stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue"\]'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue\. This session[^"]*"\]'
 
 # aims move, run inside the session, moves the conversation once the turn
 # ends, and it stays there: the first account does not take it back.
