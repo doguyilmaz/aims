@@ -6,6 +6,8 @@
 //
 //	LIMITED      runs fail with a usage-limit error
 //	EXPIRED      runs fail with a login error
+//	GRACE        an interactive turn gets Claude Code's usage-limit grace note
+//	             and keeps going, ending in no hook
 //	BUSY         claude runs fail with a short-lived rate limit (429)
 //	TOOL_FIRST   runs call a tool (appended to $FAKE_SIDE_EFFECTS) before failing
 //	USAGE        "pct" for the rate limits the codex app-server reports
@@ -291,7 +293,18 @@ func interactiveTurn(settings, label string, args []string, has func(string) boo
 		}
 		return out.String()
 	}
-	run(event, in)
+	if has("GRACE") {
+		transcript := filepath.Join(os.Getenv("HOME"), session+".jsonl")
+		start, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "session_id": session, "transcript_path": transcript, "prompt": "go on"})
+		run("UserPromptSubmit", start)
+		time.Sleep(1500 * time.Millisecond)
+		note, _ := json.Marshal(map[string]any{"type": "user", "isMeta": true, "sessionId": session, "message": map[string]any{"role": "user", "content": "[Usage limit reached; a short grace allowance remains, then this turn is cut off without warning.]"}})
+		f, _ := os.OpenFile(transcript, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		f.Write(append(note, '\n'))
+		f.Close()
+	} else {
+		run(event, in)
+	}
 	// $FAKE_NEXT_PROMPT: a moment after the turn, the user sends another
 	// prompt, which a hook may hold back.
 	if p := os.Getenv("FAKE_NEXT_PROMPT"); p != "" && event == "Stop" {
