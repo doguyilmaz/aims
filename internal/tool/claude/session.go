@@ -69,7 +69,52 @@ func (*Adapter) Watch(w tool.Watch) ([]string, func() []tool.SessionEvent, error
 	if err != nil {
 		return nil, nil, err
 	}
-	return args, tool.FollowEvents(w.RunDir), nil
+	return args, withGrace(tool.FollowEvents(w.RunDir)), nil
+}
+
+// graceNote opens the note Claude Code adds to a turn at a usage limit,
+// granting a short allowance to wind down. The turn then ends with a plain
+// Stop, so the note is the only sign of the limit, and acting on it at once
+// keeps the allowance from going to wrapping up work another account could
+// carry on.
+const graceNote = "[Usage limit reached"
+
+// withGrace adds to poll a limit for each grace note written to the
+// conversation since aims began following its transcript.
+func withGrace(poll func() []tool.SessionEvent) func() []tool.SessionEvent {
+	var path string
+	var offset int64
+	return func() []tool.SessionEvent {
+		evs := poll()
+		for _, ev := range evs {
+			if ev.Transcript != "" && ev.Transcript != path {
+				path, offset = ev.Transcript, 0
+				if fi, err := os.Stat(path); err == nil {
+					offset = fi.Size()
+				}
+			}
+		}
+		if path == "" {
+			return evs
+		}
+		var lines [][]byte
+		lines, offset = tool.ReadLines(path, offset)
+		for _, l := range lines {
+			if ev, ok := graceEvent(l, path); ok {
+				evs = append(evs, ev)
+			}
+		}
+		return evs
+	}
+}
+
+func graceEvent(line []byte, path string) (tool.SessionEvent, bool) {
+	j := gjson.ParseBytes(line)
+	text := j.Get("message.content").String()
+	if j.Get("type").String() != "user" || !j.Get("isMeta").Bool() || j.Get("isSidechain").Bool() || !strings.HasPrefix(text, graceNote) {
+		return tool.SessionEvent{}, false
+	}
+	return tool.SessionEvent{Session: j.Get("sessionId").String(), Transcript: path, Failure: tool.FailLimit, Text: text}, true
 }
 
 // withSettings writes the user's --settings (or none) with the hooks added

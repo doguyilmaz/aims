@@ -46,6 +46,17 @@ stdout 'personal .*login expired'
 rm $HOME/.claude/EXPIRED
 exec aims login claude personal
 
+# At a limit Claude Code may grant a short allowance to wind down, noted in
+# the conversation, then end the turn with no error: aims acts on the note,
+# stopping the turn and continuing it on work.
+cp LIMITED $HOME/.claude/GRACE
+exec aims claude
+stdout 'claude stopped as default'
+stderr 'claude: personal hit its usage limit; continuing this conversation on work'
+stdout 'claude interactive as work args=\["--resume" "s-default" "--" "continue\. This session[^"]*"\]'
+rm $HOME/.claude/GRACE
+exec aims clear claude
+
 # A pinned session keeps its account: nothing watches it.
 cp LIMITED $HOME/.aims/profiles/claude/work/LIMITED
 exec aims claude@work
