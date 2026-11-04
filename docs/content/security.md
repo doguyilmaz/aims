@@ -39,6 +39,8 @@ The MCP server lets the model see your account names, the e-mail addresses of yo
 
 Codex reviews new or changed hooks before they run. aims skips that review only on the restarts it makes itself, and only when you turn on `failover.trustHooks` (`aims setup --trust-hooks`); see [Failover](../failover#codex-hooks).
 
+On those restarts aims also answers Codex's "Trust this folder?" for that start only, unless the folder has Codex settings of its own; see [Failover](../failover#codex-folder-trust).
+
 If one account must never see another's conversations, give it `share: settings` or `none`. See [What accounts share](../sharing).
 
 ## Reporting a problem

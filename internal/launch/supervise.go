@@ -285,6 +285,13 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		ticker.Stop()
 		child.Stop(stopGrace)
 		o.tell(Info, "%s: %s", a.ID(), why)
+		if t, ok := sv.(tool.FolderTruster); ok {
+			trust, err := t.TrustArgs(profiles.Home(cfg, a, next), workDir(o), resume)
+			if err != nil {
+				o.tell(Warn, "%s: %v; the restart may stop to ask whether to trust this folder", a.ID(), err)
+			}
+			resume = append(trust, resume...)
+		}
 		if r, ok := sv.(tool.Reviver); ok && revive != "" {
 			if err := r.Revive(ctx, profiles.Home(cfg, a, next), revive); err != nil {
 				o.tell(Warn, "%s: this conversation's goal stays paused (%v); /goal resume picks it up", a.ID(), err)
