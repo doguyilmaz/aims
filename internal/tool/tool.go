@@ -170,6 +170,14 @@ type Reviver interface {
 	Revive(ctx context.Context, h Home, id string) error
 }
 
+// FolderTruster is a tool that asks at start whether to trust a folder, which
+// nobody is there to answer when aims restarts a session.
+type FolderTruster interface {
+	// TrustArgs are put before the restart's args, with the home it restarts
+	// in and the working directory.
+	TrustArgs(h Home, dir string, args []string) ([]string, error)
+}
+
 // FreeProber is a tool whose Probe spends nothing, so aims asks it whenever
 // every account looks limited, and every few minutes while that lasts.
 type FreeProber interface {

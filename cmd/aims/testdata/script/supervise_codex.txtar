@@ -79,6 +79,25 @@ exec aims codex resume c-default
 stdout 'codex interactive as work args=\["resume" "c-default"\]'
 env FAKE_BEFORE_TURN=
 
+# In a git repository Codex has no answer for, it asks at start whether to
+# trust the folder and waits: a restart trusts it for that start only.
+exec aims clear codex personal
+exec aims clear codex work
+exec git init -q repo
+cd repo
+cp $WORK/LIMITED $HOME/.codex/LIMITED
+exec aims codex resume c-default
+stdout 'codex interactive as work args=\["-c" "projects=\{\\"[^"]*repo\\"=\{trust_level=\\"trusted\\"\}\}" "resume" "c-default"'
+
+# A folder with its own Codex settings stays the user's question.
+mkdir .codex
+exec aims clear codex personal
+cp $WORK/LIMITED $HOME/.codex/LIMITED
+exec aims codex resume c-default
+stdout 'codex interactive as work args=\["resume" "c-default"'
+cd $WORK
+rm $HOME/.codex/LIMITED
+
 # Other commands are not followed.
 exec aims codex login status
 stdout 'Logged in'
