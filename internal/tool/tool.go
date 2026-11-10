@@ -232,6 +232,9 @@ type Layout struct {
 	ExactHomeEnv bool
 	// TranscriptDir holds the primary conversation files inside the home.
 	TranscriptDir string
+	// ACPBin is the optional upstream adapter. The adapter, not aims, owns
+	// its ACP implementation and any bundled native runtime version.
+	ACPBin string
 	// Shared entries are linked from every profile to the hub. Anything not
 	// listed, above all the login files, stays private to the profile.
 	Shared []Entry

@@ -31,7 +31,7 @@ func newBridgeCmd() *cobra.Command {
 		Long: "Shows the calling process' homes, aims' profiles, and the actual shared\n" +
 			"transcript paths. Does not read credentials, run a provider, repair files,\n" +
 			"or change settings. Shared history and a shared login are separate things.",
-		Example: "aims bridge\naims bridge --json\naims bridge t3",
+		Example: "aims bridge\naims bridge commands --json\naims bridge install\naims bridge acp claude\naims bridge t3",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load()
@@ -61,12 +61,13 @@ func newBridgeCmd() *cobra.Command {
 				fmt.Fprintln(out)
 			}
 			fmt.Fprintln(out, "Use aims exec -- <program> for apps that inherit CLI homes.")
-			fmt.Fprintln(out, "Use aims bridge t3 for T3 Code's existing-CLI connections and history import guidance.")
+			fmt.Fprintln(out, "Use aims bridge commands for generic CLI, SDK, app-server and ACP connections.")
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print paths and diagnostics as JSON (no credentials)")
 	cmd.AddCommand(newBridgeT3Cmd())
+	cmd.AddCommand(newBridgeAgentCmd(false), newBridgeAgentCmd(true), newBridgeInstallCmd(), newBridgeCommandsCmd(), newBridgeUninstallCmd())
 	return cmd
 }
 
@@ -146,9 +147,9 @@ func newBridgeT3Cmd() *cobra.Command {
 
 func newExecCmd() *cobra.Command {
 	requested := map[tool.ID]*string{}
-	var dryRun bool
+	var dryRun, launchers bool
 	cmd := &cobra.Command{
-		Use:   "exec [--claude profile] [--codex profile] [--dry-run] -- <program> [args...]",
+		Use:   "exec [flags] -- <program> [args...]",
 		Short: "Run another application with aims' preferred CLI accounts",
 		Long: "Passes the preferred accounts' CLI homes and shared database/memory\n" +
 			"paths to a child program. Explicit flags pin an account. Shell API keys\n" +
@@ -157,7 +158,9 @@ func newExecCmd() *cobra.Command {
 			"does not restart it. Apps with their own provider settings (such as T3\n" +
 			"managed accounts) can override the environment. Already running desktop\n" +
 			"apps do not acquire a new environment. No files or logins are changed\n" +
-			"by aims; the child program may change them.",
+			"by aims; the child program may change them. With --launchers, installed\n" +
+			"CLI launchers are put first on this child's PATH, without changing\n" +
+			"global PATH or overriding SDKs' bundled native runtimes.",
 		Example: "aims exec -- my-orchestrator\naims exec --claude work --codex personal -- my-orchestrator --help\naims exec --dry-run -- my-orchestrator",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -177,6 +180,26 @@ func newExecCmd() *cobra.Command {
 			env, selected, err := bridge.Environment(cfg, pins, os.Environ())
 			if err != nil {
 				return err
+			}
+			if launchers {
+				m, err := bridge.ReadLaunchers(bridge.LauncherRoot())
+				if err != nil {
+					return err
+				}
+				if m == nil {
+					return fmt.Errorf("install dedicated launchers first: aims bridge install")
+				}
+				// Explicit opt-in, scoped to this child. SDKs that bundle a
+				// runtime still keep it; no executable override is injected.
+				childPath := ""
+				for i, kv := range env {
+					if strings.HasPrefix(kv, "PATH=") {
+						childPath = strings.TrimPrefix(kv, "PATH=")
+						env = append(env[:i], env[i+1:]...)
+						break
+					}
+				}
+				env = append(env, "PATH="+bridge.LauncherBin()+string(os.PathListSeparator)+childPath)
 			}
 			if dryRun {
 				// Do not print the complete environment or command arguments:
@@ -201,5 +224,6 @@ func newExecCmd() *cobra.Command {
 		requested[a.ID()] = cmd.Flags().String(string(a.ID()), "", "pin the child's "+a.Title()+" account")
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print selected profiles without starting the program (no secrets)")
+	cmd.Flags().BoolVar(&launchers, "launchers", false, "put installed aims CLI launchers first on this child's PATH only")
 	return cmd
 }

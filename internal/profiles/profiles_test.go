@@ -206,18 +206,21 @@ func TestMarkLimitedUsesKnownReset(t *testing.T) {
 
 func TestEnv(t *testing.T) {
 	cfg, a := setup(t)
-	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_API_KEY": "own"}
-	base := []string{"PATH=/bin", "CODEX_API_KEY=shell", "CODEX_HOME=/somewhere"}
+	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_API_KEY": "own", "OPENAI_API_KEY": "own-openai"}
+	base := []string{"PATH=/bin", "CODEX_API_KEY=shell", "OPENAI_API_KEY=shell-openai", "CODEX_HOME=/somewhere"}
 
 	env, dropped := Env(cfg, a, "a", base)
 	if !slices.Contains(dropped, "CODEX_API_KEY") || slices.Contains(env, "CODEX_API_KEY=shell") {
 		t.Fatalf("conflicting key kept: %v", env)
 	}
+	if !slices.Contains(dropped, "OPENAI_API_KEY") || slices.Contains(env, "OPENAI_API_KEY=shell-openai") {
+		t.Fatal("an inherited OpenAI API key can override the selected Codex/ACP account")
+	}
 	if !slices.Contains(env, "CODEX_HOME="+cfg.Dir("codex", "a")) || !slices.Contains(env, "AIMS_SESSION_PROFILE=codex:a") || !slices.Contains(env, "PATH=/bin") {
 		t.Fatalf("env: %v", env)
 	}
 	env, dropped = Env(cfg, a, "b", base)
-	if len(dropped) != 0 || !slices.Contains(env, "CODEX_API_KEY=own") {
+	if len(dropped) != 0 || !slices.Contains(env, "CODEX_API_KEY=own") || !slices.Contains(env, "OPENAI_API_KEY=own-openai") {
 		t.Fatalf("profile's own key: %v %v", env, dropped)
 	}
 }

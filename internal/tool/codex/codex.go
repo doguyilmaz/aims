@@ -40,6 +40,7 @@ func (*Adapter) Layout() tool.Layout {
 		HomeEnv:       "CODEX_HOME",
 		DefaultHome:   ".codex",
 		TranscriptDir: "sessions",
+		ACPBin:        "codex-acp",
 		Shared: append(tool.Names(
 			"sessions", "thread-writer-locks", // shared rollouts need shared writer ownership
 			"archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "AGENTS.override.md",
@@ -51,7 +52,7 @@ func (*Adapter) Layout() tool.Layout {
 		StateEnv:       "CODEX_SQLITE_HOME",
 		Disposable:     []tool.Entry{{Pattern: regexp.MustCompile(`^(thread_history|logs)_\d+\.sqlite$`)}},
 		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl", "thread-writer-locks"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
-		ConflictingEnv: []string{"CODEX_API_KEY"},
+		ConflictingEnv: []string{"CODEX_API_KEY", "OPENAI_API_KEY"},
 		SkillsDir:      "skills",
 		Markers:        []string{"auth.json", "config.toml", "sessions", "history.jsonl"},
 	}

@@ -16,7 +16,7 @@ func TestMain(m *testing.M) { testutil.Main(m) }
 
 func TestBridgeCommandsAreReadOnlyAndDoNotHealSetup(t *testing.T) {
 	home := testutil.Sandbox(t)
-	for _, args := range [][]string{{"bridge", "--json"}, {"exec", "--dry-run", "--", "never-run-this"}} {
+	for _, args := range [][]string{{"bridge", "--json"}, {"bridge", "commands", "--json"}, {"exec", "--dry-run", "--", "never-run-this"}} {
 		cmd := newRoot("v1.2.3")
 		var out strings.Builder
 		cmd.SetOut(&out)

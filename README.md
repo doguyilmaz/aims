@@ -117,10 +117,12 @@ personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 ```bash
 aims bridge                         # read-only: compare actual homes and shared history
 aims exec -- my-orchestrator         # pass aims' CLI accounts to another program
-aims bridge t3                      # preview T3 Code existing-CLI connections
+aims bridge install                 # dedicated executable paths for IDEs and SDKs
+aims bridge commands --json          # CLI, app-server and ACP command/argument arrays
+aims bridge acp claude               # use an installed upstream ACP adapter
 ```
 
-An app's managed login and its conversation list can be separate from the CLI's. aims can export additive T3 connection settings without touching live settings or copying credentials; T3's import flow brings shared CLI conversations into its thread list. See [Other coding apps](https://aims.apps.doguyilmaz.com/other-apps) for setup and limits.
+CLI, SDK, app-server and ACP clients can use the same aims accounts without copying credentials. Protocol launches pass native streams through and leave running sessions to the client. ACP adapters keep their own bundled CLI versions; dedicated launchers let apps such as Cline choose one executable path. An app's managed login and thread list can still be separate. See [Other coding apps](https://aims.apps.doguyilmaz.com/other-apps) for setup, and the [source-backed compatibility survey](https://aims.apps.doguyilmaz.com/compatibility) for Zed, Cline, Paradev, Vibe Kanban, cmux and other integration types. T3's optional settings export remains available through `aims bridge t3`.
 
 ## How it works
 

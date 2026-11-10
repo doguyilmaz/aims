@@ -55,6 +55,34 @@ Otherwise use the CLI:
 | Pin only this terminal | `eval "$(aims env work)"`; undo with `eval "$(aims env --reset)"` |
 | Check everything | `aims doctor` |
 
+## Editors, SDKs and orchestrators
+
+Use `aims bridge` (or `--json`) to inspect the actual homes and shared
+transcript paths without running a provider, probing a login or repairing files.
+For a program that inherits CLI environment, use `aims exec -- <program>`.
+
+For machine protocols, use `aims bridge run <tool>[@profile] -- <args>`:
+it passes through stdin/stdout/stderr without buffering, retries or supervision.
+For ACP clients, use `aims bridge acp <tool>[@profile]` with an already installed
+upstream adapter. It preserves the adapter's bundled CLI and explicit runtime
+overrides. Do not configure Codex app-server as an ACP agent.
+
+`aims bridge install` creates dedicated executable links under aims' own
+directory for clients that accept a single CLI path. It does not modify global
+PATH, editor settings or credential files. `aims bridge commands --json` prints
+credential-free command/argument/environment entries for client setup, including
+a custom `AIMS_HOME`. `aims exec --launchers -- <program>` opts into those links
+on that child's PATH only; `aims bridge uninstall` removes the owned links.
+Install from a persistent aims binary, not `go run`.
+
+These connections keep their account for the lifetime of the client's process;
+aims preference changes apply to new processes. The client owns import/resume
+and its sidebar's session list, even when conversation files are shared.
+Managed application logins and API-native agents can keep separate credentials.
+Use their supported CLI/provider connection instead of copying tokens or
+rewriting session databases. `aims bridge t3` is an optional T3 settings preview;
+it does not activate or modify a running app.
+
 ## Limits and login errors
 
 1. **Usage limit.** In a session aims moves on its own (above), do nothing.

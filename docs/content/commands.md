@@ -99,6 +99,8 @@ Prints the exports that pin the current terminal to a profile. Use with `eval "$
 
 Starts another application with the preferred CLI accounts in this project. Explicit flags pin them. The child receives aims' home, database and memory routing, without the enclosing session's move hooks or CLI session identifiers. Its arguments and exit code pass through. `--dry-run` prints the selected tools and profile names without running it. No config, links, logins or account order are changed by aims. The application owns its session lifecycle and may override the inherited environment. See [Other coding apps](../other-apps).
 
+`--launchers` puts installed aims launchers first on this child's PATH only. Run `aims bridge install` first. Bundled SDK runtimes and explicit executable overrides are preserved.
+
 ## Accounts
 
 ### `aims add [tool] [profile]`
@@ -169,6 +171,22 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 ### `aims bridge`
 
 Read-only comparison of the current process' CLI homes, aims profiles and actual transcript link targets. It never invokes a provider, reads credentials, repairs links or changes setup. `--json` prints routing metadata without secrets.
+
+### `aims bridge install`, `aims bridge uninstall`
+
+Create or remove dedicated executable links under `~/.aims/bridge/bin` (or `$AIMS_HOME/bridge/bin`). Clients that accept one executable path can use these for their CLI/SDK connection. Original CLIs, global PATH, app settings, logins and conversations stay. Changed launchers and unrelated files are never overwritten or deleted. Installation requires a persistent aims binary, not `go run`.
+
+### `aims bridge commands`
+
+Print generic CLI, app-server and ACP integration commands. `--json` returns a versioned catalog of executable paths, argument arrays and environment maps, and an SDK executable path after launcher installation. No arbitrary profile environment or credentials are exported. Use it to configure custom agents in editors without depending on an app-specific exporter.
+
+### `aims bridge run <tool>[@profile] [--] [args...]`
+
+Start a native CLI with the preferred or explicit account. stdin, stdout, stderr and arguments pass through without analysis, buffering, retries or authentication probes. Only the named tool is routed; files and sharing modes are not migrated. The native process replaces aims on Unix, and Windows uses attached streams. The client owns active sessions and account switching.
+
+### `aims bridge acp <tool>[@profile] [--] [args...]`
+
+Start an installed upstream `claude-agent-acp` or `codex-acp` with the selected aims account environment. The adapter keeps its bundled native runtime and explicit executable overrides. No protocol translation, adapter downloads or preview upgrades happen in aims. See [ACP clients](../other-apps#acp-clients).
 
 ### `aims bridge t3`
 

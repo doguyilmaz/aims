@@ -50,6 +50,7 @@ func (*Adapter) Layout() tool.Layout {
 		DefaultHome:   ".claude",
 		ExactHomeEnv:  true,
 		TranscriptDir: "projects",
+		ACPBin:        "claude-agent-acp",
 		Shared: tool.Names(
 			"projects", // transcripts and auto memory: `claude --continue` works across accounts
 			"file-history", "todos", "plans", "tasks", "history.jsonl",

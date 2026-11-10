@@ -5,6 +5,18 @@ weight: 12
 
 aims can share CLI accounts and conversation files with editors, desktop apps and orchestrators. Three things need to agree: the login home, the shared transcript path, and the app's own conversation list. Pointing two apps at the same history does not make them use the same login or automatically populate both lists.
 
+## Choose the connection the client supports
+
+| Client surface | Use | What the client keeps |
+| --- | --- | --- |
+| A program that inherits CLI environment | `aims exec -- <program>` | Its own runtimes and session lifecycle |
+| One executable path, as in a CLI provider or SDK override | `aims bridge install`, then select the reported launcher | Native CLI arguments and protocol |
+| A command plus prefix arguments | `aims bridge run claude --` or `aims bridge run codex --` | Native stdin/stdout, model and permission options |
+| An ACP editor or IDE | `aims bridge acp claude` or `aims bridge acp codex` | The upstream ACP implementation and its bundled CLI version |
+| An app's own API, OAuth or managed provider | Configure the app's native provider or its existing-CLI mode | Its own authentication and conversation database |
+
+This is a connection layer for clients of Claude Code and Codex, not a replacement runtime for every agent. It does not turn one application's OAuth token into another application's credential. See the [compatibility survey](../compatibility) for current sources and the level of validation.
+
 ## Check paths without changing anything
 
 ```bash
@@ -31,6 +43,90 @@ The selected profile's `CODEX_HOME` or `CLAUDE_CONFIG_DIR`, database and memory 
 aims starts the program once, passes through its arguments and terminal, and returns its exit code. It does not choose accounts using live usage checks, restart the orchestrator, change account order, refresh logins, or synchronize files. The application manages its own session lifecycle. `--dry-run` prints only selected tools and profile names; it does not print the complete environment or command arguments, which may contain secrets.
 
 An already running desktop application keeps its old environment. A launcher that forwards to an existing process cannot change that process' accounts. An app's explicit provider settings can also take precedence over inherited variables.
+
+## One executable path for IDEs and SDKs
+
+Run once from a persistent installation of aims:
+
+```bash
+aims bridge install
+aims bridge commands --json
+```
+
+The installer reports paths such as `~/.aims/bridge/bin/claude` and `~/.aims/bridge/bin/codex` (`.exe` on Windows). Select that path in the app's custom CLI executable field. For example, Cline's **Claude Code** provider accepts a Claude CLI path. The Claude Agent SDK accepts `pathToClaudeCodeExecutable`; the Codex Python SDK accepts `CodexConfig(codex_bin=...)`. Use the SDK's documented override only when intentionally selecting a compatible installed CLI; otherwise keep its packaged runtime and use environment routing.
+
+Each new launcher process resolves the preferred account in **its working directory**, with an explicit terminal pin taking precedence. `aims use` and project orders therefore apply to future workers without updating every editor's configuration. The installation remembers its aims home and native executable locations, so it also works when an IDE starts with a minimal PATH or does not load shell functions. Existing processes keep the account they started with.
+
+Set the worker process' working directory to its project. If a client chooses a workspace only in a later protocol request, or through a native `--cd` option, give that provider connection an explicit profile pin instead: aims does not reinterpret provider arguments or change an active server's account per request.
+
+The paths are executable links to the single installed aims binary: symlinks where available, otherwise hard links on Windows. No shell script quoting or binary copies are needed. aims and `AIMS_HOME` must be on the same volume when Windows requires hard links. After replacing an aims executable on Windows, rerun `aims bridge install` to refresh its links. Building with `go run` cannot create a persistent installation; use `go install` or a normal persistent binary first.
+
+For an application that looks for CLI executables on PATH, opt in for that child only:
+
+```bash
+aims exec --launchers -- my-orchestrator
+```
+
+This leaves global PATH and the original CLIs untouched. `aims exec` pins the selected accounts for the child; configure launcher paths directly when an orchestrator should resolve each worker's own project order instead. SDKs that use a bundled CLI keep it: aims does not inject `CODEX_PATH`, `CLAUDE_CODE_EXECUTABLE` or other runtime overrides.
+
+To undo the executable integration:
+
+```bash
+aims bridge uninstall
+```
+
+Only aims' launcher links and manifest are removed. Changed launchers and unrelated files are retained. Account folders, conversations, native CLIs, shell configuration and app settings stay. Point clients back to their original executable after uninstalling.
+
+## Native protocols without another supervisor
+
+If the client accepts a command and arguments, installation of executable links is optional:
+
+```bash
+aims bridge run codex -- app-server
+aims bridge run claude@work -- -p --input-format stream-json --output-format stream-json --verbose
+```
+
+Append the client's own arguments, including its prompt, model, sandbox and permission options. aims does not parse provider output, consume stdin, add content to stdout, retry a request, probe a login or migrate data. It routes only the named tool and preserves the other provider's environment. Shell API keys that would override the chosen login are removed; keys deliberately configured in that profile's `env` are passed to the child without being printed.
+
+On macOS and Linux the native process replaces aims, keeping the PID, streams, signals and exit code, with no resident protocol proxy. Windows attaches the same streams and waits for the child, forwarding termination where supported. Running sessions belong to the client; changing aims' preference does not restart them. Use ordinary `aims claude` and `aims codex` when aims itself should supervise and move a terminal session between accounts.
+
+Launchers do not run file migrations or change sharing modes. Existing profiles already receive shared links during aims setup and normal launches. If `aims bridge` reports a broken link, finish the affected sessions before deliberately running `aims sync`.
+
+## ACP clients
+
+Use the maintained upstream adapters, installed separately, with aims supplying the account environment:
+
+```bash
+aims bridge acp claude
+aims bridge acp codex@work
+```
+
+These start `claude-agent-acp` or `codex-acp` already installed on PATH, or an absolute adapter path remembered by `aims bridge install`. aims does not download an adapter, implement its protocol, reinterpret capabilities or force a newer system CLI over the adapter's compatible bundled runtime. Explicit upstream executable overrides are preserved.
+
+For Zed's Custom Agent configuration, use the absolute path to a persistent aims binary, an argument array, and the aims home from `aims bridge commands --json`:
+
+```json
+{
+  "agent_servers": {
+    "aims-claude": {
+      "type": "custom",
+      "command": "/absolute/path/to/aims",
+      "args": ["bridge", "acp", "claude"],
+      "env": { "AIMS_HOME": "/home/me/.aims" }
+    }
+  }
+}
+```
+
+Use `codex` in the argument array for its ACP adapter. JetBrains and other ACP clients can use the same command, arguments and environment in their custom-agent setup. ACP and Codex app-server are different protocols: do not configure `app-server` as an ACP agent. Session discovery/import remains a client and adapter capability; shared files alone do not create a sidebar entry.
+
+## Client and SDK authors
+
+`aims bridge commands --json` returns a versioned, credential-free catalog of `command`, `args` and `env` values for CLI, Codex app-server and ACP connections, plus a `sdkExecutable` when dedicated launchers are installed. The environment includes the selected aims configuration root, including a custom `AIMS_HOME`; it never includes profile API keys or token files. Pass arguments as arrays instead of composing shell strings. `profileVariable` names the optional environment pin for a particular account.
+
+Keep one provider process per account connection when its home is fixed for the lifetime of that process. Use a client-side import/resume API to expose existing conversations; do not scan or rewrite token files to discover sessions. Keep runtime sockets and live writer locks under their provider's control.
+
+Run aims on the machine or in the container that actually executes the CLI. A local launcher does not mount a host home into a sandbox, copy accounts to a remote worker, or authenticate a cloud runtime.
 
 ## T3 Code
 
@@ -87,4 +183,4 @@ Do not copy `auth.json`, `.credentials.json`, keychain entries, or managed T3 to
 
 ## Disk use and cleanup
 
-Inspection reads directory metadata and link targets, not the conversation tree or database contents. Exports do not copy conversations or databases. Only an explicitly requested export file is created; repeated export to the same path is refused. After installing and checking a configuration, remove that export and its deliberate settings backup when you no longer need them. These commands create no worktrees, sandboxes, background jobs or global PATH wrappers.
+Inspection reads directory metadata and link targets, not the conversation tree or database contents. Launchers add links and one small manifest under aims' own directory. They do not duplicate executables, conversations or databases. Optional exports create only an explicitly requested new file; repeated export to the same path is refused. After installing and checking a configuration, remove its export and deliberate settings backup when no longer needed. The bridge creates no worktrees, sandboxes, background jobs or global PATH wrappers.

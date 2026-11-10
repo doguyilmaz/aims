@@ -117,7 +117,7 @@ func StartAttached(bin string, args, env []string, dir string) (*Attached, error
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	stop := relay(cmd, false)
+	stop := relay(cmd, !term.IsTerminal(a.stdin))
 	go func() {
 		a.code = ExitCode(cmd.Wait())
 		stop()

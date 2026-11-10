@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/doguyilmaz/aims/internal/bridge"
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/launch"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -32,6 +33,17 @@ func (e exitError) Error() string { return fmt.Sprintf("exit status %d", e.code)
 
 // Execute runs aims and returns the process exit code.
 func Execute(version string) int {
+	// Executable links are transparent entry points for SDKs/IDEs that accept
+	// one binary path, rather than a command with prefix arguments.
+	if id, m, err := bridge.LauncherInvocation(os.Args[0]); err != nil {
+		ui.Error(err)
+		return 1
+	} else if id != "" {
+		if os.Getenv(config.HomeVar) == "" {
+			_ = os.Setenv(config.HomeVar, m.ConfigHome)
+		}
+		os.Args = append([]string{os.Args[0], "bridge", "run", string(id), "--"}, os.Args[1:]...)
+	}
 	version = resolveVersion(version)
 	appVersion = version
 	ctx := context.Background()

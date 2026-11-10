@@ -76,17 +76,47 @@ func Environment(cfg *config.Config, requested map[tool.ID]string, base []string
 			}
 		}
 	}
-	for _, k := range []string{profiles.SessionVar, profiles.RunVar, profiles.ModeVar,
-		"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID", "CLAUDE_PID",
-		"CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_TOOL_CALL_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE"} {
-		delete(m, k)
-	}
+	cleanHost(m)
 	env = env[:0]
 	for k, v := range m {
 		env = append(env, k+"="+v)
 	}
 	slices.Sort(env)
 	return env, selected, nil
+}
+
+func cleanHost(m map[string]string) {
+	for _, k := range []string{profiles.SessionVar, profiles.RunVar, profiles.ModeVar,
+		"CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID", "CLAUDE_PID",
+		"CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_TOOL_CALL_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE"} {
+		delete(m, k)
+	}
+}
+
+// AgentEnvironment routes only the selected tool. The client owns its process,
+// protocol, retries and lifecycle: there is no auth probe, migration or failover.
+func AgentEnvironment(cfg *config.Config, a tool.Adapter, explicit string, base []string) ([]string, string, error) {
+	name, err := cfg.Preferred(a.ID(), explicit)
+	if err != nil {
+		return nil, "", err
+	}
+	env := base
+	if name != "" {
+		env, _ = profiles.Env(cfg, a, name, base)
+	}
+	m := envMap(env)
+	cleanHost(m)
+	if name != "" {
+		m[profiles.SessionVar] = string(a.ID()) + ":" + name
+		m[profiles.ModeVar] = string(profiles.Unwatched)
+		m[config.PinVar(a.ID())] = name
+	}
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, k+"="+v)
+	}
+	slices.Sort(out)
+	return out, name, nil
 }
 
 // History describes the actual transcript directory, following links without
