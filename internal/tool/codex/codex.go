@@ -35,10 +35,11 @@ func (*Adapter) Title() string { return "Codex" }
 
 func (*Adapter) Layout() tool.Layout {
 	return tool.Layout{
-		Bin:         "codex",
-		BinEnv:      "AIMS_CODEX_BIN",
-		HomeEnv:     "CODEX_HOME",
-		DefaultHome: ".codex",
+		Bin:           "codex",
+		BinEnv:        "AIMS_CODEX_BIN",
+		HomeEnv:       "CODEX_HOME",
+		DefaultHome:   ".codex",
+		TranscriptDir: "sessions",
 		Shared: append(tool.Names(
 			"sessions", "thread-writer-locks", // shared rollouts need shared writer ownership
 			"archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "AGENTS.override.md",

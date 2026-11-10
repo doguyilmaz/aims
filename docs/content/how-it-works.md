@@ -18,6 +18,8 @@ An editor extension, a desktop app, a script, a cron job, or plain `claude` in a
 - It sees every shared conversation, setting and skill, because those live in that folder. Tools that read `~/.claude/projects` or `~/.codex/sessions`, such as usage trackers, see the conversations of every account that shares history.
 - The other accounts live in `~/.aims/profiles` and are used only by what aims starts. A program started from a terminal pinned with `aims env` inherits the variable and uses that account too.
 
+`aims exec -- <program>` gives another application aims' preferred CLI accounts without changing the parent shell. `aims bridge` inspects the actual paths without running a provider or repairing anything; `aims bridge t3` exports T3 Code existing-CLI connections. An application's managed login or its own thread list can remain separate even when it shares transcript files. See [Other coding apps](../other-apps).
+
 ## Links to the hub
 
 Everything except the login links from the profile folder to the tool's normal folder, the hub. A conversation saved under one account is therefore a file every account sees, which is why `--continue` works across accounts. The links are symlinks on macOS and Linux. On Windows they are symlinks when Developer Mode allows them, and otherwise junctions for folders and hard links for files.

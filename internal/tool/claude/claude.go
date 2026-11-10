@@ -44,10 +44,12 @@ func (*Adapter) Title() string { return "Claude Code" }
 
 func (*Adapter) Layout() tool.Layout {
 	return tool.Layout{
-		Bin:         "claude",
-		BinEnv:      "AIMS_CLAUDE_BIN",
-		HomeEnv:     "CLAUDE_CONFIG_DIR",
-		DefaultHome: ".claude",
+		Bin:           "claude",
+		BinEnv:        "AIMS_CLAUDE_BIN",
+		HomeEnv:       "CLAUDE_CONFIG_DIR",
+		DefaultHome:   ".claude",
+		ExactHomeEnv:  true,
+		TranscriptDir: "projects",
 		Shared: tool.Names(
 			"projects", // transcripts and auto memory: `claude --continue` works across accounts
 			"file-history", "todos", "plans", "tasks", "history.jsonl",

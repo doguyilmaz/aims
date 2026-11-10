@@ -156,13 +156,13 @@ aims               # status and next steps`,
 	}
 	add("daily", newStatusCmd(), newUsageCmd())
 	add("accounts", newOrderCmd(), newUseCmd(), newAddCmd(), newLogoutCmd(), newRemoveCmd())
-	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd())
-	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
+	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd(), newExecCmd())
+	add("maintain", newBridgeCmd(), newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
 	// Commands that run for a tool, or that set the keepalive up themselves.
-	noHeal := []string{"statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
+	noHeal := []string{"bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		top := cmd
 		for top.HasParent() && top.Parent() != root {

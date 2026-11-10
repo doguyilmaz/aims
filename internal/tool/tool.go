@@ -227,6 +227,11 @@ type Layout struct {
 	// directory name under $HOME used when it is unset.
 	HomeEnv     string
 	DefaultHome string
+	// ExactHomeEnv means the login identity depends on the literal home
+	// variable (including unset vs. an explicit default), not just its path.
+	ExactHomeEnv bool
+	// TranscriptDir holds the primary conversation files inside the home.
+	TranscriptDir string
 	// Shared entries are linked from every profile to the hub. Anything not
 	// listed, above all the login files, stays private to the profile.
 	Shared []Entry

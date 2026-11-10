@@ -44,7 +44,7 @@ func offerNew(args []string) {
 	if !ui.IsTerminal(os.Stderr) || os.Getenv("AIMS_NO_UPDATE_CHECK") != "" {
 		return
 	}
-	if len(args) > 0 && slices.Contains([]string{"mcp", "statusline", "hook", "shell-init", "env", "completion", "__complete", "__completeNoDesc", "init", "setup", "claude", "codex", "run"}, args[0]) {
+	if len(args) > 0 && slices.Contains([]string{"bridge", "exec", "mcp", "statusline", "hook", "shell-init", "env", "completion", "__complete", "__completeNoDesc", "init", "setup", "claude", "codex", "run"}, args[0]) {
 		return
 	}
 	cfg, err := config.Load()

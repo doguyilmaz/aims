@@ -95,6 +95,10 @@ Prints the exports that pin the current terminal to a profile. Use with `eval "$
 | `--reset` | Unpin |
 | `--shell` | `bash`, `zsh`, `fish` or `powershell` (default: detected) |
 
+### `aims exec [--claude profile] [--codex profile] -- <program> [args...]`
+
+Starts another application with the preferred CLI accounts in this project. Explicit flags pin them. The child receives aims' home, database and memory routing, without the enclosing session's move hooks or CLI session identifiers. Its arguments and exit code pass through. `--dry-run` prints the selected tools and profile names without running it. No config, links, logins or account order are changed by aims. The application owns its session lifecycle and may override the inherited environment. See [Other coding apps](../other-apps).
+
 ## Accounts
 
 ### `aims add [tool] [profile]`
@@ -161,6 +165,22 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 | `-y`, `--yes` | Do not ask |
 
 ## Integrations
+
+### `aims bridge`
+
+Read-only comparison of the current process' CLI homes, aims profiles and actual transcript link targets. It never invokes a provider, reads credentials, repairs links or changes setup. `--json` prints routing metadata without secrets.
+
+### `aims bridge t3`
+
+Previews additive T3 Code existing-CLI connections for aims profiles. Existing providers, defaults and unknown settings are retained; managed T3 logins remain separate. Use T3's import flow to add available CLI conversations to its own thread list.
+
+| Flag | |
+| --- | --- |
+| `--settings` | Read another T3 server settings file instead of `$T3CODE_HOME/userdata/settings.json` or `~/.t3/userdata/settings.json` |
+| `--json` | Print new connections and diagnostics; omit existing settings and credentials |
+| `--output` | Write merged settings to a **new**, private export file. Refuses existing paths, symlinks and live settings. |
+
+Close T3 before installing a reviewed export, generate it from the latest settings and retain a backup. The exporter does not modify running apps, copy credentials or change sharing modes. See [T3 Code setup](../other-apps#t3-code) for activation, keychain identity and import limits.
 
 ### `aims setup`
 

@@ -37,6 +37,10 @@ It checks the tools, every login and shared folder, and the integrations, repair
 
 ## Common problems
 
+### Conversations or accounts are missing in T3 Code or another app
+
+Run `aims bridge` inside the affected environment. It shows the actual CLI homes and shared transcript paths without modifying them. An external `shadow` home may share conversations while using a separate managed login, and T3's own thread list needs its session/project import flow even when the files are shared. `aims bridge t3` previews connections to aims' existing CLI accounts; `aims exec -- <program>` passes those accounts to apps that inherit the environment. See [Other coding apps](../other-apps) before changing paths or logins. Never copy credentials or delete session databases to make the lists agree.
+
 ### Both profiles log in as the same account
 
 The browser signed in with whatever account it was already logged into. aims warns when it sees this (`me@gmail.com is already used by personal`), and `aims status` lists it under **Next**. Log the second profile in again from a private window, or let Claude Code pre-fill the address:

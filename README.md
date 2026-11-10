@@ -112,6 +112,16 @@ personal ▰▱▱▱▱  12% · 7d 31% · auto → work
 
 `aims` alone shows your accounts, the sessions open now and anything left to set up. `aims order` changes which account comes first (in this project; `--global` for every folder), and `aims doctor` checks everything.
 
+## Editors and orchestrators
+
+```bash
+aims bridge                         # read-only: compare actual homes and shared history
+aims exec -- my-orchestrator         # pass aims' CLI accounts to another program
+aims bridge t3                      # preview T3 Code existing-CLI connections
+```
+
+An app's managed login and its conversation list can be separate from the CLI's. aims can export additive T3 connection settings without touching live settings or copying credentials; T3's import flow brings shared CLI conversations into its thread list. See [Other coding apps](https://aims.apps.doguyilmaz.com/other-apps) for setup and limits.
+
 ## How it works
 
 Claude Code and Codex read their state from one folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). aims gives each account its own folder holding only its login, and links everything else to your normal `~/.claude` and `~/.codex`. `aims claude` sets the variable and starts the real `claude`; aims is not a proxy and never sees your prompts. Details in [How it works](https://aims.apps.doguyilmaz.com/how-it-works).
