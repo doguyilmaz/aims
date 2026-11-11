@@ -137,8 +137,10 @@ function FileHash([string]$path) {
     finally { $sha.Dispose(); $stream.Dispose() }
 }
 try {
+    if ($parentWait.WaitOne(0)) { throw 'aims exited before cleanup became ready' }
     $null = $readyWait.Set()
     if (-not $parentWait.WaitOne(60000)) { throw 'aims did not exit before cleanup deadline' }
+    $parentWait.Dispose()
     for ($attempt = 0; $attempt -lt 250; $attempt++) {
         try {
             $lockStream = [IO.File]::Open($data.root + '.lock', [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
