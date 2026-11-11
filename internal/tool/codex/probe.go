@@ -82,7 +82,7 @@ func rpc(ctx context.Context, h tool.Home, calls []call) (map[string]*reply, err
 		_, err = stdin.Write(append(b, '\n'))
 		return err
 	}
-	if err := send(map[string]any{"id": 0, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "aims", "title": "aims", "version": "1"}}}); err != nil {
+	if err := send(map[string]any{"id": 0, "method": "initialize", "params": map[string]any{"clientInfo": map[string]any{"name": "aims", "title": "aims", "version": "1.0.0"}}}); err != nil {
 		return nil, err
 	}
 
