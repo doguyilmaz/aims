@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Writing lists the files pids have open for writing, by the pid holding
@@ -53,6 +54,25 @@ func HoldingTree(dir string) (held, ok bool) {
 }
 
 func holdingDirectory(dir string, recursive bool) (held, ok bool) {
+	return retryInspection(func() (bool, bool) { return inspectDirectory(dir, recursive) })
+}
+
+// A process can exit while /proc is being inspected. Retry an incomplete
+// snapshot briefly; a persistently opaque process still leaves it unknown.
+func retryInspection(inspect func() (held, known bool)) (bool, bool) {
+	for attempt := range 3 {
+		held, known := inspect()
+		if held || known {
+			return held, known
+		}
+		if attempt < 2 {
+			time.Sleep(25 * time.Millisecond)
+		}
+	}
+	return false, false
+}
+
+func inspectDirectory(dir string, recursive bool) (held, ok bool) {
 	// With hidepid, other processes are out of sight.
 	if mounts, err := os.ReadFile("/proc/self/mounts"); err != nil || strings.Contains(string(mounts), "hidepid=") {
 		return false, false

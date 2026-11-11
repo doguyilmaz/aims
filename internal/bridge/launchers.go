@@ -21,6 +21,10 @@ import (
 
 const manifestName = "manifest.json"
 
+// ErrUninstallDeferred means Windows cleanup is ready and will proceed after
+// this process releases the executable image shared by its launcher hard links.
+var ErrUninstallDeferred = errors.New("launcher removal queued until aims exits")
+
 // Launcher contains executable routing only, never account or auth contents.
 type Launcher struct {
 	Name   string `json:"name"`
@@ -388,6 +392,11 @@ func UninstallLaunchers() error {
 		}
 		if err := owned(root, m); err != nil {
 			return err
+		}
+		if deferred, err := deferLauncherUninstall(root, m); err != nil {
+			return err
+		} else if deferred {
+			return ErrUninstallDeferred
 		}
 		for _, l := range m.Tools {
 			if err := os.Remove(filepath.Join(root, "bin", l.Name)); err != nil && !os.IsNotExist(err) {

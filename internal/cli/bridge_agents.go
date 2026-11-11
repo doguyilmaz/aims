@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,6 +54,10 @@ func newBridgeUninstallCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := bridge.UninstallLaunchers(); err != nil {
+				if errors.Is(err, bridge.ErrUninstallDeferred) {
+					fmt.Fprintln(cmd.OutOrStdout(), "Windows launcher removal is queued until this aims process exits; close active clients and run aims bridge --json to verify")
+					return nil
+				}
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "aims launchers removed; accounts, conversations and native CLIs stay")

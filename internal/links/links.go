@@ -443,14 +443,24 @@ func preflightTreeMove(src, dst string) error {
 			if !filepath.IsAbs(referent) {
 				referent = filepath.Join(filepath.Dir(path), referent)
 			}
+			referent = filepath.Clean(referent)
 			if fsx.Within(referent, src) {
 				// A conflicting file will receive a backup suffix. Rebasing its
 				// incoming link to the unsuffixed hub path would select another
 				// file (or turn a dangling link into an unrelated live reference).
 				// Check ancestors too: a directory/file collision renames the
 				// whole source subtree rather than only its referenced leaf.
-				for originalPath := referent; originalPath != src; originalPath = filepath.Dir(originalPath) {
-					rel, _ := filepath.Rel(src, originalPath)
+				for originalPath := referent; ; originalPath = filepath.Dir(originalPath) {
+					rel, err := filepath.Rel(src, originalPath)
+					if err != nil {
+						return err
+					}
+					if rel == "." {
+						break
+					}
+					if filepath.Dir(originalPath) == originalPath {
+						return fmt.Errorf("internal link %s did not reach its source root; kept the source tree", path)
+					}
 					destPath := filepath.Join(dst, rel)
 					original, destination := fsx.Lstat(originalPath), fsx.Lstat(destPath)
 					if destination == nil {

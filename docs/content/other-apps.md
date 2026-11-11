@@ -77,6 +77,8 @@ aims bridge uninstall
 
 Only aims' launcher links and manifest are removed. Changed launchers and unrelated files are retained. Account folders, conversations, native CLIs, shell configuration and app settings stay. Point clients back to their original executable after uninstalling.
 
+On Windows, hard links can remain locked by the running aims executable. In that case uninstall reports queued removal: a bounded system PowerShell helper waits for this aims process to exit, reacquires the installation lock, and verifies the unchanged manifest and launcher hashes before deleting owned files. Close active clients first. Use `aims bridge --json` to verify completion; a changed or still-busy installation remains available for retry. No executable copy, script file or scheduled cleanup task is installed.
+
 ## Native protocols without another supervisor
 
 If the client accepts a command and arguments, installation of executable links is optional:

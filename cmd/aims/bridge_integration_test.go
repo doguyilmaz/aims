@@ -258,8 +258,13 @@ func TestBridgeProcesses(t *testing.T) {
 		t.Fatal("protocol launch probed accounts or wrote usage state")
 	}
 	output("bridge", "uninstall")
-	if _, err := os.Stat(bridge.LauncherRoot()); !os.IsNotExist(err) {
-		t.Fatal("owned launcher installation was not cleaned up")
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if _, err := os.Stat(bridge.LauncherRoot()); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("owned launcher installation was not cleaned up")
+		}
 	}
 }
 
