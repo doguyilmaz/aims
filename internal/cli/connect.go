@@ -12,6 +12,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/launch"
+	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/mcpserver"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/profiles"
@@ -235,10 +236,15 @@ func newSyncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			conflicts := false
 			for _, id := range ids {
 				a := tools.Get(id)
 				for _, n := range cfg.Tools[id].Order {
-					reportLinks(id, n, profiles.Sync(cfg, a, n, false))
+					reports := profiles.Sync(cfg, a, n, false)
+					reportLinks(id, n, reports)
+					for _, r := range reports {
+						conflicts = conflicts || r.Action == links.Conflict
+					}
 				}
 				changed, err := profiles.ShareSettings(cfg, a)
 				if len(changed) > 0 {
@@ -247,6 +253,9 @@ func newSyncCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+			}
+			if conflicts {
+				return fmt.Errorf("some shared entries need attention; independent data was kept (run aims doctor --check)")
 			}
 			ui.Done("shared folders are in order")
 			return nil

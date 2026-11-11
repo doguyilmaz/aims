@@ -46,3 +46,5 @@ If one account must never see another's conversations, give it `share: settings`
 ## Reporting a problem
 
 Please report security issues privately through [GitHub security advisories](https://github.com/doguyilmaz/aims/security/advisories/new) rather than in a public issue.
+
+Integration changes preserve MCP settings in private, content-addressed files under `~/.aims/recovery/mcp`. Skill updates retain previous text beside the installed skill directory. These recovery copies survive clean; MCP settings can contain inline secrets, so they should remain private. The mechanism never copies `auth.json`, `.credentials.json` or keychain credentials. A failed clean retains aims configuration and account marks for retry.

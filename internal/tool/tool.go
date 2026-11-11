@@ -260,6 +260,8 @@ type Layout struct {
 	ConflictingEnv []string
 	// SkillsDir is where skills live inside the home ("" if unsupported).
 	SkillsDir string
+	// SettingsFile is the shared settings entry used by integrations.
+	SettingsFile string
 	// Markers are entries only the tool's own folder has. An existing folder
 	// given as a profile's --dir must hold one, so a code repository (with its
 	// own CLAUDE.md or plugins/) is never mistaken for a config folder.
@@ -415,6 +417,12 @@ type MCPServer struct {
 // nil when it is complete or not there.
 type MCPAuditor interface {
 	MCPMissing(h Home, s MCPServer) []string
+}
+
+// MCPConfigLocator identifies settings to preserve before a provider changes
+// its MCP registration. It never identifies a credential file.
+type MCPConfigLocator interface {
+	MCPConfigPath(Home) string
 }
 
 const (

@@ -112,7 +112,7 @@ func startUpdateCheck(ctx context.Context, version string, args []string) *updat
 	}
 	if len(args) > 0 {
 		switch args[0] {
-		case "bridge", "exec", "mcp", "statusline", "shell-init", "env", "completion", "__complete", "__completeNoDesc", "upgrade", "update", "claude", "codex", "run":
+		case "doctor", "bridge", "exec", "mcp", "statusline", "shell-init", "env", "completion", "__complete", "__completeNoDesc", "upgrade", "update", "claude", "codex", "run":
 			return nil
 		}
 	}

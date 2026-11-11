@@ -259,6 +259,16 @@ func TestEnvDatabases(t *testing.T) {
 	if v := get("a", []string{"CODEX_SQLITE_HOME=/mine"}); v != "/mine" {
 		t.Errorf("the user's own folder: %q", v)
 	}
+	t.Setenv("CODEX_SQLITE_HOME", "/mine")
+	if StateShared(cfg, a, "a") {
+		t.Fatal("external inherited database home was considered the shared hub")
+	}
+	t.Setenv("CODEX_SQLITE_HOME", "")
+	cfg.Tools["codex"].Profiles["a"].Env = map[string]string{"CODEX_SQLITE_HOME": ""}
+	if StateShared(cfg, a, "a") {
+		t.Fatal("explicit empty database override was ignored")
+	}
+	cfg.Tools["codex"].Profiles["a"].Env = nil
 	if v := get("b", base); v != "unset" {
 		t.Errorf("own history: %q", v)
 	}

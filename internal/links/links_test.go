@@ -156,10 +156,10 @@ func TestEnsureConflicts(t *testing.T) {
 	if testutil.Read(t, filepath.Join(dir, "settings.json")) != "a file here" {
 		t.Fatal("conflicting file changed")
 	}
-	// With Fix (tools closed) the database moves, sidecars too.
+	// Fix never forces a database that still has recovery sidecars to move.
 	Ensure(Options{Hub: hub, Dir: dir, Layout: layout, Fix: true})
-	if testutil.Read(t, filepath.Join(hub, "state_5.sqlite-wal")) != "wal" || !isLink(t, filepath.Join(dir, "state_5.sqlite")) {
-		t.Fatal("database not adopted with Fix")
+	if testutil.Read(t, filepath.Join(dir, "state_5.sqlite-wal")) != "wal" || testutil.Read(t, filepath.Join(dir, "state_5.sqlite")) != "db" || fsx.Lstat(filepath.Join(hub, "state_5.sqlite")) != nil {
+		t.Fatal("Fix separated a database from its recovery data")
 	}
 }
 
@@ -356,6 +356,9 @@ func TestMoveNeverReplaces(t *testing.T) {
 	if err := move(a, b); err == nil || testutil.Read(t, b) != "b" {
 		t.Fatal("move replaced an existing file")
 	}
+	if err := renameNoReplace(a, b); err == nil || testutil.Read(t, a) != "a" || testutil.Read(t, b) != "b" {
+		t.Fatal("the native move may replace a concurrently created destination")
+	}
 	if unique(b) == b || unique(filepath.Join(root, "c")) != filepath.Join(root, "c") {
 		t.Fatal("unique")
 	}
@@ -372,7 +375,7 @@ func TestMergeDropsProfileLinks(t *testing.T) {
 	os.Symlink(filepath.Join(dst, "v1"), filepath.Join(dst, "current"))
 	os.Symlink(filepath.Join(src, "v1"), filepath.Join(src, "current"))
 	kept, err := mergeDir(src, dst, "p")
-	if err != nil || len(kept) != 0 {
+	if err != nil || len(kept) != 1 || !strings.HasPrefix(kept[0], "bin.aims-p-") {
 		t.Fatalf("kept %v, err %v", kept, err)
 	}
 	if target, _ := os.Readlink(filepath.Join(dst, "current")); target != filepath.Join(dst, "v1") {
@@ -380,7 +383,7 @@ func TestMergeDropsProfileLinks(t *testing.T) {
 	}
 }
 
-func TestFixRemovesUnusedCopy(t *testing.T) {
+func TestFixArchivesUnusedCopy(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file links need developer mode on Windows")
 	}
@@ -403,15 +406,19 @@ func TestFixRemovesUnusedCopy(t *testing.T) {
 	if r := report(false); r.Action != Unused || testutil.Read(t, filepath.Join(dir, "logs_2.sqlite")) != "old" {
 		t.Fatalf("deleted without fix: %+v", r)
 	}
-	if r := report(true); r.Action != Removed {
+	if r := report(true); r.Action != Archived {
 		t.Fatalf("%+v", r)
 	}
 	if !isLink(t, filepath.Join(dir, "logs_2.sqlite")) || testutil.Read(t, filepath.Join(hub, "logs_2.sqlite")) != "shared" || fsx.Lstat(filepath.Join(dir, "logs_2.sqlite-wal")) != nil {
 		t.Fatal("copy not replaced by a link to the shared one")
 	}
+	assertArchivedDatabase(t, dir)
 }
 
-func TestFixRemovesUnsharedDisposableCopy(t *testing.T) {
+func TestFixArchivesUnsharedDisposableCopy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows cannot establish that the old database is unused")
+	}
 	hub, dir := dirs(t)
 	l := layout
 	l.Disposable = []tool.Entry{{Pattern: regexp.MustCompile(`^logs_\d+\.sqlite$`)}}
@@ -430,10 +437,22 @@ func TestFixRemovesUnsharedDisposableCopy(t *testing.T) {
 	if r := report(false); r.Action != Unused || testutil.Read(t, filepath.Join(dir, "logs_2.sqlite")) != "old" {
 		t.Fatalf("deleted without fix: %+v", r)
 	}
-	if r := report(true); r.Action != Removed {
+	if r := report(true); r.Action != Archived {
 		t.Fatalf("%+v", r)
 	}
 	if fsx.Lstat(filepath.Join(dir, "logs_2.sqlite")) != nil || fsx.Lstat(filepath.Join(dir, "logs_2.sqlite-wal")) != nil || testutil.Read(t, filepath.Join(hub, "logs_2.sqlite")) != "shared" {
-		t.Fatal("unused copy not deleted, or the shared one touched")
+		t.Fatal("unused copy not archived, or the shared one touched")
+	}
+	assertArchivedDatabase(t, dir)
+}
+
+func assertArchivedDatabase(t *testing.T, dir string) {
+	t.Helper()
+	archives, err := filepath.Glob(filepath.Join(dir, ".aims-recovery-*"))
+	if err != nil || len(archives) != 1 {
+		t.Fatalf("recovery folders: %v, %v", archives, err)
+	}
+	if testutil.Read(t, filepath.Join(archives[0], "logs_2.sqlite")) != "old" || testutil.Read(t, filepath.Join(archives[0], "logs_2.sqlite-wal")) != "old wal" {
+		t.Fatal("recovery data lost")
 	}
 }

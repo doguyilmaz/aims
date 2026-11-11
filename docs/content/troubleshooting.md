@@ -10,30 +10,13 @@ aliases: ["/docs/troubleshooting/"]
 aims doctor
 ```
 
-```text
-aims
-  ✓ aims v0.1.3 ~/.local/bin/aims
-  ✓ config ~/.aims/config.json
-
-Claude Code
-  ✓ 2.1.0 /opt/homebrew/bin/claude
-  ✓ claude/personal me@gmail.com
-  ! claude/work: not logged in
-    → aims login claude work
-
-Codex
-  ✓ 0.200.0 /usr/local/bin/codex
-  ✓ codex/personal me@gmail.com
-  ✓ codex/work me@company.com
-
-Integrations
-  ✓ shell integration in ~/.zshrc
-  ✓ Claude Code skill
-  ✓ Codex skill
-  ✓ login keepalive ~/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+```bash
+aims doctor --check --json   # read-only, scriptable report
+aims doctor --fix            # conservative repairs; recovery copies stay
+aims doctor --logins         # optional login/version inspection
 ```
 
-It checks the tools, every login and shared folder, and the integrations, repairs shared links as it goes, and prints the command for anything left. It exits with 1 when something needs you, so it also works in scripts.
+The default check inspects paths and integration settings without invoking a provider or accessing credentials. `--fix` creates missing links and applies explicit sharing-policy changes, then checks again. Independent data and externally managed links are kept. Exit `1` means a problem remains; read its message before retrying. `--logins` may invoke local CLIs, read the keychain and update cached account details.
 
 ## Common problems
 
@@ -74,9 +57,9 @@ The tool could not renew it. Run `aims login <tool> <profile>`, and `aims keepal
 
 The entry in the profile is a link aims did not make, for example from a dotfiles tool. aims leaves it alone. Remove it if it should be shared, or list it under [`exclude`](../sharing#keeping-one-entry-private) to keep it.
 
-### "the database is open; close the tool and run `aims doctor --fix`"
+### A database may be open or need recovery
 
-Codex keeps some state in SQLite databases. aims moves a database into the shared folder only when it is closed. Quit Codex and run `aims doctor --fix`.
+Codex keeps some state in SQLite databases. aims adopts an independent database only when no process has its folder open and no SQLite sidecar remains in either location. Close affected apps and daemons, retain the database with all its `-wal`, `-shm` and `-journal` files, and checkpoint/recover it with SQLite before running `aims sync`. Never delete a sidecar to silence the warning. `aims doctor --fix` cannot force adoption or merge two databases.
 
 ### "This conversation is open in another app"
 
@@ -92,11 +75,19 @@ Use the profile's actual folder shown by aims; an account using the original log
 
 ### Private writer locks
 
-New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory; `aims` lists such a profile under Next. A lock file is open for as long as Codex has the conversation open, so on the next launch (or `aims sync`, `aims doctor`) aims checks that no process has a file in the profile's directory open, sets the directory aside (as `thread-writer-locks.aims-<profile>-<time>`) and links the shared one. While any Codex still uses it, it stays, and `aims` lists the profile under Next: close every Codex using that profile, including the app and background daemons (`codex app-server daemon stop` with that profile's `CODEX_HOME`). Do not delete lock files to bypass an active writer.
+New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles may already have their own directory; `aims` lists such a profile under Next. A lock file is open for as long as Codex has the conversation open, so on the next launch (or `aims sync`, `aims doctor --fix`) aims checks that no process has a file in the profile's directory open, sets the directory aside (as `thread-writer-locks.aims-<profile>-<time>`) and links the shared one. While any Codex still uses it, it stays, and `aims` lists the profile under Next: close every Codex using that profile, including the app and background daemons (`codex app-server daemon stop` with that profile's `CODEX_HOME`). Do not delete lock files to bypass an active writer.
 
-### "the tool uses the shared copy; delete this one to free its space"
+### Unused index or log database copies
 
-aims starts every Codex profile that shares history with `CODEX_SQLITE_HOME` set to `~/.codex`, so all of them read and write the same databases, including ones a new Codex version adds. An index or log database still in the profile folder (`thread_history_*.sqlite`, `logs_*.sqlite`), created by Codex before aims did this, is no longer read: the index is rebuilt from the shared rollout files, so the conversations themselves are not in it. Once no Codex started before the update is running, you can delete the file and its `-wal` and `-shm` sidecars. aims never deletes it itself.
+For a Codex profile sharing history, aims sets `CODEX_SQLITE_HOME` to the hub unless an explicit override or private data database prevents it. Older index/log copies in the profile may be unused. `aims doctor --fix` archives a verified-unused copy and all its sidecars in `.aims-recovery-*` inside the profile. It never deletes that recovery data. Keep the archive until you have checked the conversations in the tools you use; it is not included in automatic cleanup. If aims cannot establish that the folder is unused, the copy stays where it is. On Windows this inspection is unavailable, so automatic archival is skipped.
+
+### An independent file remains after doctor fix
+
+This is a deliberate conflict, not a failed upgrade. Doctor does not choose between independent settings, history folders or databases. Close affected tools, review and back up both copies, then use `aims sync` for files/folders. For two data databases, use a deliberate SQLite reconciliation. Running `--fix` repeatedly will not discard one.
+
+### A skill is managed through a symlink
+
+Update it through its owner (for example a dotfiles tool or lockstep). aims setup and refresh leave that path alone. When setup updates a regular installed aims skill, its previous text is kept in a private `.aims-skill-*.bak` file beside the `aims` skill directory. `aims clean` keeps recovery files and user additions. Locally edited or externally managed skills are not deleted during uninstall.
 
 ### "history sharing is incomplete"
 

@@ -1,0 +1,12 @@
+# On macOS normal commands heal an upgraded cask's missing keepalive.
+# Doctor must bypass that startup behavior as well as its own repairs.
+[!darwin] skip 'macOS keepalive startup behavior'
+exec aims keepalive on
+exists $HOME/.aims/keepalive-wanted
+rm $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+exec aims doctor --check
+! exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+exec aims doctor --json
+stdout '"schemaVersion": "1.0.0"'
+! exists $HOME/Library/LaunchAgents/com.doguyilmaz.aims.keepalive.plist
+! exists $HOME/.aims/keepalive-failure

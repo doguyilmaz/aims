@@ -53,7 +53,9 @@ Otherwise use the CLI:
 | Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
 | Log an account in again | tell the user: `aims login claude work` |
 | Pin only this terminal | `eval "$(aims env work)"`; undo with `eval "$(aims env --reset)"` |
-| Check everything | `aims doctor` |
+| Check paths and integrations without changes | `aims doctor --check` (`--json` for scripts) |
+| Repair missing links and sharing-policy changes | `aims doctor --fix` (independent data and recovery copies stay) |
+| Inspect local logins and CLI versions | `aims doctor --logins` |
 
 ## Editors, SDKs and orchestrators
 

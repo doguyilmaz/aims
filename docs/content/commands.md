@@ -218,7 +218,7 @@ When a new version of aims can add something you were never asked about, the nex
 
 ### `aims sync [tool]`
 
-Repairs shared links for every profile (each launch does this for the profile it starts) and shares Claude Code MCP servers and project trust between your accounts.
+Reconciles shared links for every profile (each launch does this for the profile it starts) and shares Claude Code MCP servers and project trust between your accounts. It keeps conflicting versions and returns a failure when an entry still needs attention. Close affected tools before reconciling independent content. Open databases, recovery sidecars, unrelated symlinks and independent data databases are kept. For conservative migration repairs, start with `aims doctor --check`, then `aims doctor --fix`.
 
 ### `aims shell-init [shell]`
 
@@ -232,7 +232,18 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 
 ### `aims doctor`
 
-Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes, including a profile's own writer lock folder once no process uses it, and names database copies a profile no longer uses; `--fix` deletes those copies when no instance of the tool has a file of the profile open, and adopts databases that looked open (close the tools first). It also says when a work account (team, enterprise, business or edu plan) shares with a personal one, and names any MCP server whose token or password is written into the settings every account shares. Exits with 1 when something needs attention.
+Read-only checks of shared folders, account routing, existing bridge launchers, installed skills and MCP settings. It never starts a provider, reads login files or writes repairs by default. Exits with `1` when a problem remains; informational setup suggestions alone do not fail the check.
+
+| Flag | Behavior |
+| --- | --- |
+| `--check` | Explicit spelling of the default read-only check |
+| `--json` | Versioned report (`schemaVersion: "1.0.0"`) with `checks` and `repairs`; no credential values |
+| `--fix` | Create missing links, apply explicit sharing-policy changes and repair an existing owned launcher installation; keep independent settings, histories and data databases |
+| `--logins` | Inspect local login status and provider versions, account sharing and MCP secret warnings; may invoke installed CLIs, read login files/keychain and update aims' cached account details |
+
+`--fix --json` reports attempted repairs and then checks the resulting state. Repeating a successful fix makes no further changes. Use `--logins` separately from the other flags.
+
+Fix never forces an open database to move. Verified-unused index/log copies and their SQLite sidecars are archived together in a private `.aims-recovery-*` folder in the profile. The report gives the recovery path. A missing open-file inspection capability leaves them in place. Independent content requires an explicit `aims sync` after closing affected tools; two independent data databases require deliberate SQLite reconciliation. Existing symlinks managed by other tools remain untouched. See [Troubleshooting](../troubleshooting).
 
 ### `aims keepalive [on|off]`
 
@@ -242,7 +253,7 @@ Renews every login whose access token has run out or is within 10 minutes of it,
 
 ### `aims clean`
 
-Takes aims out of your tools (skill, MCP server, status line, shell line, keepalive) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. Alias: `aims uninstall`. `-y` skips the question.
+Takes aims out of your tools (skill, MCP server, status line, shell line, keepalive) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. If an integration cannot be removed, configuration and marks are retained for retry. Recovery copies and user additions stay. Alias: `aims uninstall`. `-y` skips the question.
 
 ### `aims wipe`
 

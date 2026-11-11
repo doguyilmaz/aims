@@ -49,9 +49,9 @@ Private to each profile: `auth.json` (or the OS keyring entry). Daemon processes
 
 ## Work and personal accounts
 
-By default a work and a personal account share everything above: conversations, settings, skills, MCP servers and project trust. `aims doctor` points out such a pair. If your company's rules keep work data out of a personal account, give the work profile `"share": "settings"` (its own conversations, everything else shared) or `"none"` (nothing shared) in `~/.aims/config.json`; see [Changing the mode later](#changing-the-mode-later).
+By default a work and a personal account share everything above: conversations, settings, skills, MCP servers and project trust. `aims doctor --logins` points out such a pair. If your company's rules keep work data out of a personal account, give the work profile `"share": "settings"` (its own conversations, everything else shared) or `"none"` (nothing shared) in `~/.aims/config.json`; see [Changing the mode later](#changing-the-mode-later).
 
-Shared MCP servers reach every account with their settings, so keep tokens out of them: `${NAME}` in Claude Code's `.claude.json`, `env_vars` or `bearer_token_env_var` in Codex's `config.toml`. `aims doctor` names a server that has one written out.
+Shared MCP servers reach every account with their settings, so keep tokens out of them: `${NAME}` in Claude Code's `.claude.json`, `env_vars` or `bearer_token_env_var` in Codex's `config.toml`. `aims doctor --logins` names a server that has one written out.
 
 ## Keeping one entry private
 
@@ -70,12 +70,12 @@ Tools often save a file by writing a new one and renaming it over the old, which
 - A file or folder that exists only in the profile moves to the hub, and the link comes back.
 - Folders present in both are merged. Nothing is overwritten: when the same file differs, both copies are kept, the profile's with an `.aims-<profile>-<time>` suffix.
 - For a plain file in both places, the newer one wins and the other is kept next to it as a backup.
-- Prompt history files (`.jsonl`) are appended, not replaced.
-- A database that may be open (its `-wal` file is not empty) is left alone until you close the tool and run `aims doctor --fix`.
+- Prompt history files (`.jsonl`) are appended, not replaced; the original source is retained with an `.aims-<profile>-<time>` suffix. Equal independent files are also retained, so a writer opened just after the idle check cannot lose its reachable source inode.
+- A database that may be open or has any SQLite recovery sidecar (`-wal`, `-shm`, `-journal`, even empty) is kept. Close the tool and recover/checkpoint it with SQLite before explicitly running `aims sync`. `--fix` never overrides this protection.
 - If both the profile and hub already have a Codex database with the same name, both are kept. For an index or log, Codex reads the hub's (`CODEX_SQLITE_HOME`) and doctor names the profile's copy as unused; for one that holds data, the profile keeps using its own and doctor reports incomplete history sharing.
 - An existing private `thread-writer-locks/` directory is never merged: replacing a lock file could bypass a live writer's lock. aims sets it aside, on its own, only once no process has a file in it open. See [private writer locks](../troubleshooting#private-writer-locks).
 
-`aims doctor` and `aims sync` run the same repair for every profile and report anything that needs a decision.
+`aims doctor` checks without changing files. `aims doctor --fix` repairs missing links and explicit sharing-policy changes, and archives verified-unused index/log copies with their sidecars. Independent files and data databases stay. `aims sync` explicitly reconciles independent files and folders, keeping conflicting versions; it reports failure if anything still needs a decision.
 
 ## Changing the mode later
 
@@ -87,6 +87,6 @@ Automatic moves require shared history on both profiles. A profile using `settin
 
 Once links are in place, profiles access the same files. Normal synchronization checks the home directory's entries and link targets; it does not read database contents, walk conversation directories, copy history, or produce recurring backups. The move checks are also metadata-only and do not call a model or a provider API.
 
-Repairs run when a tool starts or when you explicitly run `aims sync` or `aims doctor`; there is no background migration loop. If a tool replaces a link, the next repair may need to move or merge that entry. On the same filesystem, moves use rename rather than making a second copy. Across filesystems, a move must copy before removing the source. Comparing duplicate files and appending prompt history stream data with bounded memory.
+Repairs run when a tool starts or when you explicitly run `aims sync` or `aims doctor --fix`; there is no background migration loop. If a tool replaces a link, the next repair may need to move or merge that entry. On the same filesystem, file moves use rename without replacing an existing destination on Linux, macOS and Windows. Directory reconciliation preserves internal and external skill/plugin symlink targets and never recursively deletes a source. Platforms that cannot guarantee a safe directory move leave it in place. Cross-filesystem reconciliation is refused: an offline copy must be performed deliberately, because copying and then deleting a live source can lose writes. Comparing duplicate files and appending prompt history stream data with bounded memory.
 
 Backups are retained for actual conflicts, not on every launch. Existing independent databases remain untouched until a deliberate migration reconciles them; aims cannot safely discard one merely because the other looks newer. Do not change sharing or migrate history while the affected tools are running.

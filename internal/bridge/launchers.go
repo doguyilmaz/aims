@@ -94,6 +94,46 @@ func ReadLaunchers(root string) (*Launchers, error) {
 	return &m, nil
 }
 
+// CheckLaunchers diagnoses an existing installation without running a binary
+// or installing optional integrations. Ownership failures are never repaired.
+func CheckLaunchers(root string) []string {
+	m, err := ReadLaunchers(root)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	if m == nil {
+		return nil
+	}
+	if err := owned(root, m); err != nil {
+		return []string{err.Error()}
+	}
+	var out []string
+	if fsx.Real(m.ConfigHome) != fsx.Real(config.Home()) {
+		out = append(out, "bridge launchers belong to another aims configuration home; review before reinstalling")
+	}
+	if _, err := exec.LookPath(m.Aims); err != nil {
+		out = append(out, "bridge aims executable is missing; run aims bridge install from a persistent installation")
+	}
+	for _, a := range tools.All() {
+		l, ok := m.Tools[a.ID()]
+		if !ok {
+			continue
+		}
+		if _, err := exec.LookPath(filepath.Join(root, "bin", l.Name)); err != nil {
+			out = append(out, string(a.ID())+" bridge launcher is missing or not executable")
+		}
+		if _, err := exec.LookPath(l.Native); err != nil {
+			out = append(out, string(a.ID())+" recorded native executable is missing; reinstall the launcher after upgrading the CLI")
+		}
+		if p := m.Adapters[a.ID()]; p != "" {
+			if _, err := exec.LookPath(p); err != nil {
+				out = append(out, string(a.ID())+" recorded ACP adapter is missing; reinstall the launcher after upgrading the adapter")
+			}
+		}
+	}
+	return out
+}
+
 // ACPExecutable preserves the installed adapter's choice of bundled runtime.
 // A recorded absolute path also works when a desktop client's PATH is minimal.
 func ACPExecutable(a tool.Adapter, m *Launchers) (string, error) {

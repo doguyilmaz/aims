@@ -2,6 +2,8 @@
 
 package proc
 
+func HoldingTree(dir string) (bool, bool) { return Holding(dir) }
+
 // Writing lists the files pids have open for writing, by the pid holding
 // them. ok is false when this system cannot tell.
 func Writing(...int) (map[int][]string, bool) { return nil, false }

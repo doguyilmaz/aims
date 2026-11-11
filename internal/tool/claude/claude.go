@@ -63,6 +63,7 @@ func (*Adapter) Layout() tool.Layout {
 		History:        tool.Names("projects", "file-history", "todos", "plans", "tasks", "history.jsonl"),
 		ConflictingEnv: []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"},
 		SkillsDir:      "skills",
+		SettingsFile:   "settings.json",
 		Markers:        []string{".credentials.json", ".claude.json", "projects", "settings.json"},
 	}
 }
@@ -264,6 +265,8 @@ func firstLine(s string) string {
 }
 
 func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPPerLogin }
+
+func (*Adapter) MCPConfigPath(h tool.Home) string { return claudeJSON(h) }
 
 var alreadyRe = regexp.MustCompile(`(?i)already exists`)
 var missingRe = regexp.MustCompile(`(?i)no (mcp )?server named|not found`)

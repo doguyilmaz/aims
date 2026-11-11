@@ -54,6 +54,7 @@ func (*Adapter) Layout() tool.Layout {
 		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl", "thread-writer-locks"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
 		ConflictingEnv: []string{"CODEX_API_KEY", "OPENAI_API_KEY"},
 		SkillsDir:      "skills",
+		SettingsFile:   "config.toml",
 		Markers:        []string{"auth.json", "config.toml", "sessions", "history.jsonl"},
 	}
 }
@@ -185,6 +186,8 @@ func decode(token string, v any) bool {
 }
 
 func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPShared }
+
+func (*Adapter) MCPConfigPath(h tool.Home) string { return filepath.Join(h.Dir, "config.toml") }
 
 var (
 	alreadyRe = regexp.MustCompile(`(?i)already exists`)

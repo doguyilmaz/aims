@@ -26,7 +26,7 @@ aims bridge --json
 
 The report compares the current process' `CODEX_HOME` and `CLAUDE_CONFIG_DIR` with aims' hub and profiles. It follows transcript directory links, so a T3 `shadow` home linked to `~/.codex/sessions` is correctly reported as sharing transcripts. It does not assume the shadow home shares the hub's login.
 
-Inspection never starts a provider, checks or refreshes a login, repairs links, installs the keepalive, or writes config. JSON contains routing paths and environment variable **names**, never credentials or arbitrary profile environment values. This is the first check to use in a running app; `aims doctor` also repairs links and may run login-status commands.
+Inspection never starts a provider, checks or refreshes a login, repairs links, installs the keepalive, or writes config. JSON contains routing paths and environment variable **names**, never credentials or arbitrary profile environment values. This is the first check to use in a running app; `aims doctor` performs read-only checks, `aims doctor --fix` applies conservative repairs, and `aims doctor --logins` explicitly inspects local logins.
 
 ## Apps that inherit the CLI environment
 

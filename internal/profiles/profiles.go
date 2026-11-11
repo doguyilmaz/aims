@@ -214,6 +214,46 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: layout, Private: private, Label: name, Fix: fix, StateShared: StateShared(cfg, a, name)})...)
 }
 
+// CheckSharing is a read-only inspection of the effective sharing policy.
+func CheckSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if p == nil || p.Existing {
+		return nil
+	}
+	return links.Check(links.Options{Hub: cfg.EnsureHub(a.ID()), Dir: cfg.Dir(a.ID(), name),
+		Layout: a.Layout(), Private: Private(p, a.Layout()), StateShared: StateShared(cfg, a, name)})
+}
+
+// RepairSharing creates missing links and applies explicit sharing-policy
+// changes. Independent content is left to `aims sync`; a doctor upgrade must
+// never choose a winner between two settings, histories, or databases.
+func RepairSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if p == nil || p.Existing {
+		return nil
+	}
+	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
+	if err != nil || !ok {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "cannot acquire the shared-folder repair lock"}}
+	}
+	defer unlock()
+	l := a.Layout()
+	o := links.Options{Hub: cfg.EnsureHub(a.ID()), Dir: cfg.Dir(a.ID(), name), Layout: l, Private: Private(p, l), Label: name, MissingOnly: true, Fix: true, StateShared: StateShared(cfg, a, name)}
+	out := links.Detach(o.Hub, o.Dir, o.Private, l)
+	needed := map[string]bool{}
+	for _, r := range links.Check(o) {
+		if r.Repairable {
+			needed[r.Name] = true
+		}
+	}
+	private := o.Private
+	if len(needed) == 0 {
+		return out
+	}
+	o.Private = func(n string) bool { return private(n) || !needed[n] }
+	return append(out, links.Ensure(o)...)
+}
+
 // StateHome is what a profile's StateEnv should be: for a profile that
 // shares history, the folder the user already set or else the hub, so every
 // profile uses the same databases; "" (unset) for one with history of its
@@ -251,11 +291,15 @@ func MemoryHome(cfg *config.Config, a tool.Adapter, name string) string {
 // folder as every other profile that shares history.
 func StateShared(cfg *config.Config, a tool.Adapter, name string) bool {
 	l := a.Layout()
-	if p := cfg.Tools[a.ID()].Profiles[name]; l.StateEnv == "" || p == nil || p.Env[l.StateEnv] != "" {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if l.StateEnv == "" || p == nil {
+		return false
+	}
+	if _, explicit := p.Env[l.StateEnv]; explicit {
 		return false
 	}
 	v, keep := StateHome(cfg, a, name, os.Getenv(l.StateEnv))
-	return !keep && v != ""
+	return !keep && v != "" && fsx.Real(v) == fsx.Real(cfg.EnsureHub(a.ID()))
 }
 
 // ownDatabase reports whether dir holds a database file of its own, not a

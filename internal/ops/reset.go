@@ -22,6 +22,11 @@ func Clean(ctx context.Context) ([]Step, error) {
 	if err != nil {
 		return steps, err
 	}
+	for _, step := range steps {
+		if step.Err != nil {
+			return steps, fmt.Errorf("some integrations could not be removed; aims configuration and marks were kept for retry")
+		}
+	}
 	for _, f := range []string{"config.json", "state.json"} {
 		p := filepath.Join(config.Home(), f)
 		switch err := os.Remove(p); {
