@@ -292,7 +292,7 @@ func newMCPCmd(version string) *cobra.Command {
 		Use:   "mcp",
 		Short: "Run the MCP server (started by Claude Code and Codex)",
 		Long: "Speaks MCP over stdio. `aims setup` registers it; you do not run it yourself.\n" +
-			"Tools: aims_status, aims_switch, aims_failover, aims_clear, aims_run, aims_login_help.",
+			"Tools: aims_status, aims_switch, aims_failover, aims_move, aims_clear, aims_run, aims_login_help.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if ui.Interactive() {
