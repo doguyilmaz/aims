@@ -47,3 +47,24 @@ func TestSkillUpdateRejectsExternallyManagedPath(t *testing.T) {
 		t.Fatal("external skill changed")
 	}
 }
+
+func TestSkillUpdateKeepsDanglingManagedLink(t *testing.T) {
+	root := fsx.Real(t.TempDir())
+	path := filepath.Join(root, "skills", "aims", "SKILL.md")
+	target := filepath.Join(root, "manager", "missing-skill.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Skip(err)
+	}
+	if err := writeSkill(path, []byte("new skill")); err == nil {
+		t.Fatal("replaced a dangling managed skill link")
+	}
+	if got, err := os.Readlink(path); err != nil || got != target {
+		t.Fatalf("managed link changed: %q, %v", got, err)
+	}
+	if fsx.Lstat(target) != nil {
+		t.Fatal("created an external manager's missing file")
+	}
+}

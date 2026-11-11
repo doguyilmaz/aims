@@ -12,6 +12,11 @@ import (
 // writeSkill preserves any previous text before replacing it. Externally
 // managed symlinks belong to their manager (for example lockstep or dotfiles).
 func managedSkill(path string) bool {
+	// Real cannot resolve a dangling link. Its absence is not permission to
+	// replace a path owned by a dotfiles/skill manager.
+	if fi := fsx.Lstat(path); fi != nil && fi.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
 	expected := fsx.Abs(path)
 	// HOME may itself sit below a platform alias such as macOS /var. That
 	// does not make the skill externally managed; links below HOME do.
