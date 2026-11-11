@@ -765,11 +765,20 @@ func ensureOne(o Options, name string) (Report, error) {
 		}
 		backup := unique(target + ".aims-" + tag + "-" + stamp())
 		if profileNewer {
+			// Reject an impossible replacement before taking the settings used
+			// by every sharing profile out of service.
+			if same, err := sameFilesystem(link, filepath.Dir(target)); err != nil {
+				return r, fmt.Errorf("cannot preflight shared settings replacement: %w", err)
+			} else if !same {
+				return r, fmt.Errorf("cross-filesystem settings replacement refused; both files kept; close affected tools and reconcile %s and %s explicitly", link, target)
+			}
 			if err := move(target, backup); err != nil {
 				return r, err
 			}
 			if err := move(link, target); err != nil {
-				return r, err
+				// Permissions or a concurrent edit can still prevent the second
+				// move. Restore the old hub without replacing any new occupant.
+				return r, errors.Join(err, move(backup, target))
 			}
 		} else if err := move(link, backup); err != nil {
 			return r, err

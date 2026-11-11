@@ -55,7 +55,8 @@ func newBridgeUninstallCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := bridge.UninstallLaunchers(); err != nil {
 				if errors.Is(err, bridge.ErrUninstallDeferred) {
-					fmt.Fprintln(cmd.OutOrStdout(), "Windows launcher removal is queued until this aims process exits; close active clients and run aims bridge --json to verify")
+					fmt.Fprintln(cmd.OutOrStdout(), "Windows launcher removal is queued until this aims process exits; close active clients first")
+					fmt.Fprintf(cmd.OutOrStdout(), "After exit, inspect %s: manifest.json and aims' launcher links under bin must be absent; unrelated files may remain. Review changed files before retrying.\n", bridge.LauncherRoot())
 					return nil
 				}
 				return err
