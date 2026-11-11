@@ -10,7 +10,7 @@ aims handles the logins of your personal and work accounts, so it is built to to
 ## Logins
 
 - **Never copied.** Each account logs in once, with the tool's own login, into its own folder. Claude Code and Codex rotate refresh tokens, so a copied login would also log the original out; aims refuses to do it and the skill tells the model not to.
-- **Never read for their secrets.** aims checks that a login exists and reads the e-mail and plan stored next to it, to show you which account is which. Token values are not used.
+- **Read locally when needed.** Account inspection reads local login files and, for Claude Code on macOS, its keychain entry to identify login state and plan. An explicit live Codex check reads its access token to call the account API; Claude checks run through its native CLI. Credential contents are not printed by bridge inspection or the default doctor check, and login files are never copied between profiles.
 - **Removed through the tool.** `aims rm --purge` requires the tool's own logout before deleting the folder. If logout fails or the executable is unavailable, registration and remaining files stay for retry, including when the folder is already missing but a keychain/keyring entry may remain.
 - **Kept apart.** Variables that would override a profile's login (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY`) are removed from the tool's environment, and aims tells you when it does, unless the profile sets them itself.
 
