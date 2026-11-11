@@ -34,21 +34,30 @@ func deferLauncherUninstall(root string, m *Launchers) (bool, error) {
 	if !mapped {
 		return false, nil
 	}
-	systemDir, err := windows.GetSystemDirectory()
-	if err != nil {
-		return false, err
-	}
 	parent, err := windows.OpenProcess(windows.SYNCHRONIZE, true, uint32(os.Getpid()))
 	if err != nil {
 		return false, err
 	}
 	defer windows.CloseHandle(parent)
+	cmd, err := startUninstallHelper(root, m, parent)
+	if err != nil {
+		return false, err
+	}
+	go cmd.Wait()
+	return true, nil
+}
+
+func startUninstallHelper(root string, m *Launchers, parent windows.Handle) (*exec.Cmd, error) {
+	systemDir, err := windows.GetSystemDirectory()
+	if err != nil {
+		return nil, err
+	}
 	sa := &windows.SecurityAttributes{
 		Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1,
 	}
 	ready, err := windows.CreateEvent(sa, 1, 0, nil)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer windows.CloseHandle(ready)
 	data := struct {
@@ -60,7 +69,7 @@ func deferLauncherUninstall(root string, m *Launchers) (bool, error) {
 	}{Root: root, Files: map[string]string{}, Parent: uint64(parent), Ready: uint64(ready)}
 	data.ManifestHash, err = digest(filepath.Join(root, manifestName))
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	for _, l := range m.Tools {
 		path := filepath.Join(root, "bin", l.Name)
@@ -69,13 +78,13 @@ func deferLauncherUninstall(root string, m *Launchers) (bool, error) {
 		}
 		d, err := digest(path)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		data.Files[l.Name] = d
 	}
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	// Encode the fixed script and its JSON data literally, so Unicode paths,
 	// quotes, percent signs and shell metacharacters are never evaluated.
@@ -99,16 +108,15 @@ func deferLauncherUninstall(root string, m *Launchers) (bool, error) {
 	var startupError bytes.Buffer
 	cmd.Stderr = &startupError
 	if err := cmd.Start(); err != nil {
-		return false, fmt.Errorf("could not start Windows launcher cleanup; installation kept: %w", err)
+		return nil, fmt.Errorf("could not start Windows launcher cleanup; installation kept: %w", err)
 	}
 	state, err := windows.WaitForSingleObject(ready, 15000)
 	if err != nil || state != windows.WAIT_OBJECT_0 {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return false, fmt.Errorf("Windows launcher cleanup did not become ready; installation kept: state %d: %v: %s", state, err, startupError.String())
+		return nil, fmt.Errorf("Windows launcher cleanup did not become ready; installation kept: state %d: %v: %s", state, err, startupError.String())
 	}
-	go cmd.Wait()
-	return true, nil
+	return cmd, nil
 }
 
 const deferredUninstallScript = `

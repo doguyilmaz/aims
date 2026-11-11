@@ -1,11 +1,13 @@
 package bridge
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +15,63 @@ import (
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
+	"golang.org/x/sys/windows"
 )
+
+func TestWindowsDeferredCleanupKeepsChangedInstallation(t *testing.T) {
+	for _, changed := range []string{"manifest", "launcher"} {
+		t.Run(changed, func(t *testing.T) {
+			self := launcherFixture(t)
+			m, err := InstallLaunchers(self)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Write(t, filepath.Join(LauncherRoot(), "my-file"), "keep")
+			parent, err := windows.CreateEvent(nil, 1, 0, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer windows.CloseHandle(parent)
+			if err := windows.SetHandleInformation(parent, windows.HANDLE_FLAG_INHERIT, windows.HANDLE_FLAG_INHERIT); err != nil {
+				t.Fatal(err)
+			}
+			cmd, err := startUninstallHelper(LauncherRoot(), m, parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cmd.Process.Kill()
+			if changed == "manifest" {
+				testutil.Write(t, filepath.Join(LauncherRoot(), manifestName), `{"owner":"changed"}`)
+			} else {
+				path := filepath.Join(LauncherBin(), m.Tools["codex"].Name)
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				testutil.Write(t, path, "user replacement")
+			}
+			if err := windows.SetEvent(parent); err != nil {
+				t.Fatal(err)
+			}
+			err = cmd.Wait()
+			diagnostic := cmd.Stderr.(*bytes.Buffer).String()
+			if err == nil || !strings.Contains(diagnostic, "changed") {
+				t.Fatalf("cleanup did not reject the changed installation: %v\n%s", err, diagnostic)
+			}
+			for _, l := range m.Tools {
+				if _, err := os.Lstat(filepath.Join(LauncherBin(), l.Name)); err != nil {
+					t.Fatal("preflight failure removed an owned or replaced launcher")
+				}
+			}
+			if _, err := os.Stat(filepath.Join(LauncherRoot(), manifestName)); err != nil {
+				t.Fatal("preflight failure removed the manifest")
+			}
+			if testutil.Read(t, filepath.Join(LauncherRoot(), "my-file")) != "keep" ||
+				testutil.Read(t, self) != "test-only executable content" {
+				t.Fatal("preflight failure changed unrelated files or the original executable")
+			}
+		})
+	}
+}
 
 func TestWindowsUninstallWaitsForMappedLauncherImage(t *testing.T) {
 	testutil.Sandbox(t)
