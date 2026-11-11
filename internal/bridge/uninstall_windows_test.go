@@ -97,9 +97,10 @@ func TestWindowsDeferredCleanupRechecksAfterBlockedDelete(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Permit hash reads and edits but prevent deletion until the test
-			// observes the helper's first sharing violation.
-			locked, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE,
+			// A read-only handle is compatible with File.OpenRead's read-only
+			// sharing. Allow later edits, but deny deletion so the helper reaches
+			// its retry loop after successfully checking the original hash.
+			locked, err := windows.CreateFile(name, windows.GENERIC_READ,
 				windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
 			if err != nil {
 				t.Fatal(err)
