@@ -3,6 +3,7 @@ package links
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/doguyilmaz/aims/internal/testutil"
@@ -17,7 +18,10 @@ func TestWindowsAdoptionPreservesPrivateDACL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;" + user.User.Sid.String() + ")")
+	// Propagate the private owner grant to existing children. A non-inheritable
+	// replacement removes their inherited access and makes the fixture unreadable
+	// before adoption, correctly causing the open-handle check to refuse it.
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;" + user.User.Sid.String() + ")")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,6 +33,10 @@ func TestWindowsAdoptionPreservesPrivateDACL(t *testing.T) {
 		if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
 			t.Fatal(err)
 		}
+	}
+	runtime.KeepAlive(sd)
+	if b, err := os.ReadFile(filepath.Join(src, "private", "SKILL.md")); err != nil || string(b) != "private instructions" {
+		t.Fatalf("private fixture must be readable before adoption: %q %v", b, err)
 	}
 	before, err := windows.GetNamedSecurityInfo(src, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
