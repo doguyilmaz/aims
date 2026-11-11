@@ -36,7 +36,7 @@ Everything else, including your prompts and conversations, goes from the tools t
 
 ## Sessions and the model
 
-The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, switch the account for new sessions, and run a prompt with another account. It cannot log in, read logins or change the account of the running session. `aims_run` is read-only unless the call asks for `write`, so a restricted session cannot use it to edit files; see [AI integration](../ai-integration#mcp-server).
+The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, choose the account for new sessions, request a conversation move in a supervised session, and run a prompt with another account. It exposes no login or raw-credential-reading tool. By default, `aims_run` requests Claude Code's plan mode or Codex's read-only sandbox; aims does not add operating-system isolation. The installed CLI's permission, trust and hook settings enforce those controls, and your MCP client controls call approval. With `write: true`, the run uses the CLI's normal settings. See [AI integration](../ai-integration#mcp-server).
 
 Codex reviews new or changed hooks before they run. aims skips that review only on the restarts it makes itself, and only when you turn on `failover.trustHooks` (`aims setup --trust-hooks`); see [Failover](../failover#codex-hooks).
 
