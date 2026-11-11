@@ -50,7 +50,7 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		for _, a := range tools.All() {
 			for _, name := range cfg.Tools[a.ID()].Order {
 				p := cfg.Tools[a.ID()].Profiles[name]
-				if v, ok := p.Env[a.Layout().HomeEnv]; ok && v != cfg.HomeEnv(a.ID(), name) {
+				if v, ok := profiles.EnvOverride(p, a.Layout().HomeEnv); ok && v != cfg.HomeEnv(a.ID(), name) {
 					continue
 				}
 				for _, rep := range profiles.RepairSharing(cfg, a, name) {
@@ -94,8 +94,16 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		for _, name := range t.Order {
 			key := string(id) + "/" + name
 			p := t.Profiles[name]
-			if v, ok := p.Env[l.HomeEnv]; ok && v != cfg.HomeEnv(id, name) {
+			if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+				add(key+"/isolation", "problem", err.Error(), "")
+			}
+			if v, ok := profiles.EnvOverride(p, l.HomeEnv); ok && v != cfg.HomeEnv(id, name) {
 				add(key+"/home", "problem", "profile environment changes its login home; use the profile dir setting instead of overriding "+l.HomeEnv, "")
+			}
+			_, customState := profiles.EnvOverride(p, l.StateEnv)
+			_, customMemory := profiles.EnvOverride(p, l.MemoryEnv)
+			if l.StateEnv != "" && customState || l.MemoryEnv != "" && customMemory {
+				add(key+"/storage", "info", key+": explicit persistent-storage routing; automatic moves require matching storage homes and shared history", "aims bridge")
 			}
 			for _, rep := range profiles.CheckSharing(cfg, a, name) {
 				if rep.Action == links.Conflict || rep.Action == links.Missing {

@@ -88,6 +88,8 @@ On Windows: `irm https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/
 
 Check an existing installation with `aims doctor --check` (or `--json` for scripts), then use `aims doctor --fix` for conservative repairs. Independent settings and databases stay; unused index/log copies are archived with their recovery files. Login inspection is explicit with `aims doctor --logins`. See [safe recovery](docs/content/troubleshooting.md).
 
+A stricter sharing policy must be applied before aims starts new work for that profile. Purge and wipe also retain a profile when native logout cannot complete, including when its folder is missing but a system keyring login may remain.
+
 ## Start
 
 ```bash

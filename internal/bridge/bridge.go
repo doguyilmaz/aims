@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/profiles"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
@@ -23,13 +23,7 @@ type Selection struct {
 }
 
 func envMap(env []string) map[string]string {
-	m := make(map[string]string, len(env))
-	for _, kv := range env {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			m[k] = v
-		}
-	}
-	return m
+	return proc.EnvironmentMap(env)
 }
 
 // Environment prepares an application's environment. Both tools use their
@@ -52,6 +46,9 @@ func Environment(cfg *config.Config, requested map[tool.ID]string, base []string
 		}
 		if name == "" {
 			continue
+		}
+		if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+			return nil, nil, err
 		}
 		env, _ = profiles.Env(cfg, a, name, env)
 		// A program may start the CLI through aims' shell integration later.
@@ -102,6 +99,9 @@ func AgentEnvironment(cfg *config.Config, a tool.Adapter, explicit string, base 
 	}
 	env := base
 	if name != "" {
+		if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+			return nil, "", err
+		}
 		env, _ = profiles.Env(cfg, a, name, base)
 	}
 	m := envMap(env)

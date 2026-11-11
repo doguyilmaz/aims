@@ -191,15 +191,7 @@ func newExecCmd() *cobra.Command {
 				}
 				// Explicit opt-in, scoped to this child. SDKs that bundle a
 				// runtime still keep it; no executable override is injected.
-				childPath := ""
-				for i, kv := range env {
-					if strings.HasPrefix(kv, "PATH=") {
-						childPath = strings.TrimPrefix(kv, "PATH=")
-						env = append(env[:i], env[i+1:]...)
-						break
-					}
-				}
-				env = append(env, "PATH="+bridge.LauncherBin()+string(os.PathListSeparator)+childPath)
+				env = proc.PrependPath(env, bridge.LauncherBin())
 			}
 			if dryRun {
 				// Do not print the complete environment or command arguments:

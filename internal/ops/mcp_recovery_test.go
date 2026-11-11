@@ -57,3 +57,17 @@ func TestMCPFailureKeepsPrivateRecoverySettings(t *testing.T) {
 		t.Fatalf("duplicate recovery files: %v, %v", files, err)
 	}
 }
+
+func TestMCPRecoveryRefusesConflictingLoginHome(t *testing.T) {
+	home := testutil.Sandbox(t)
+	path := filepath.Join(home, ".codex", "config.toml")
+	testutil.Write(t, path, "original settings")
+	a := failingMCP{Adapter: tools.Get("codex"), path: path}
+	h := tool.Home{EnvValue: filepath.Join(home, "expected"), Env: []string{"CODEX_HOME=" + filepath.Join(home, "another-login")}}
+	if err := updateMCP(context.Background(), a, h, tool.MCPServer{Name: "aims"}, true); err == nil || !strings.Contains(err.Error(), "changes this login's home") {
+		t.Fatalf("conflicting home was not rejected: %v", err)
+	}
+	if testutil.Read(t, path) != "original settings" {
+		t.Fatal("changed MCP registration despite ambiguous login routing")
+	}
+}

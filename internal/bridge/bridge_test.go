@@ -18,6 +18,35 @@ import (
 
 func TestMain(m *testing.M) { testutil.Main(m) }
 
+func TestExportsRefusePendingPrivateHistoryWithoutRepair(t *testing.T) {
+	cfg := setup(t)
+	a := tools.Get("codex")
+	cfg.Tools[a.ID()].Profiles["other"].Share = config.ShareSettings
+	source := filepath.Join(cfg.EnsureHub(a.ID()), "history.jsonl")
+	target := filepath.Join(cfg.Dir(a.ID(), "other"), "history.jsonl")
+	testutil.Write(t, source, "shared prompt\n")
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Environment(cfg, nil, nil); err == nil {
+		t.Fatal("application environment accepted stale shared history")
+	}
+	if _, _, err := AgentEnvironment(cfg, a, "other", nil); err == nil {
+		t.Fatal("launcher environment accepted stale shared history")
+	}
+	if _, err := PlanT3(cfg, filepath.Join(t.TempDir(), "settings.json")); err == nil {
+		t.Fatal("T3 export accepted stale shared history")
+	}
+	si, _ := os.Stat(source)
+	ti, _ := os.Stat(target)
+	if !os.SameFile(si, ti) {
+		t.Fatal("read-only exports repaired the history link")
+	}
+}
+
 func setup(t *testing.T) *config.Config {
 	t.Helper()
 	testutil.Sandbox(t)

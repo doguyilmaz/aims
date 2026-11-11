@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -14,7 +15,28 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
+	"github.com/doguyilmaz/aims/internal/tools"
 )
+
+func TestT3ExportMakesRelativeExecutableAbsolute(t *testing.T) {
+	cfg := setup(t)
+	root := t.TempDir()
+	name := "codex"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(root, "bin", name)
+	testutil.Write(t, path, "fixture")
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	t.Setenv("AIMS_CODEX_BIN", filepath.Join("bin", name))
+	i, err := t3Instance(cfg, tools.Get("codex"), "other")
+	if err != nil || i.Config["binaryPath"] != path {
+		t.Fatalf("relative export lost its working directory: %+v %v", i, err)
+	}
+}
 
 func TestT3ExportPreservesSettingsAndNeverCopiesLogins(t *testing.T) {
 	cfg := setup(t)

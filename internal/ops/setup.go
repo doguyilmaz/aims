@@ -212,7 +212,7 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 				}
 				path := filepath.Join(dir, "SKILL.md")
 				b, readErr := os.ReadFile(path)
-				if readErr != nil || string(b) != aims.Skill || managedSkill(path) {
+				if readErr != nil || !bundledSkill(b) || managedSkill(path) {
 					steps = append(steps, Step{Tool: id, What: "skill", Target: fsx.Tildify(dir), Err: fmt.Errorf("skill was changed or is externally managed; kept it")})
 					continue
 				}

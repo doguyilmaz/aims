@@ -13,6 +13,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
@@ -20,6 +21,10 @@ import (
 // A failed remove/add must not erase the previous MCP entry or unknown keys.
 // Identical settings reuse one copy; credential files are never selected.
 func backupMCP(a tool.Adapter, h tool.Home) (string, error) {
+	effective, _ := proc.EnvValue(h.Env, a.Layout().HomeEnv)
+	if effective != h.EnvValue {
+		return "", fmt.Errorf("%s changes this login's home; use the profile dir setting before changing MCP registration", a.Layout().HomeEnv)
+	}
 	l, ok := a.(tool.MCPConfigLocator)
 	if !ok {
 		return "", fmt.Errorf("%s cannot identify its MCP settings for recovery", a.ID())

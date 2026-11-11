@@ -176,10 +176,17 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			if session {
 				profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: mode, Dir: workDir(o), Started: time.Now()})
 			}
-			code, err := proc.RunAttached(bin, o.Args, sessionEnv(o, cfg, name), o.Dir)
+			env, err := sessionEnv(o, cfg, name)
+			if err != nil {
+				return Result{Code: 1, Profile: name}, err
+			}
+			code, err := proc.RunAttached(bin, o.Args, env, o.Dir)
 			return Result{Code: code, Profile: name}, err
 		}
-		env := sessionEnv(o, cfg, name)
+		env, err := sessionEnv(o, cfg, name)
+		if err != nil {
+			return Result{Code: 1, Profile: name}, err
+		}
 
 		res, retry, err := attempt(ctx, o, cfg, bin, env, input, name, auto, tried)
 		if err != nil || retry.Name == "" {
@@ -257,12 +264,18 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 
 // sessionEnv prepares a run as profile name: its links, its environment, and
 // the record that it was used last.
-func sessionEnv(o Options, cfg *config.Config, name string) []string {
+func sessionEnv(o Options, cfg *config.Config, name string) ([]string, error) {
 	a := o.Tool
+	if err := profiles.HomeConflict(cfg, a, name); err != nil {
+		return nil, err
+	}
 	for _, r := range profiles.Sync(cfg, a, name, false) {
 		if r.Action == links.Conflict && !r.Quiet {
 			o.say(Warn, "%s/%s: shared %q: %s (aims doctor)", a.ID(), name, r.Name, r.Detail)
 		}
+	}
+	if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+		return nil, err
 	}
 	changed, err := profiles.ShareSettings(cfg, a)
 	if err != nil {
@@ -278,7 +291,7 @@ func sessionEnv(o Options, cfg *config.Config, name string) []string {
 	}
 	usedAt := config.Now().UTC()
 	_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.LastUsedAt = usedAt })
-	return env
+	return env, nil
 }
 
 // choose picks the profile a session starts on and says why when it is not

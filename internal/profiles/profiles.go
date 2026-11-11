@@ -16,6 +16,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 )
@@ -51,17 +52,45 @@ func Session() (id tool.ID, name string, ok bool) {
 // that do not share history with it, so would not find the conversation.
 func Apart(cfg *config.Config, id tool.ID, name string) []string {
 	t := cfg.Tools[id]
-	layout := tools.Get(id).Layout()
+	a := tools.Get(id)
+	layout := a.Layout()
 	hub := cfg.EnsureHub(id)
 	sharesHistory := func(n string) bool {
 		p := t.Profiles[n]
+		if p != nil {
+			if value, explicit := EnvOverride(p, layout.HomeEnv); explicit && value != cfg.HomeEnv(id, n) {
+				return false
+			}
+		}
 		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
-			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, tools.Get(id), n))
+			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, a, n))
+	}
+	// Shared transcript files alone do not prove that persistent memory and
+	// goals are shared: a profile may explicitly redirect their storage.
+	routing := func(n string) []string {
+		env, _ := Env(cfg, a, n, os.Environ())
+		m := envMap(env)
+		var out []string
+		for _, key := range []string{layout.StateEnv, layout.MemoryEnv} {
+			if key == "" {
+				continue
+			}
+			dir := m[key]
+			if dir == "" {
+				dir = cfg.Dir(id, n)
+			}
+			out = append(out, fsx.Real(dir))
+		}
+		return out
 	}
 	shared := sharesHistory(name)
+	var sourceRouting []string
+	if shared {
+		sourceRouting = routing(name)
+	}
 	var out []string
 	for _, n := range t.Order {
-		if n != name && (!shared || !sharesHistory(n)) {
+		if n != name && (!shared || !sharesHistory(n) || !slices.Equal(sourceRouting, routing(n))) {
 			out = append(out, n)
 		}
 	}
@@ -84,13 +113,7 @@ func Bin(a tool.Adapter) string {
 
 // envMap turns KEY=VALUE pairs into a map; later entries win.
 func envMap(env []string) map[string]string {
-	m := make(map[string]string, len(env))
-	for _, kv := range env {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			m[k] = v
-		}
-	}
-	return m
+	return proc.EnvironmentMap(env)
 }
 
 func envList(m map[string]string) []string {
@@ -107,10 +130,11 @@ func envList(m map[string]string) []string {
 // dropped, the profile's own variables added. dropped lists what was removed.
 func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []string, dropped []string) {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	ownEnv := envMap(envList(p.Env))
 	m := envMap(base)
 	l := a.Layout()
 	for _, k := range l.ConflictingEnv {
-		if _, own := p.Env[k]; m[k] != "" && !own {
+		if _, own := ownEnv[k]; m[k] != "" && !own {
 			delete(m, k)
 			dropped = append(dropped, k)
 		}
@@ -134,7 +158,7 @@ func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []
 			delete(m, l.MemoryEnv)
 		}
 	}
-	for k, v := range p.Env {
+	for k, v := range ownEnv {
 		m[k] = v
 	}
 	m[SessionVar] = string(a.ID()) + ":" + name
@@ -195,11 +219,14 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 	if p == nil || p.Existing {
 		return nil
 	}
+	if err := HomeConflict(cfg, a, name); err != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: err.Error()}}
+	}
 	hub := cfg.EnsureHub(a.ID())
 	dir := cfg.Dir(a.ID(), name)
 	// Profiles of a tool share one hub: two launches repairing links at once
 	// could move the same file twice. A launch that cannot get the lock skips
-	// the repair; the links it needs are almost always in place already.
+	// repair, then RequireIsolation verifies any pending privacy transition.
 	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
 	if err != nil || !ok {
 		return []links.Report{{Name: dir, Action: links.Conflict, Quiet: true, Detail: "another aims process is repairing the shared folders; skipped"}}
@@ -231,6 +258,9 @@ func RepairSharing(cfg *config.Config, a tool.Adapter, name string) []links.Repo
 	p := cfg.Tools[a.ID()].Profiles[name]
 	if p == nil || p.Existing {
 		return nil
+	}
+	if err := HomeConflict(cfg, a, name); err != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: err.Error()}}
 	}
 	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
 	if err != nil || !ok {
@@ -295,11 +325,16 @@ func StateShared(cfg *config.Config, a tool.Adapter, name string) bool {
 	if l.StateEnv == "" || p == nil {
 		return false
 	}
-	if _, explicit := p.Env[l.StateEnv]; explicit {
+	if _, explicit := EnvOverride(p, l.StateEnv); explicit {
 		return false
 	}
 	v, keep := StateHome(cfg, a, name, os.Getenv(l.StateEnv))
 	return !keep && v != "" && fsx.Real(v) == fsx.Real(cfg.EnsureHub(a.ID()))
+}
+
+// EnvOverride observes platform environment-name rules for profile settings.
+func EnvOverride(p *config.Profile, key string) (string, bool) {
+	return proc.EnvValue(envList(p.Env), key)
 }
 
 // ownDatabase reports whether dir holds a database file of its own, not a

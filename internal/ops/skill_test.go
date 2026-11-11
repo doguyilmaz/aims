@@ -1,14 +1,43 @@
 package ops
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
 )
+
+func TestCleanRecognizesPreviouslyBundledSkillWithoutReinstall(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		c.EnsureHub("codex")
+		c.Tools["codex"].Profiles["work"] = &config.Profile{}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.ReadFile("testdata/skill-v0.4.6.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfg.EnsureHub("codex"), "skills", "aims", "SKILL.md")
+	testutil.Write(t, path, string(old))
+	if _, err := Clean(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if fsx.Lstat(path) != nil || fsx.Lstat(filepath.Join(config.Home(), "config.json")) != nil {
+		t.Fatal("clean kept an untouched previous bundled skill")
+	}
+	if bundledSkill(append(old, []byte("\nmy local edits\n")...)) {
+		t.Fatal("local edits were treated as a bundled skill")
+	}
+}
 
 func TestSkillUpdateKeepsPreviousTextOnce(t *testing.T) {
 	root := fsx.Real(t.TempDir())

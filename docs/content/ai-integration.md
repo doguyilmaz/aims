@@ -40,7 +40,7 @@ Before setup, refresh or removal changes an MCP registration, aims retains a pri
 
 `aims setup` writes `skills/aims/SKILL.md` into `~/.claude` and `~/.codex` (and into profiles that keep skills private through `share: none` or `exclude`). It teaches the model when to use the MCP tools (a limit error, a dead login, "which account am I on?") and the rules around them: never copy login files, and never move one account's data to another unasked.
 
-Skill updates preserve previous text in a private `.aims-skill-*.bak` beside the installed `aims` skill directory. Externally managed symlinks are left to their owner; uninstall keeps edited skills, backups and user additions. `aims doctor --check` diagnoses stale skills and MCP settings without running a provider. Use the indicated setup command to update those integrations deliberately.
+Skill updates preserve previous text in a private `.aims-skill-*.bak` beside the installed `aims` skill directory. Externally managed symlinks are left to their owner; uninstall recognizes previously bundled skill versions and keeps edited skills, backups and user additions. `aims doctor --check` diagnoses stale skills and MCP settings without running a provider. Use the indicated setup command to update those integrations deliberately.
 
 ## Claude Code plugin
 

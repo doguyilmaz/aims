@@ -34,6 +34,36 @@ func TestApartHonorsHistoryExclusions(t *testing.T) {
 	}
 }
 
+func TestApartRequiresMatchingPersistentStorageRouting(t *testing.T) {
+	cfg, _ := setup(t)
+	shared := filepath.Join(t.TempDir(), "shared-databases")
+	cfg.Tools["codex"].Profiles["a"].Env = map[string]string{"CODEX_SQLITE_HOME": shared}
+	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_SQLITE_HOME": shared + "-private"}
+	if !slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("move could leave goals and memory in another database home")
+	}
+	cfg.Tools["codex"].Profiles["b"].Env["CODEX_SQLITE_HOME"] = shared
+	if slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("matching explicit storage homes were rejected")
+	}
+	cfg.Tools["codex"].Profiles["b"].Env["CODEX_HOME"] = shared + "-another-login"
+	if !slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("ambiguous login-home override was allowed to move")
+	}
+	cfg.Tools["claude"].Profiles = map[string]*config.Profile{
+		"a": {Env: map[string]string{"CLAUDE_CODE_REMOTE_MEMORY_DIR": shared}},
+		"b": {Env: map[string]string{"CLAUDE_CODE_REMOTE_MEMORY_DIR": shared + "-private"}},
+	}
+	cfg.Tools["claude"].Order = []string{"a", "b"}
+	if !slices.Contains(Apart(cfg, "claude", "a"), "b") {
+		t.Fatal("move could change Claude's memory home")
+	}
+	cfg.Tools["claude"].Profiles["b"].Env["CLAUDE_CODE_REMOTE_MEMORY_DIR"] = shared
+	if slices.Contains(Apart(cfg, "claude", "a"), "b") {
+		t.Fatal("matching Claude memory homes rejected")
+	}
+}
+
 var now = time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 
 // setup makes codex profiles a, b and c, all logged in.

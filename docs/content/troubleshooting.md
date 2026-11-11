@@ -20,6 +20,10 @@ The default check inspects paths and integration settings without invoking a pro
 
 ## Common problems
 
+### Profile labels point to the same login folder
+
+New profile names must differ beyond letter case, so moving between case-sensitive and case-insensitive filesystems cannot merge two login homes. Doctor also reports existing labels that resolve to the same folder. aims leaves their credentials and files in place and refuses to launch, repair or purge the ambiguous home. Remove only the duplicate label with `aims rm` without `--purge`; do not delete its folder or log it out to resolve the duplicate.
+
 ### Conversations or accounts are missing in T3 Code or another app
 
 Run `aims bridge` inside the affected environment. It shows the actual CLI homes and shared transcript paths without modifying them. An external `shadow` home may share conversations while using a separate managed login, and T3's own thread list needs its session/project import flow even when the files are shared. `aims bridge t3` previews connections to aims' existing CLI accounts; `aims exec -- <program>` passes those accounts to apps that inherit the environment. See [Other coding apps](../other-apps) before changing paths or logins. Never copy credentials or delete session databases to make the lists agree.
@@ -79,7 +83,7 @@ New shared Codex profiles link `thread-writer-locks/` to the hub. Older profiles
 
 ### Unused index or log database copies
 
-For a Codex profile sharing history, aims sets `CODEX_SQLITE_HOME` to the hub unless an explicit override or private data database prevents it. Older index/log copies in the profile may be unused. `aims doctor --fix` archives a verified-unused copy and all its sidecars in `.aims-recovery-*` inside the profile. It never deletes that recovery data. Keep the archive until you have checked the conversations in the tools you use; it is not included in automatic cleanup. If aims cannot establish that the folder is unused, the copy stays where it is. On Windows this inspection is unavailable, so automatic archival is skipped.
+For a Codex profile sharing history, aims sets `CODEX_SQLITE_HOME` to the hub unless an explicit override or private data database prevents it. Older index/log copies in the profile may be unused. `aims doctor --fix` archives a verified-unused copy and all its sidecars in `.aims-recovery-*` inside the profile. It never deletes that recovery data. Keep the archive until you have checked the conversations in the tools you use; it is not included in automatic cleanup. If aims cannot establish that the folder is unused, the copy stays where it is. On Windows, aims probes files and directories with native sharing restrictions. An open or inaccessible entry prevents reconciliation; closing the affected tools allows the next sync or repair to try again.
 
 ### An independent file remains after doctor fix
 

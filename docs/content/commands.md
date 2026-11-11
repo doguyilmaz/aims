@@ -163,8 +163,10 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 | Flag | |
 | --- | --- |
 | `--purge` | Also log it out and delete its folder. Anything shared that was written there moves to the hub first; shared history and settings are never deleted. aims only deletes folders it created. |
-| `--force` | Purge even if some shared entries could not be moved |
+| `--force` | Purge even if some shared entries could not be moved; does not bypass a failed logout |
 | `-y`, `--yes` | Do not ask |
+
+Purge requires the native tool to complete logout, even if the profile folder is already missing: a keychain or keyring login can outlive that folder. If the tool is unavailable or logout fails, the profile registration and remaining files stay for retry. Removing a profile without `--purge` only forgets its label and keeps its login.
 
 ## Integrations
 
@@ -186,7 +188,7 @@ Start a native CLI with the preferred or explicit account. stdin, stdout, stderr
 
 ### `aims bridge acp <tool>[@profile] [--] [args...]`
 
-Start an installed upstream `claude-agent-acp` or `codex-acp` with the selected aims account environment. The adapter keeps its bundled native runtime and explicit executable overrides. No protocol translation, adapter downloads or preview upgrades happen in aims. See [ACP clients](../other-apps#acp-clients).
+Start an installed upstream `claude-agent-acp` or `codex-acp` with the selected aims account environment. The adapter keeps its bundled native runtime and explicit executable overrides. On Windows, standard npm command shims run through their recorded Node entrypoint or native executable, with arguments passed directly. Custom batch scripts require an explicit native/runtime command (for example `aims exec -- node <adapter-entrypoint>`). No protocol translation, adapter downloads or preview upgrades happen in aims. See [ACP clients](../other-apps#acp-clients).
 
 ### `aims bridge t3`
 
@@ -257,7 +259,9 @@ Takes aims out of your tools (skill, MCP server, status line, shell line, keepal
 
 ### `aims wipe`
 
-Logs out every account aims created and deletes its folder, then cleans. Anything shared that was written in a folder moves to `~/.claude` or `~/.codex` first. Your conversations, sessions, skills, settings and main logins are never touched, and custom `--dir` folders are forgotten, not deleted.
+Logs out every account aims created and deletes its folder, then cleans. Anything shared that was written in a folder moves to `~/.claude` or `~/.codex` first. Your conversations, sessions, skills, settings and main logins are never touched, and custom `--dir` folders are forgotten, not deleted. Recovery copies are retained, so the aims home can remain after wipe even though its account configuration and profile folders have been removed.
+
+If a native logout fails or its executable is unavailable, wipe stops with that profile and its registration retained. `--force` does not bypass logout; earlier completed removals remain completed.
 
 | Flag | |
 | --- | --- |

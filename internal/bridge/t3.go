@@ -138,6 +138,9 @@ func PlanT3(cfg *config.Config, settings string) (*T3Plan, error) {
 }
 
 func t3Instance(cfg *config.Config, a tool.Adapter, name string) (T3Instance, error) {
+	if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+		return T3Instance{}, err
+	}
 	id, l := a.ID(), a.Layout()
 	p := cfg.Tools[id].Profiles[name]
 	if !config.ValidName(name) {
@@ -153,6 +156,8 @@ func t3Instance(cfg *config.Config, a tool.Adapter, name string) (T3Instance, er
 	bin := profiles.Bin(a)
 	if bin == "" {
 		bin = l.Bin
+	} else {
+		bin = fsx.Abs(bin)
 	}
 	i := T3Instance{Driver: string(id), DisplayName: "aims · " + a.Title() + " / " + name, Enabled: true,
 		Config: map[string]string{"binaryPath": bin, "homePath": home}}

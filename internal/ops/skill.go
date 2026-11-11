@@ -2,12 +2,23 @@ package ops
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/doguyilmaz/aims"
 	"github.com/doguyilmaz/aims/internal/fsx"
 )
+
+func bundledSkill(content []byte) bool {
+	if bytes.Equal(content, []byte(aims.Skill)) {
+		return true
+	}
+	hash := sha256.Sum256(content)
+	return previousSkillDigests[hex.EncodeToString(hash[:])]
+}
 
 // writeSkill preserves any previous text before replacing it. Externally
 // managed symlinks belong to their manager (for example lockstep or dotfiles).

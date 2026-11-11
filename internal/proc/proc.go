@@ -107,6 +107,14 @@ type Attached struct {
 
 // StartAttached starts bin with the terminal attached.
 func StartAttached(bin string, args, env []string, dir string) (*Attached, error) {
+	resolved, err := LookPathEnv(bin, env)
+	if err != nil {
+		return nil, err
+	}
+	bin, args, err = attachedCommand(resolved, args, env)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.Command(bin, args...)
 	cmd.Env, cmd.Dir = env, dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr

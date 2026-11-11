@@ -209,7 +209,8 @@ func copyTreeAt(from, to, sourceRoot, destRoot string) error {
 		if err != nil {
 			return err
 		}
-		return os.Symlink(rebasedLink(target, from, sourceRoot, destRoot), to)
+		info := fsx.Stat(from)
+		return makeLink(rebasedLink(target, from, sourceRoot, destRoot), to, isJunction(from) || info != nil && info.IsDir())
 	}
 	if !fi.IsDir() {
 		if !fi.Mode().IsRegular() {
@@ -217,7 +218,7 @@ func copyTreeAt(from, to, sourceRoot, destRoot string) error {
 		}
 		return copyFile(from, to, fi.Mode().Perm(), fi.ModTime())
 	}
-	if err := os.Mkdir(to, fi.Mode().Perm()); err != nil {
+	if err := createCopyDirectory(to, fi.Mode().Perm()|0o700); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(from)
@@ -229,7 +230,7 @@ func copyTreeAt(from, to, sourceRoot, destRoot string) error {
 			return err
 		}
 	}
-	return nil
+	return finishCopyPermissions(from, to, fi.Mode().Perm())
 }
 
 func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
@@ -252,7 +253,10 @@ func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
 	if err := out.Close(); err != nil {
 		return err
 	}
-	return os.Chtimes(to, mtime, mtime)
+	if err := os.Chtimes(to, mtime, mtime); err != nil {
+		return err
+	}
+	return finishCopyPermissions(from, to, perm)
 }
 
 func sameContent(a, b string) bool {
@@ -294,16 +298,42 @@ func sameContent(a, b string) bool {
 // mergeDir moves src's contents into dst without overwriting anything, then
 // removes src. Returns the names of kept duplicates.
 func mergeDir(src, dst, label string) ([]string, error) {
+	// Check the entire move before removing even a symlink. A later EXDEV
+	// must not strand earlier links in an otherwise unmigrated profile.
+	if err := preflightTreeMove(src, dst); err != nil {
+		return nil, err
+	}
 	return mergeDirAt(src, dst, label, src, dst)
 }
 
-func mergeDirAt(src, dst, label, sourceRoot, destRoot string) ([]string, error) {
-	var kept []string
+func mergeDirAt(src, dst, label, sourceRoot, destRoot string) (kept []string, err error) {
 	if si, di := fsx.Stat(src), fsx.Stat(dst); si != nil && di != nil && os.SameFile(si, di) {
 		return nil, fmt.Errorf("%s and %s are the same folder", src, dst) // removing src would empty dst
 	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
+	si, err := os.Stat(src)
+	if err != nil {
 		return nil, err
+	}
+	if fsx.Lstat(dst) == nil {
+		restore, e := copyPermissionRestorer(src, dst, si.Mode().Perm())
+		if e != nil {
+			return nil, e
+		}
+		if err := createCopyDirectory(dst, si.Mode().Perm()|0o700); err != nil {
+			return nil, err
+		}
+		// Restore read-only modes after population, including on failure.
+		defer func() { err = errors.Join(err, restore()) }()
+	}
+	if si.Mode().Perm()&0o700 != 0o700 {
+		if err := os.Chmod(src, si.Mode().Perm()|0o700); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if e := os.Chmod(src, si.Mode().Perm()); !errors.Is(e, os.ErrNotExist) {
+				err = errors.Join(err, e)
+			}
+		}()
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
@@ -321,7 +351,11 @@ func mergeDirAt(src, dst, label, sourceRoot, destRoot string) ([]string, error) 
 				return kept, err
 			}
 			rebased := rebasedLink(raw, s, sourceRoot, destRoot)
-			if dfi != nil && (dfi.Mode()&fs.ModeSymlink != 0 || isJunction(d)) && pointsTo(d, rebased) {
+			resolved := rebased
+			if !filepath.IsAbs(resolved) {
+				resolved = filepath.Join(filepath.Dir(d), resolved)
+			}
+			if dfi != nil && (dfi.Mode()&fs.ModeSymlink != 0 || isJunction(d)) && pointsTo(d, resolved) {
 				if err := os.Remove(s); err != nil {
 					return kept, err
 				}
@@ -331,7 +365,8 @@ func mergeDirAt(src, dst, label, sourceRoot, destRoot string) ([]string, error) 
 				d = unique(d + ".aims-" + label + "-" + stamp())
 				kept = append(kept, filepath.Base(d))
 			}
-			if err := os.Symlink(rebased, d); err != nil {
+			info := fsx.Stat(s)
+			if err := makeLink(rebased, d, isJunction(s) || info != nil && info.IsDir()); err != nil {
 				return kept, err
 			}
 			if err := os.Remove(s); err != nil {
@@ -366,6 +401,68 @@ func mergeDirAt(src, dst, label, sourceRoot, destRoot string) ([]string, error) 
 	// Never recursively remove the source: a concurrent writer or a failed
 	// directory read must leave its remaining entries available for recovery.
 	return kept, os.Remove(src)
+}
+
+func preflightTreeMove(src, dst string) error {
+	src, dst = fsx.Abs(src), fsx.Abs(dst)
+	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		for fsx.Lstat(target) == nil {
+			parent := filepath.Dir(target)
+			if parent == target {
+				return fmt.Errorf("cannot determine destination filesystem")
+			}
+			target = parent
+		}
+		same, err := sameFilesystem(path, target)
+		if err != nil {
+			return err
+		}
+		if !same {
+			return fmt.Errorf("cross-filesystem move refused before changing source %s", src)
+		}
+		if entry.Type()&fs.ModeSymlink != 0 || isJunction(path) {
+			raw, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			referent := raw
+			if !filepath.IsAbs(referent) {
+				referent = filepath.Join(filepath.Dir(path), referent)
+			}
+			if fsx.Within(referent, src) {
+				// A conflicting file will receive a backup suffix. Rebasing its
+				// incoming link to the unsuffixed hub path would select another
+				// file (or turn a dangling link into an unrelated live reference).
+				// Check ancestors too: a directory/file collision renames the
+				// whole source subtree rather than only its referenced leaf.
+				for originalPath := referent; originalPath != src; originalPath = filepath.Dir(originalPath) {
+					rel, _ := filepath.Rel(src, originalPath)
+					destPath := filepath.Join(dst, rel)
+					original, destination := fsx.Lstat(originalPath), fsx.Lstat(destPath)
+					if destination == nil {
+						continue
+					}
+					same := original != nil && os.SameFile(original, destination)
+					mergedDirs := original != nil && original.IsDir() && destination.IsDir() && !isJunction(originalPath) && !isJunction(destPath)
+					if !same && !mergedDirs {
+						return fmt.Errorf("internal link %s would select a conflicting destination; kept the source tree for explicit reconciliation", path)
+					}
+				}
+			}
+		}
+		if entry.IsDir() && isJunction(path) {
+			return filepath.SkipDir
+		}
+		return nil
+	})
 }
 
 var sqliteSidecars = []string{"-wal", "-shm", "-journal"}

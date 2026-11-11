@@ -50,8 +50,10 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 		id := a.ID()
 		c.EnsureHub(id)
 		t := c.Tools[id]
-		if t.Profiles[name] != nil {
-			return fmt.Errorf("%s already has a profile named %q", a.Title(), name)
+		for existing := range t.Profiles {
+			if strings.EqualFold(existing, name) {
+				return fmt.Errorf("%s already has a profile named %q (names must also differ in case-insensitive filesystems)", a.Title(), existing)
+			}
 		}
 		if o.Share != "" && !config.ValidShare(o.Share) {
 			return fmt.Errorf("share must be %s, %s or %s", config.ShareAll, config.ShareSettings, config.ShareNone)
@@ -155,7 +157,7 @@ func checkCustomDir(c *config.Config, a tool.Adapter, dir string) (string, error
 }
 
 // Removed describes a removed profile. LogoutErr is set when logging out
-// before a purge failed; the purge goes ahead.
+// before a purge failed; registration and files are kept for retry.
 type Removed struct {
 	Dir       string
 	Purged    bool
@@ -176,13 +178,19 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 		return Removed{}, err
 	}
 	out := Removed{Dir: cfg.Dir(a.ID(), name)}
-	purge = purge && !p.Existing && fsx.Lstat(out.Dir) != nil
+	purge = purge && !p.Existing
 	if purge {
+		if err := profiles.HomeConflict(cfg, a, name); err != nil {
+			return out, err
+		}
 		root := config.ProfilesRoot()
 		if p.Dir != "" || !fsx.Within(out.Dir, root) || fsx.Abs(out.Dir) == fsx.Abs(root) {
 			return out, fmt.Errorf("%s is a custom folder; remove the profile without --purge and delete it yourself", fsx.Tildify(out.Dir))
 		}
-		if p.ShareMode() != config.ShareNone {
+		if fi := fsx.Lstat(out.Dir); fi != nil && (!fi.IsDir() || fi.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0) {
+			return out, fmt.Errorf("%s is not a dedicated profile directory; remove only its label without --purge", fsx.Tildify(out.Dir))
+		}
+		if p.ShareMode() != config.ShareNone && fsx.Lstat(out.Dir) != nil {
 			out.Reports = profiles.Sync(cfg, a, name, true)
 			var stuck []string
 			for _, r := range out.Reports {
@@ -194,10 +202,18 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 				return out, fmt.Errorf("not deleting %s: %s; resolve it or add --force", fsx.Tildify(out.Dir), strings.Join(stuck, "; "))
 			}
 		}
-		// The login may live in the keychain or a keyring, outside the folder.
-		if acct := a.Account(ctx, profiles.Home(cfg, a, name)); profiles.Bin(a) != "" && (acct.LoggedIn == nil || *acct.LoggedIn) {
-			out.LogoutErr = Logout(ctx, a, name)
+		// The login may outlive even a missing folder in the keychain/keyring.
+		// --force only overrides sharing conflicts, never an incomplete logout.
+		if out.LogoutErr = Logout(ctx, a, name); out.LogoutErr != nil {
+			return out, fmt.Errorf("profile kept because logout did not complete: %w", out.LogoutErr)
 		}
+		if err := links.RemoveLinks(out.Dir); err != nil {
+			return out, err
+		}
+		if err := os.RemoveAll(out.Dir); err != nil {
+			return out, err
+		}
+		out.Purged = true
 	}
 	if _, err := config.Update(func(c *config.Config) error {
 		t := c.Tools[a.ID()]
@@ -214,15 +230,6 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 		return out, err
 	}
 	_ = config.RemoveState(a.ID(), name)
-	if purge {
-		if err := links.RemoveLinks(out.Dir); err != nil {
-			return out, err
-		}
-		if err := os.RemoveAll(out.Dir); err != nil {
-			return out, err
-		}
-		out.Purged = true
-	}
 	return out, nil
 }
 
@@ -233,6 +240,12 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
+	}
+	if err := profiles.HomeConflict(cfg, a, name); err != nil {
+		return err
+	}
+	if v, ok := profiles.EnvOverride(cfg.Tools[a.ID()].Profiles[name], a.Layout().HomeEnv); ok && v != cfg.HomeEnv(a.ID(), name) {
+		return fmt.Errorf("profile environment changes its login home; use the profile dir setting before logging out")
 	}
 	h := profiles.Home(cfg, a, name)
 	if h.Bin == "" {

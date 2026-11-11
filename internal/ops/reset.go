@@ -82,6 +82,9 @@ func Wipe(ctx context.Context, force bool) ([]Step, error) {
 			if !purge {
 				what = n + " forgotten, its folder kept"
 			}
+			if err != nil {
+				what = n + " removal did not complete"
+			}
 			steps = append(steps, Step{Tool: a.ID(), What: what, Target: fsx.Tildify(res.Dir), Err: err})
 			if err != nil {
 				return steps, fmt.Errorf("wipe stopped, nothing else was changed: %w", err)

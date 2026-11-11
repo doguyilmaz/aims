@@ -57,6 +57,8 @@ Otherwise use the CLI:
 | Repair missing links and sharing-policy changes | `aims doctor --fix` (independent data and recovery copies stay) |
 | Inspect local logins and CLI versions | `aims doctor --logins` |
 
+If a privacy change is incomplete, close affected tools and run `aims doctor --fix` before launching the profile or exporting it to another app. Purge/wipe stop when native logout cannot complete; keep the registration for retry. For duplicate labels that use the same login folder, remove only the duplicate label without `--purge`.
+
 ## Editors, SDKs and orchestrators
 
 Use `aims bridge` (or `--json`) to inspect the actual homes and shared
