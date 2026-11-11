@@ -1,7 +1,6 @@
 package bridge
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -53,7 +52,7 @@ func TestWindowsDeferredCleanupKeepsChangedInstallation(t *testing.T) {
 				t.Fatal(err)
 			}
 			err = cmd.Wait()
-			diagnostic := cmd.Stderr.(*bytes.Buffer).String()
+			diagnostic := cmd.Stderr.(*cleanupDiagnostic).String()
 			if err == nil || !strings.Contains(diagnostic, "changed") {
 				t.Fatalf("cleanup did not reject the changed installation: %v\n%s", err, diagnostic)
 			}
@@ -68,6 +67,86 @@ func TestWindowsDeferredCleanupKeepsChangedInstallation(t *testing.T) {
 			if testutil.Read(t, filepath.Join(LauncherRoot(), "my-file")) != "keep" ||
 				testutil.Read(t, self) != "test-only executable content" {
 				t.Fatal("preflight failure changed unrelated files or the original executable")
+			}
+		})
+	}
+}
+
+func TestWindowsDeferredCleanupRechecksAfterBlockedDelete(t *testing.T) {
+	for _, changed := range []string{"manifest", "launcher"} {
+		t.Run(changed, func(t *testing.T) {
+			self := launcherFixture(t)
+			m, err := InstallLaunchers(self)
+			if err != nil {
+				t.Fatal(err)
+			}
+			l := m.Tools["codex"]
+			path := filepath.Join(LauncherBin(), l.Name)
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Link(self, path); err != nil {
+				t.Fatal(err)
+			}
+			l.Kind = "hardlink"
+			m.Tools = map[tool.ID]Launcher{"codex": l}
+			if err := fsx.WriteJSON(filepath.Join(LauncherRoot(), manifestName), m, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			name, err := windows.UTF16PtrFromString(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Permit hash reads and edits but prevent deletion until the test
+			// observes the helper's first sharing violation.
+			locked, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE,
+				windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if locked != 0 {
+					_ = windows.CloseHandle(locked)
+				}
+			}()
+			parent, err := windows.CreateEvent(nil, 1, 0, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer windows.CloseHandle(parent)
+			if err := windows.SetHandleInformation(parent, windows.HANDLE_FLAG_INHERIT, windows.HANDLE_FLAG_INHERIT); err != nil {
+				t.Fatal(err)
+			}
+			cmd, err := startUninstallHelper(LauncherRoot(), m, parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+			if err := windows.SetEvent(parent); err != nil {
+				t.Fatal(err)
+			}
+			diagnostic := cmd.Stderr.(*cleanupDiagnostic)
+			select {
+			case <-diagnostic.retry:
+			case <-time.After(10 * time.Second):
+				t.Fatalf("cleanup did not reach the locked deletion: %s", diagnostic.String())
+			}
+			changedPath := path
+			if changed == "manifest" {
+				changedPath = filepath.Join(LauncherRoot(), manifestName)
+			}
+			testutil.Write(t, changedPath, "user replacement after blocked deletion")
+			if err := cmd.Wait(); err == nil || !strings.Contains(diagnostic.String(), "changed") {
+				t.Fatalf("cleanup did not stop on the changed %s: %v\n%s", changed, err, diagnostic.String())
+			}
+			if got := testutil.Read(t, changedPath); got != "user replacement after blocked deletion" {
+				t.Fatalf("cleanup changed the replacement: %q", got)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Fatal("cleanup removed the changed installation's launcher")
+			}
+			if _, err := os.Stat(filepath.Join(LauncherRoot(), manifestName)); err != nil {
+				t.Fatal("cleanup removed the changed installation's manifest")
 			}
 		})
 	}

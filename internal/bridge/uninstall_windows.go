@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -60,17 +61,18 @@ func startUninstallHelper(root string, m *Launchers, parent windows.Handle) (*ex
 		return nil, err
 	}
 	defer windows.CloseHandle(ready)
-	data := struct {
-		Root         string            `json:"root"`
-		ManifestHash string            `json:"manifestHash"`
-		Files        map[string]string `json:"files"`
-		Parent       uint64            `json:"parent"`
-		Ready        uint64            `json:"ready"`
-	}{Root: root, Files: map[string]string{}, Parent: uint64(parent), Ready: uint64(ready)}
-	data.ManifestHash, err = digest(filepath.Join(root, manifestName))
+	manifestHash, err := digest(filepath.Join(root, manifestName))
 	if err != nil {
 		return nil, err
 	}
+	// Use only language primitives and framework methods. ConvertFrom-Json
+	// autoloads a PowerShell module before readiness, including module discovery
+	// and first-use preparation outside this helper's work.
+	var script strings.Builder
+	script.WriteString("$ErrorActionPreference = 'Stop'\n$ProgressPreference = 'SilentlyContinue'\n$PSModuleAutoLoadingPreference = 'None'\n")
+	script.WriteString("[Console]::Error.WriteLine('aims cleanup: binding wait handles')\n")
+	fmt.Fprintf(&script, "$data = @{ root = %s; manifestHash = %s; parent = [long]%d; ready = [long]%d; files = @{\n",
+		powerShellString(root), powerShellString(manifestHash), parent, ready)
 	for _, l := range m.Tools {
 		path := filepath.Join(root, "bin", l.Name)
 		if _, err := os.Lstat(path); os.IsNotExist(err) {
@@ -80,23 +82,19 @@ func startUninstallHelper(root string, m *Launchers, parent windows.Handle) (*ex
 		if err != nil {
 			return nil, err
 		}
-		data.Files[l.Name] = d
+		fmt.Fprintf(&script, "%s = %s\n", powerShellString(l.Name), powerShellString(d))
 	}
-	payload, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	// Encode the fixed script and its JSON data literally, so Unicode paths,
+	script.WriteString("} }\n")
+	script.WriteString(deferredUninstallScript)
+	// Encode the fixed script and its string data literally, so Unicode paths,
 	// quotes, percent signs and shell metacharacters are never evaluated.
-	script := "$data = ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" +
-		base64.StdEncoding.EncodeToString(payload) + "')))\n" + deferredUninstallScript
-	code := utf16.Encode([]rune(script))
+	code := utf16.Encode([]rune(script.String()))
 	encoded := make([]byte, len(code)*2)
 	for i, c := range code {
 		binary.LittleEndian.PutUint16(encoded[2*i:], c)
 	}
 	cmd := exec.Command(filepath.Join(systemDir, "WindowsPowerShell", "v1.0", "powershell.exe"),
-		"-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", base64.StdEncoding.EncodeToString(encoded))
+		"-NoLogo", "-NoProfile", "-NonInteractive", "-OutputFormat", "Text", "-EncodedCommand", base64.StdEncoding.EncodeToString(encoded))
 	cmd.Env = []string{
 		"SystemRoot=" + filepath.Dir(systemDir), "PATH=" + systemDir,
 		"TEMP=" + os.TempDir(), "TMP=" + os.TempDir(),
@@ -105,8 +103,8 @@ func startUninstallHelper(root string, m *Launchers, parent windows.Handle) (*ex
 		HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW,
 		AdditionalInheritedHandles: []syscall.Handle{syscall.Handle(parent), syscall.Handle(ready)},
 	}
-	var startupError bytes.Buffer
-	cmd.Stderr = &startupError
+	diagnostic := &cleanupDiagnostic{retry: make(chan struct{})}
+	cmd.Stderr = diagnostic
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("could not start Windows launcher cleanup; installation kept: %w", err)
 	}
@@ -114,9 +112,40 @@ func startUninstallHelper(root string, m *Launchers, parent windows.Handle) (*ex
 	if err != nil || state != windows.WAIT_OBJECT_0 {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return nil, fmt.Errorf("Windows launcher cleanup did not become ready; installation kept: state %d: %v: %s", state, err, startupError.String())
+		return nil, fmt.Errorf("Windows launcher cleanup did not become ready; installation kept: state %d: %v: %s", state, err, diagnostic.String())
 	}
 	return cmd, nil
+}
+
+func powerShellString(s string) string {
+	return "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + base64.StdEncoding.EncodeToString([]byte(s)) + "')))"
+}
+
+// Keep diagnostics bounded and readable while the helper runs. The retry signal
+// also lets preservation tests change a locked file after a failed deletion.
+type cleanupDiagnostic struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+	retry  chan struct{}
+	once   sync.Once
+}
+
+func (d *cleanupDiagnostic) Write(p []byte) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.buffer.Len() < 8192 {
+		d.buffer.Write(p[:min(len(p), 8192-d.buffer.Len())])
+	}
+	if strings.Contains(d.buffer.String(), "rechecking ownership before retry") {
+		d.once.Do(func() { close(d.retry) })
+	}
+	return len(p), nil
+}
+
+func (d *cleanupDiagnostic) String() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.buffer.String()
 }
 
 const deferredUninstallScript = `
@@ -136,6 +165,19 @@ function FileHash([string]$path) {
     try { return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
     finally { $sha.Dispose(); $stream.Dispose() }
 }
+function CheckInstallation {
+    foreach ($directory in @($data.root, $bin)) {
+        $attrs = [IO.File]::GetAttributes($directory)
+        if (($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'launcher directory was redirected' }
+    }
+    if ((FileHash $manifest) -ne $data.manifestHash) { throw 'launcher manifest changed; installation kept' }
+}
+function CheckLauncher([string]$path, [string]$hash) {
+    $attrs = [IO.File]::GetAttributes($path)
+    if (($attrs -band [IO.FileAttributes]::Directory) -ne 0 -or (FileHash $path) -ne $hash) {
+        throw 'launcher was changed; installation kept'
+    }
+}
 try {
     if ($parentWait.WaitOne(0)) { throw 'aims exited before cleanup became ready' }
     $null = $readyWait.Set()
@@ -152,32 +194,32 @@ try {
     $lockStream.Write($bytes, 0, $bytes.Length)
     $lockStream.Flush()
     $bin = [IO.Path]::Combine($data.root, 'bin')
-    foreach ($directory in @($data.root, $bin)) {
-        $attrs = [IO.File]::GetAttributes($directory)
-        if (($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'launcher directory was redirected' }
-    }
     $manifest = [IO.Path]::Combine($data.root, 'manifest.json')
-    if ((FileHash $manifest) -ne $data.manifestHash) { throw 'launcher manifest changed; installation kept' }
+    CheckInstallation
     $paths = @()
-    foreach ($file in $data.files.PSObject.Properties) {
-        $path = [IO.Path]::Combine($bin, $file.Name)
+    foreach ($file in $data.files.GetEnumerator()) {
+        $path = [IO.Path]::Combine($bin, $file.Key)
         try { $attrs = [IO.File]::GetAttributes($path) }
         catch [IO.FileNotFoundException] { continue }
         catch [IO.DirectoryNotFoundException] { continue }
-        if (($attrs -band [IO.FileAttributes]::Directory) -ne 0 -or (FileHash $path) -ne $file.Value) {
-            throw 'launcher was changed; installation kept'
-        }
-        $paths += $path
+        CheckLauncher $path $file.Value
+        $paths += @{ path = $path; hash = $file.Value }
     }
-    foreach ($path in $paths) {
+    foreach ($file in $paths) {
         for ($attempt = 0; ; $attempt++) {
-            try { [IO.File]::Delete($path); break }
+            # The lock coordinates aims only. Recheck external edits before
+            # every attempt, including after a sharing-violation backoff.
+            CheckInstallation
+            CheckLauncher $file.path $file.hash
+            try { [IO.File]::Delete($file.path); break }
             catch [IO.IOException], [UnauthorizedAccessException] {
                 if ($attempt -ge 99) { throw }
+                if ($attempt -eq 0) { [Console]::Error.WriteLine('aims cleanup: rechecking ownership before retry') }
                 [Threading.Thread]::Sleep(20)
             }
         }
     }
+    CheckInstallation
     [IO.File]::Delete($manifest)
     try { [IO.Directory]::Delete($bin) } catch [IO.IOException] {}
     try { [IO.Directory]::Delete($data.root) } catch [IO.IOException] {}
