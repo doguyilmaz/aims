@@ -1,6 +1,6 @@
 module github.com/doguyilmaz/aims
 
-go 1.26.3
+go 1.26.11
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
