@@ -384,9 +384,6 @@ func TestMergeDropsProfileLinks(t *testing.T) {
 }
 
 func TestFixArchivesUnusedCopy(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file links need developer mode on Windows")
-	}
 	hub, dir := dirs(t)
 	l := layout
 	l.Shared = append(l.Shared, tool.Entry{Pattern: regexp.MustCompile(`^logs_\d+\.sqlite$`)})
@@ -409,16 +406,16 @@ func TestFixArchivesUnusedCopy(t *testing.T) {
 	if r := report(true); r.Action != Archived {
 		t.Fatalf("%+v", r)
 	}
-	if !isLink(t, filepath.Join(dir, "logs_2.sqlite")) || testutil.Read(t, filepath.Join(hub, "logs_2.sqlite")) != "shared" || fsx.Lstat(filepath.Join(dir, "logs_2.sqlite-wal")) != nil {
+	linked, shared := fsx.Stat(filepath.Join(dir, "logs_2.sqlite")), fsx.Stat(filepath.Join(hub, "logs_2.sqlite"))
+	// Windows may use a hard link without Developer Mode. Both link forms
+	// must resolve to the same shared database rather than an independent copy.
+	if linked == nil || shared == nil || !os.SameFile(linked, shared) || testutil.Read(t, filepath.Join(hub, "logs_2.sqlite")) != "shared" || fsx.Lstat(filepath.Join(dir, "logs_2.sqlite-wal")) != nil {
 		t.Fatal("copy not replaced by a link to the shared one")
 	}
 	assertArchivedDatabase(t, dir)
 }
 
 func TestFixArchivesUnsharedDisposableCopy(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows cannot establish that the old database is unused")
-	}
 	hub, dir := dirs(t)
 	l := layout
 	l.Disposable = []tool.Entry{{Pattern: regexp.MustCompile(`^logs_\d+\.sqlite$`)}}
