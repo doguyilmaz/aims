@@ -40,7 +40,11 @@ var missing = map[string]string{
 // that does not call Sandbox still cannot reach the real one. Started as
 // claude or codex (see Fakes), the test binary is that fake instead.
 func Main(m *testing.M) {
-	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
+	name := filepath.Base(os.Args[0])
+	if runtime.GOOS == "windows" {
+		name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	}
+	switch name {
 	case "claude":
 		os.Exit(fake.Claude())
 	case "codex":

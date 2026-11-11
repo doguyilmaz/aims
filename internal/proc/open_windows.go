@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -34,8 +35,20 @@ func holdingWindows(dir string, recursive bool) (bool, bool) {
 		if err != nil {
 			return err
 		}
-		h, err := windows.CreateFile(name, windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING,
-			windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+		var h windows.Handle
+		for attempt := range 10 {
+			h, err = windows.CreateFile(name, windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING,
+				windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+			if err == nil || !(errors.Is(err, windows.ERROR_SHARING_VIOLATION) || errors.Is(err, windows.ERROR_LOCK_VIOLATION) || errors.Is(err, windows.ERROR_ACCESS_DENIED)) {
+				break
+			}
+			// Indexers and scanners may briefly open a newly changed path.
+			// Retry only for a bounded interval; persistent handles or denied
+			// inspection still prevent reconciliation.
+			if attempt < 9 {
+				time.Sleep(20 * time.Millisecond)
+			}
+		}
 		if errors.Is(err, windows.ERROR_SHARING_VIOLATION) || errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
 			busy = true
 			return fs.SkipAll

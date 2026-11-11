@@ -18,7 +18,12 @@ func TestAttachedUsesPreparedPATH(t *testing.T) {
 		name += ".exe"
 	}
 	bin := filepath.Join(dir, name)
-	if err := os.Link(self, bin); err != nil {
+	// A Windows image mapping locks every hard link to the executable,
+	// including this alias while the parent test process is still running.
+	if runtime.GOOS != "windows" {
+		err = os.Link(self, bin)
+	}
+	if runtime.GOOS == "windows" || err != nil {
 		b, e := os.ReadFile(self)
 		if e != nil {
 			t.Fatal(e)

@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -13,29 +14,37 @@ import (
 )
 
 func TestCleanRecognizesPreviouslyBundledSkillWithoutReinstall(t *testing.T) {
-	testutil.Sandbox(t)
-	cfg, err := config.Update(func(c *config.Config) error {
-		c.EnsureHub("codex")
-		c.Tools["codex"].Profiles["work"] = &config.Profile{}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	old, err := os.ReadFile("testdata/skill-v0.4.6.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(cfg.EnsureHub("codex"), "skills", "aims", "SKILL.md")
-	testutil.Write(t, path, string(old))
-	if _, err := Clean(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if fsx.Lstat(path) != nil || fsx.Lstat(filepath.Join(config.Home(), "config.json")) != nil {
-		t.Fatal("clean kept an untouched previous bundled skill")
-	}
-	if bundledSkill(append(old, []byte("\nmy local edits\n")...)) {
-		t.Fatal("local edits were treated as a bundled skill")
+	for _, lineEnding := range []string{"LF", "CRLF"} {
+		t.Run(lineEnding, func(t *testing.T) {
+			testutil.Sandbox(t)
+			cfg, err := config.Update(func(c *config.Config) error {
+				c.EnsureHub("codex")
+				c.Tools["codex"].Profiles["work"] = &config.Profile{}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			old, err := os.ReadFile("testdata/skill-v0.4.6.md")
+			if err != nil {
+				t.Fatal(err)
+			}
+			old = bytes.ReplaceAll(old, []byte("\r\n"), []byte("\n"))
+			if lineEnding == "CRLF" {
+				old = bytes.ReplaceAll(old, []byte("\n"), []byte("\r\n"))
+			}
+			path := filepath.Join(cfg.EnsureHub("codex"), "skills", "aims", "SKILL.md")
+			testutil.Write(t, path, string(old))
+			if _, err := Clean(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if fsx.Lstat(path) != nil || fsx.Lstat(filepath.Join(config.Home(), "config.json")) != nil {
+				t.Fatal("clean kept an untouched previous bundled skill")
+			}
+			if bundledSkill(append(old, []byte("\nmy local edits\n")...)) {
+				t.Fatal("local edits were treated as a bundled skill")
+			}
+		})
 	}
 }
 

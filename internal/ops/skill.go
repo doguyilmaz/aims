@@ -13,7 +13,11 @@ import (
 )
 
 func bundledSkill(content []byte) bool {
-	if bytes.Equal(content, []byte(aims.Skill)) {
+	// Git and Windows editors may convert an untouched bundled skill to CRLF.
+	// Only normalize line endings; every other local edit must stay detectable.
+	content = bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
+	current := bytes.ReplaceAll([]byte(aims.Skill), []byte("\r\n"), []byte("\n"))
+	if bytes.Equal(content, current) {
 		return true
 	}
 	hash := sha256.Sum256(content)
