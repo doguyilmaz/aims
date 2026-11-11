@@ -51,4 +51,12 @@ func TestAdoptedHubCannotPromisePrivateHistoryFromSharingPeers(t *testing.T) {
 	if err := RequireIsolation(cfg, a, "a"); err != nil {
 		t.Fatalf("hub with private peers rejected: %v", err)
 	}
+	source := filepath.Join(cfg.EnsureHub(a.ID()), "history.jsonl")
+	testutil.Write(t, source, "shared prompt\n")
+	if err := os.Link(source, filepath.Join(cfg.Dir(a.ID(), "b"), "history.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireIsolation(cfg, a, "a"); err == nil {
+		t.Fatal("adopted hub started private work while a peer retained the old shared link")
+	}
 }

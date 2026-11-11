@@ -2,11 +2,21 @@
 
 package links
 
-import "os"
+import (
+	"os"
 
-func createCopyDirectory(path string, mode os.FileMode) error       { return os.Mkdir(path, mode) }
-func finishCopyPermissions(from, to string, mode os.FileMode) error { return os.Chmod(to, mode) }
+	"github.com/doguyilmaz/aims/internal/fsx"
+)
+
+func createCopyDirectory(path string, _ os.FileMode) error { return fsx.MkdirPrivate(path) }
+func finishCopyPermissions(from, to string, mode os.FileMode) error {
+	restore, err := copyPermissionRestorer(from, to, mode)
+	if err != nil {
+		return err
+	}
+	return restore()
+}
 
 func copyPermissionRestorer(from, to string, mode os.FileMode) (func() error, error) {
-	return func() error { return os.Chmod(to, mode) }, nil
+	return fsx.AccessRestorer(from, to)
 }

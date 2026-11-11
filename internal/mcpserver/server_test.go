@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +15,13 @@ import (
 	"github.com/doguyilmaz/aims/internal/tools"
 )
 
-func TestMain(m *testing.M) { testutil.Main(m) }
+func TestMain(m *testing.M) {
+	if os.Getenv("AIMS_TEST_MCP_CONTEXT_WORKER") == "1" {
+		contextWorker()
+		return
+	}
+	testutil.Main(m)
+}
 
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()

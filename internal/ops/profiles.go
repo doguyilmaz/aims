@@ -45,6 +45,9 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 	if !config.ValidName(name) {
 		return Added{}, fmt.Errorf("%q is not a valid profile name (letters, digits, '.', '_' and '-'; up to 40)", name)
 	}
+	if o.Existing && (o.Share != "" && o.Share != config.ShareAll || len(o.Exclude) > 0) {
+		return Added{}, fmt.Errorf("an adopted login lives in the shared hub; create a separate profile for private sharing instead of combining --existing with --share or --exclude")
+	}
 	var out Added
 	cfg, err := config.Update(func(c *config.Config) error {
 		id := a.ID()
@@ -89,7 +92,7 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 	if o.Existing {
 		return out, nil
 	}
-	if err := os.MkdirAll(out.Dir, 0o700); err != nil {
+	if err := fsx.MkdirAllPrivate(out.Dir); err != nil {
 		return out, err
 	}
 	if s, ok := a.(tool.Seeder); ok && o.Share != config.ShareNone {
@@ -251,7 +254,7 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 	if h.Bin == "" {
 		return fmt.Errorf("%s is not installed", a.Title())
 	}
-	out, code, err := proc.CombinedOutput(h.Bin, a.Commands().Logout, h.Env, time.Minute)
+	out, code, err := proc.CombinedOutputContext(ctx, h.Bin, a.Commands().Logout, h.Env, time.Minute)
 	if err != nil {
 		return err
 	}

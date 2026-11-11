@@ -128,7 +128,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 			code, err := proc.RunAttached(bin, o.Args, env, o.Dir)
 			return Result{Code: code}, err
 		}
-		return runOnce(o, bin, env, readInput(o))
+		return runOnce(ctx, o, bin, env, readInput(o))
 	}
 
 	preferred, err := cfg.Preferred(a.ID(), o.Profile)
@@ -203,7 +203,8 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	a := o.Tool
 	an := a.NewAnalyzer(o.Args)
 	cap, err := proc.RunCaptured(bin, o.Args, proc.CaptureOptions{
-		Env: env, Dir: o.Dir, Stdin: input, Stdout: o.Stdout, Stderr: o.Stderr, Timeout: o.Timeout,
+		Context: ctx,
+		Env:     env, Dir: o.Dir, Stdin: input, Stdout: o.Stdout, Stderr: o.Stderr, Timeout: o.Timeout,
 		OnLine: an.Line,
 	})
 	res := Result{Code: 127, Profile: name}
@@ -389,10 +390,11 @@ func failureText(f tool.Failure) string {
 	return "its usage limit"
 }
 
-func runOnce(o Options, bin string, env []string, input []byte) (Result, error) {
+func runOnce(ctx context.Context, o Options, bin string, env []string, input []byte) (Result, error) {
 	an := o.Tool.NewAnalyzer(o.Args)
 	cap, err := proc.RunCaptured(bin, o.Args, proc.CaptureOptions{
-		Env: env, Dir: o.Dir, Stdin: input, Stdout: o.Stdout, Stderr: o.Stderr, Timeout: o.Timeout, OnLine: an.Line,
+		Context: ctx,
+		Env:     env, Dir: o.Dir, Stdin: input, Stdout: o.Stdout, Stderr: o.Stderr, Timeout: o.Timeout, OnLine: an.Line,
 	})
 	if err != nil {
 		return Result{Code: 127}, err

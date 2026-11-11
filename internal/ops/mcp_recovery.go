@@ -57,10 +57,10 @@ func backupMCP(a tool.Adapter, h tool.Home) (string, error) {
 	if fsx.Real(root) != filepath.Join(fsx.Real(config.Home()), "recovery", "mcp") {
 		return "", fmt.Errorf("MCP recovery directory is externally managed; kept settings untouched")
 	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	if err := fsx.MkdirAllPrivate(root); err != nil {
 		return "", err
 	}
-	out, err := os.CreateTemp(root, ".settings-*")
+	out, err := fsx.CreatePrivateTemp(root, ".settings-*")
 	if err != nil {
 		return "", err
 	}

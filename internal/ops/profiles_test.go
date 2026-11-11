@@ -110,6 +110,19 @@ func TestAddProfileRejectsCaseVariantName(t *testing.T) {
 	}
 }
 
+func TestAddExistingRefusesPrivacyOptionsInsteadOfDroppingThem(t *testing.T) {
+	for _, o := range []AddOptions{{Existing: true, Share: config.ShareSettings}, {Existing: true, Share: config.ShareNone}, {Existing: true, Exclude: []string{"sessions"}}} {
+		testutil.Sandbox(t)
+		if _, err := AddProfile(tools.Get("codex"), "personal", o); err == nil {
+			t.Fatal("adopted profile silently discarded an explicit privacy policy")
+		}
+		cfg, err := config.Load()
+		if err != nil || cfg.Tools["codex"].Profiles["personal"] != nil {
+			t.Fatal("rejected adoption changed profile registration")
+		}
+	}
+}
+
 func TestWipeRetainsConfigurationWhenLogoutUnavailable(t *testing.T) {
 	testutil.Sandbox(t)
 	if _, err := config.Update(func(c *config.Config) error {

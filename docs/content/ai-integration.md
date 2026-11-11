@@ -34,6 +34,8 @@ A session started with `aims claude` or `aims codex` (no `@profile`) moves on by
 
 `aims_run` is read-only by default: Claude Code runs in plan mode and Codex in its read-only sandbox, whatever your settings allow. With `write: true` the run gets your normal settings, which for a headless Claude Code run still excludes anything that would ask for approval. Unless you approved the tool for good, your client shows the call, `write` included, before it runs. A run started this way cannot start another `aims_run`, and when the MCP client disconnects, aims stops any run it started.
 
+Individual MCP request cancellation is also passed to headless workers and live probes. A canceled live-status check stops before probing the next profile and does not replace cached account state with a canceled result. The server remains available for other requests.
+
 Before setup, refresh or removal changes an MCP registration, aims retains a private recovery copy of its settings under `~/.aims/recovery/mcp` (or `$AIMS_HOME/recovery/mcp`). Unchanged contents reuse the same copy. A registration failure names the recovery path; compare it with the current settings before restoring anything, because another tool may have edited them meanwhile. These settings may include inline MCP secrets, so keep recovery files private. Login credential files and keychain entries are not backed up or moved by this mechanism.
 
 ## Skill

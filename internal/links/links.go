@@ -242,7 +242,7 @@ func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
-	out, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_EXCL, perm)
+	out, err := fsx.CreatePrivateFile(to)
 	if err != nil {
 		return err
 	}
@@ -325,12 +325,13 @@ func mergeDirAt(src, dst, label, sourceRoot, destRoot string) (kept []string, er
 		// Restore read-only modes after population, including on failure.
 		defer func() { err = errors.Join(err, restore()) }()
 	}
-	if si.Mode().Perm()&0o700 != 0o700 {
-		if err := os.Chmod(src, si.Mode().Perm()|0o700); err != nil {
+	sourceMode := si.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+	if sourceMode.Perm()&0o700 != 0o700 {
+		if err := os.Chmod(src, sourceMode|0o700); err != nil {
 			return nil, err
 		}
 		defer func() {
-			if e := os.Chmod(src, si.Mode().Perm()); !errors.Is(e, os.ErrNotExist) {
+			if e := os.Chmod(src, sourceMode); !errors.Is(e, os.ErrNotExist) {
 				err = errors.Join(err, e)
 			}
 		}()
@@ -427,6 +428,11 @@ func preflightTreeMove(src, dst string) error {
 		}
 		if !same {
 			return fmt.Errorf("cross-filesystem move refused before changing source %s", src)
+		}
+		if entry.IsDir() && !isJunction(path) && fsx.Lstat(filepath.Join(dst, rel)) == nil {
+			if _, err := copyPermissionRestorer(path, filepath.Join(dst, rel), 0); err != nil {
+				return err
+			}
 		}
 		if entry.Type()&fs.ModeSymlink != 0 || isJunction(path) {
 			raw, err := os.Readlink(path)

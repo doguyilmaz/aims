@@ -72,6 +72,11 @@ func RequireIsolation(cfg *config.Config, a tool.Adapter, name string) error {
 					return fmt.Errorf("%s/%s lives in the shared hub and cannot keep %s private from %q; use a separate private profile or stop sharing that entry in the other profile", a.ID(), name, entry, other)
 				}
 			}
+			for _, r := range CheckSharing(cfg, a, other) {
+				if r.Action == links.Conflict && (private(r.Name) && Private(q, l)(r.Name) || filepath.IsAbs(r.Name)) {
+					return fmt.Errorf("%s/%s hub privacy change is incomplete in peer %q: %s; close affected tools and run aims doctor --fix", a.ID(), name, other, r.Detail)
+				}
+			}
 		}
 		return nil
 	}

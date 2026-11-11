@@ -52,7 +52,7 @@ func writeSkill(path string, content []byte) error {
 	if err == nil {
 		// Keep recovery text outside the installed skill directory so clean
 		// can remove that directory without deleting the user's previous text.
-		backup, err := os.CreateTemp(filepath.Dir(filepath.Dir(path)), ".aims-skill-*.bak")
+		backup, err := fsx.CreatePrivateTemp(filepath.Dir(filepath.Dir(path)), ".aims-skill-*.bak")
 		if err != nil {
 			return err
 		}

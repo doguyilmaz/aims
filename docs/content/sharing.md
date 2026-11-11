@@ -83,6 +83,8 @@ Edit `share` in the config file. On the next launch, entries the profile should 
 
 If detachment is incomplete, including when another aims process holds the repair lock, aims refuses to start that profile until its privacy policy is effective. Bridge launches and T3 exports check this too; they never repair files. Close affected tools, then run `aims doctor --fix`. An adopted login lives in the hub itself: it cannot keep an entry private from another profile that still shares that hub entry. Use a separate private profile or stop sharing the entry in its peers.
 
+Adding an adopted login with `--existing` rejects restrictive sharing/exclusion options instead of silently dropping them. For an already adopted profile with a manually tightened policy, every peer must stop sharing the affected entries and complete detachment before new private work can start in the hub.
+
 Automatic moves require shared history on both profiles. A profile using `settings` or `none`, excluding a history entry, or still holding a private data database or writer lock directory cannot move a conversation to another account or receive one from it. aims checks existing links before choosing another profile and again before stopping the current session for a move. Explicit database or memory home overrides must also resolve to the same storage for both profiles; shared transcripts alone cannot carry private goals or memory into another store. `aims doctor` reports such overrides without changing them.
 
 ## Runtime cost and disk use

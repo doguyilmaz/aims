@@ -270,7 +270,7 @@ func (p *T3Plan) Merged() ([]byte, error) {
 // WriteNew writes a private export file and refuses every existing path,
 // including dangling symlinks. The live settings file is never a destination.
 func WriteNew(path string, data []byte) error {
-	f, err := os.OpenFile(fsx.Abs(path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := fsx.CreatePrivateFile(fsx.Abs(path))
 	if err != nil {
 		return err
 	}

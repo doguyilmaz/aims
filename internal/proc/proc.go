@@ -201,6 +201,8 @@ func (c *Captured) Flush() { c.flush() }
 
 // CaptureOptions configures RunCaptured.
 type CaptureOptions struct {
+	// Context binds this worker to its caller, independently of its timeout.
+	Context context.Context
 	Env     []string
 	Dir     string
 	Stdin   []byte
@@ -211,10 +213,36 @@ type CaptureOptions struct {
 	OnLine func(stderr bool, line string)
 }
 
+type serialWriter struct {
+	mu *sync.Mutex
+	w  io.Writer
+}
+
+func (s serialWriter) Write(b []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.w == nil {
+		return len(b), nil
+	}
+	return s.w.Write(b)
+}
+
 // RunCaptured runs a headless command. stderr streams live; stdout is held
 // back briefly so a failed attempt can be retried on another profile without
 // mixing two runs' output.
 func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error) {
+	ctx := o.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return &Captured{Code: 127, flush: func() {}}, err
+	}
+	// The caller may use a buffer, including the same buffer for both streams.
+	// Timer/cancellation messages and reader goroutines share this lock too.
+	var streamMu sync.Mutex
+	o.Stdout = serialWriter{&streamMu, o.Stdout}
+	o.Stderr = serialWriter{&streamMu, o.Stderr}
 	cmd := exec.Command(bin, args...)
 	cmd.Env, cmd.Dir = o.Env, o.Dir
 	if len(o.Stdin) > 0 {
@@ -259,18 +287,27 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 		}
 		held = nil
 	}
-	commitTimer := time.AfterFunc(CommitAfter, commit)
+	commitDone := make(chan struct{})
+	commitTimer := time.AfterFunc(CommitAfter, func() { defer close(commitDone); commit() })
 	defer commitTimer.Stop()
-	if o.Timeout > 0 {
+	if o.Timeout > 0 || ctx.Done() != nil {
 		exited := make(chan struct{})
 		defer close(exited)
+		var timeout <-chan time.Time
+		if o.Timeout > 0 {
+			timer := time.NewTimer(o.Timeout)
+			defer timer.Stop()
+			timeout = timer.C
+		}
 		go func() {
 			select {
 			case <-exited:
 				return
-			case <-time.After(o.Timeout):
+			case <-timeout:
+				io.WriteString(o.Stderr, "aims: stopped after "+o.Timeout.String()+"\n")
+			case <-ctx.Done():
+				io.WriteString(o.Stderr, "aims: stopped: "+ctx.Err().Error()+"\n")
 			}
-			io.WriteString(o.Stderr, "aims: stopped after "+o.Timeout.String()+"\n")
 			_ = terminate(cmd.Process)
 			select {
 			case <-exited:
@@ -316,10 +353,15 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 		errR.Close()
 		<-readers
 	}
+	// AfterFunc.Stop does not join an already running callback. Finish any
+	// commit before reporting whether stdout was exposed or returning buffers.
+	if !commitTimer.Stop() {
+		<-commitDone
+	}
 	mu.Lock()
 	wasCommitted := committed
 	mu.Unlock()
-	return &Captured{Code: code, Committed: wasCommitted, flush: commit}, nil
+	return &Captured{Code: code, Committed: wasCommitted, flush: commit}, ctx.Err()
 }
 
 // pipeGrace is how long output may keep arriving after the tool exits.
@@ -370,7 +412,12 @@ func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
 // Output runs a short helper command (`claude auth status`, `security`,
 // `--version`) and returns its stdout. It never hangs past timeout.
 func Output(bin string, args, env []string, timeout time.Duration) (string, int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return OutputContext(context.Background(), bin, args, env, timeout)
+}
+
+// OutputContext also stops the helper when the request is cancelled.
+func OutputContext(ctx context.Context, bin string, args, env []string, timeout time.Duration) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = env
@@ -393,7 +440,11 @@ func Output(bin string, args, env []string, timeout time.Duration) (string, int,
 
 // CombinedOutput is Output with stderr included.
 func CombinedOutput(bin string, args, env []string, timeout time.Duration) (string, int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return CombinedOutputContext(context.Background(), bin, args, env, timeout)
+}
+
+func CombinedOutputContext(ctx context.Context, bin string, args, env []string, timeout time.Duration) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = env

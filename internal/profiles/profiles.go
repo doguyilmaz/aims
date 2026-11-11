@@ -671,7 +671,11 @@ func RecordAccount(id tool.ID, name, email, plan string) error {
 
 // Live asks the provider about a profile and stores what it learned.
 func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	return record(cfg, a, name, a.Probe(ctx, Home(cfg, a, name)))
+	p := a.Probe(ctx, Home(cfg, a, name))
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
+	}
+	return record(cfg, a, name, p)
 }
 
 // AskFree asks the provider about the named accounts at once and records

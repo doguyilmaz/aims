@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +17,30 @@ import (
 )
 
 func TestMain(m *testing.M) { testutil.Main(m) }
+
+type canceledProbe struct {
+	tool.Adapter
+	cancel context.CancelFunc
+}
+
+func (a canceledProbe) Probe(context.Context, tool.Home) tool.Probe {
+	a.cancel()
+	return tool.Probe{Status: tool.ProbeOK, Email: "dummy@example.test"}
+}
+
+func TestCanceledLiveCheckDoesNotClearExistingLoginMark(t *testing.T) {
+	cfg, a := setup(t)
+	if err := MarkNeedsLogin(a.ID(), "a", "fixture", "expired"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	p := Live(ctx, cfg, canceledProbe{a, cancel}, "a")
+	ps := config.LoadState().Get(a.ID(), "a")
+	if p.Status != tool.ProbeError || !ps.NeedsLogin || ps.Account != nil {
+		t.Fatal("canceled result changed account state")
+	}
+}
 
 func TestApartHonorsHistoryExclusions(t *testing.T) {
 	cfg, _ := setup(t)
