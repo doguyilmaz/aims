@@ -43,6 +43,9 @@ jobs:
           # Host runner daemons can deny /proc inspection even for the same
           # user. Keep the fail-closed reconciliation guard and test it in a
           # dedicated PID namespace, as in the offline local validation.
+          # Idle-process assertions also need other test packages/scripts not
+          # to spawn or replace processes during the /proc snapshot. Explicit
+          # concurrency tests still exercise their own workers and goroutines.
           toolchain_version=$(go env GOVERSION)
           test_image="golang:${toolchain_version#go}-bookworm"
           docker pull "$test_image"
@@ -60,7 +63,7 @@ jobs:
             GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOTELEMETRY=off CGO_ENABLED=1 GOMAXPROCS=2 \
             AIMS_TEST_SECOND_FS=/scratch/otherfs GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
             GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=/src \
-            timeout 900 go test -race -count=1 ./...
+            timeout 900 go test -race -count=1 -p 1 -parallel 1 ./...
 
   release-config:
     runs-on: ubuntu-latest
