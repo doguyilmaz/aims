@@ -3,6 +3,8 @@ import SwiftUI
 
 struct UsageSettings: View {
     @Bindable var model: UsageModel
+    @State private var configHome = ""
+    @State private var additionalPaths = ""
 
     var body: some View {
         Form {
@@ -22,9 +24,40 @@ struct UsageSettings: View {
                     Button("Use bundled") { model.executablePath = "" }
                 }
                 Text(
-                    "Requires aims usage --json support. Provider logins remain in their existing homes; this app stores display preferences only."
+                    "Requires aims usage --json support. Provider logins remain in their existing homes; this app stores preferences and selected paths only."
                 )
                 .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("aims data folder") {
+                TextField("Default: ~/.aims", text: $configHome).textFieldStyle(.roundedBorder)
+                HStack {
+                    Button("Choose folder…") { chooseDataFolder() }
+                    Button("Use default") { configHome = "" }
+                }
+                Text(
+                    "For a custom AIMS_HOME, select the same existing folder you use in Terminal. Finder does not load shell exports. No files are moved."
+                ).font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Additional CLI folders") {
+                TextEditor(text: $additionalPaths).font(.system(.caption, design: .monospaced)).frame(height: 68)
+                Text(
+                    "One absolute folder per line; ~/ is supported. These precede the standard Go, Cargo, npm, Homebrew and provider paths. No shell is started."
+                ).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Button("Apply paths") {
+                        Task {
+                            if await model.applyPaths(configHome: configHome, additionalPaths: additionalPaths) {
+                                configHome = model.configHome
+                                additionalPaths = model.additionalPaths
+                            }
+                        }
+                    }
+                    .disabled(
+                        model.isRefreshing
+                            || (configHome == model.configHome && additionalPaths == model.additionalPaths))
+                }
+                if let error = model.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }
             Section {
                 Text(
@@ -33,6 +66,10 @@ struct UsageSettings: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).padding(12)
+            .onAppear {
+                configHome = model.configHome
+                additionalPaths = model.additionalPaths
+            }
     }
 
     private func chooseExecutable() {
@@ -42,5 +79,14 @@ struct UsageSettings: View {
         picker.allowsMultipleSelection = false
         picker.prompt = "Choose aims"
         if picker.runModal() == .OK, let url = picker.url { model.executablePath = url.path }
+    }
+
+    private func chooseDataFolder() {
+        let picker = NSOpenPanel()
+        picker.canChooseFiles = false
+        picker.canChooseDirectories = true
+        picker.allowsMultipleSelection = false
+        picker.prompt = "Choose aims data"
+        if picker.runModal() == .OK, let url = picker.url { configHome = url.path }
     }
 }

@@ -671,13 +671,59 @@ func RecordAccount(id tool.ID, name, email, plan string) error {
 	})
 }
 
-// Live asks the provider about a profile and stores what it learned.
-func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	p := a.Probe(ctx, Home(cfg, a, name))
+// RecordLogin invalidates derived quotas and old limit marks after a successful
+// user-controlled authentication. It never changes native credentials/history.
+func RecordLogin(id tool.ID, name string, acct tool.Account) error {
+	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
+		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
+		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
+		ps.Account = &config.Account{Email: acct.Email, Plan: acct.Plan, Tenant: acct.Tenant}
+	})
+}
+
+func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	h := Home(cfg, a, name)
+	p := a.Probe(ctx, h)
 	if err := ctx.Err(); err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
 	}
+	if a.ID() == "claude" && p.Email == "" && (p.Status == tool.ProbeOK || p.Status == tool.ProbeLimit) {
+		acct := a.Account(ctx, h)
+		p.Email = acct.Email
+		if p.Plan == "" {
+			p.Plan = acct.Plan
+		}
+		if acct.Stale {
+			p.UsageReported = true
+			p.UsageError = "account identity unavailable"
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
+	}
+	return p
+}
+
+// Live asks the provider and reconciles its usage, limit and login marks.
+func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	p := readProbe(ctx, cfg, a, name)
+	if ctx.Err() != nil {
+		return p
+	}
 	return record(cfg, a, name, p)
+}
+
+// ReadUsage updates observation caches without changing manual routing/login
+// marks. A passive usage display must not clear a profile's existing busy mark.
+func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	p := readProbe(ctx, cfg, a, name)
+	if ctx.Err() != nil {
+		return p
+	}
+	recordObservation(a.ID(), name, p)
+	_ = RecordAccount(a.ID(), name, p.Email, p.Plan)
+	return p
 }
 
 // AskFree asks the provider about the named accounts at once and records
@@ -715,15 +761,29 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 	} else {
 		p = a.Probe(ctx, h)
 	}
+	updated := a.Account(ctx, h)
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}, updated, true
+	}
+	if a.ID() == "claude" && p.Email == "" {
+		p.Email = updated.Email
+		if p.Plan == "" {
+			p.Plan = updated.Plan
+		}
+		if updated.Stale {
+			p.UsageReported = true
+			p.UsageError = "account identity unavailable"
+		}
+	}
 	record(cfg, a, name, p)
-	return p, a.Account(ctx, h), true
+	return p, updated, true
 }
 
-// record keeps what a probe found: usage, a limit, a dead login.
-func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
-	id := a.ID()
+func recordObservation(id tool.ID, name string, p tool.Probe) {
 	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
 	_ = config.UpdateState(id, name, func(ps *config.ProfileState) {
+		identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
+		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
 		ps.UsageAttemptedAt = config.Now().UTC()
 		ps.UsageError = p.UsageError
 		if p.Status == tool.ProbeError || p.Status == tool.ProbeLogin {
@@ -731,10 +791,16 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 		}
 		if hasUsage {
 			ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
-		} else if ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email) {
+		} else if identityChanged || becameAPIKey {
 			ps.Usage = nil // a previous login's quotas must not label the new account
 		}
 	})
+}
+
+// record keeps what a probe found: usage, a limit, a dead login.
+func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
+	id := a.ID()
+	recordObservation(id, name, p)
 	switch p.Status {
 	case tool.ProbeOK:
 		_ = Clear(id, name)

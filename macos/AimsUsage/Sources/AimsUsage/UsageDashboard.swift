@@ -125,6 +125,13 @@ struct UsageDashboard: View {
             }
             Text("Claude updates from its last reported status line.")
                 .foregroundStyle(.tertiary)
+            Button {
+                openSettings()
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Label(model.configHome.isEmpty ? "Data: ~/.aims" : "Data: \(model.configHome)", systemImage: "folder")
+                    .lineLimit(1).truncationMode(.middle)
+            }.buttonStyle(.borderless).help("Choose the same AIMS_HOME folder used in Terminal")
         }
         .font(.system(size: 10)).foregroundStyle(.secondary)
         .padding(.horizontal, 18).padding(.vertical, 12)

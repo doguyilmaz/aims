@@ -33,8 +33,10 @@ struct ProviderCard: View {
             if provider.rows.isEmpty {
                 Text(
                     provider.installed
-                        ? "No reading yet. Refresh to check this provider."
-                        : "Install and sign in with the provider’s CLI to see usage."
+                        ? (provider.id == "claude" || provider.id == "codex"
+                            ? "No configured accounts. Choose your aims data folder in Settings, or run aims init."
+                            : "No reading yet. Refresh to check this provider.")
+                        : "CLI not found. Install it or add its folder in Settings."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

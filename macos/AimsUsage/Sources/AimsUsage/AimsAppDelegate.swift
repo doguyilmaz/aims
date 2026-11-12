@@ -9,7 +9,11 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         refreshTask = Task { await model.run() }
-        if model.fixtureURL != nil || UserDefaults.standard.bool(forKey: "edgePanelVisible") { togglePanel() }
+        let firstLaunch = UserDefaults.standard.object(forKey: "hasLaunched") == nil
+        UserDefaults.standard.set(true, forKey: "hasLaunched")
+        if firstLaunch || model.fixtureURL != nil || UserDefaults.standard.bool(forKey: "edgePanelVisible") {
+            togglePanel()
+        }
     }
 
     func togglePanel() { panel.toggle(model: model, toggle: togglePanel) }

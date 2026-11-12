@@ -197,7 +197,7 @@ func interpret(acct, limits *reply) tool.Probe {
 			continue
 		}
 		win := tool.Window{Label: label(w.w.WindowDurationMins, w.fallback), Percent: w.w.UsedPercent}
-		if w.w.ResetsAt != nil {
+		if w.w.ResetsAt != nil && *w.w.ResetsAt > 0 {
 			win.ResetsAt = time.Unix(*w.w.ResetsAt, 0).UTC()
 		}
 		p.Windows = append(p.Windows, win)

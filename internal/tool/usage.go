@@ -25,4 +25,5 @@ type ResetCredit struct {
 	Title     string    `json:"title,omitempty"`
 	GrantedAt time.Time `json:"grantedAt,omitzero"`
 	ExpiresAt time.Time `json:"expiresAt,omitzero"`
+	NoExpiry  bool      `json:"noExpiry,omitempty"`
 }

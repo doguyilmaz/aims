@@ -8,8 +8,36 @@ final class UsageModel {
     var error: String?
     var isRefreshing = false
     var panelVisible = false
+    private(set) var configHome: String
+    private(set) var additionalPaths = UserDefaults.standard.string(forKey: "additionalPaths") ?? ""
     private var command: UsageCommand?
     private var shuttingDown = false
+
+    init() {
+        let stored = UserDefaults.standard.string(forKey: "configHome")
+        configHome = stored ?? ProcessInfo.processInfo.environment["AIMS_HOME"] ?? ""
+        if stored == nil && !configHome.isEmpty { UserDefaults.standard.set(configHome, forKey: "configHome") }
+    }
+
+    func applyPaths(configHome: String, additionalPaths: String) async -> Bool {
+        guard !isRefreshing, !shuttingDown else { return false }
+        do {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            _ = try UsageEnvironment.make(
+                base: [:], homeDirectory: home, aimsHome: configHome, additionalPaths: additionalPaths)
+            self.configHome = try UsageEnvironment.homePath(configHome, homeDirectory: home)
+            self.additionalPaths = additionalPaths
+            UserDefaults.standard.set(self.configHome, forKey: "configHome")
+            UserDefaults.standard.set(additionalPaths, forKey: "additionalPaths")
+            snapshot = nil
+            error = nil
+            await refresh(live: false)
+            return error == nil
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
 
     func shutdown() async {
         shuttingDown = true
@@ -67,7 +95,8 @@ final class UsageModel {
                 let command = UsageCommand()
                 self.command = command
                 data = try await command.run(
-                    executable: executable(), arguments: ["usage", "--json"] + (live ? ["--refresh"] : []))
+                    executable: executable(), arguments: ["usage", "--json"] + (live ? ["--refresh"] : []),
+                    configHome: configHome, additionalPaths: additionalPaths)
             }
             try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
@@ -95,7 +124,9 @@ final class UsageModel {
         do {
             let command = UsageCommand()
             self.command = command
-            let data = try await command.run(executable: executable(), arguments: arguments)
+            let data = try await command.run(
+                executable: executable(), arguments: arguments, configHome: configHome, additionalPaths: additionalPaths
+            )
             snapshot = try UsageSnapshot.decode(data)
             error = nil
             return true

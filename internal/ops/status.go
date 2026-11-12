@@ -34,6 +34,7 @@ type ProfileStatus struct {
 	UsageAt      time.Time          `json:"usageAt,omitzero"`
 	BankedResets *tool.ResetBalance `json:"bankedResets,omitempty"`
 	UsageGroups  []tool.QuotaGroup  `json:"usageGroups,omitempty"`
+	UsageError   string             `json:"usageError,omitempty"`
 	Until        time.Time          `json:"until,omitzero"`
 	// Reason ("limit", "busy"), MarkedBy and Detail explain a mark.
 	Reason   string    `json:"reason,omitempty"`
@@ -140,6 +141,7 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			row.BankedResets = ps.Usage.Resets
 			row.UsageGroups = ps.Usage.Groups
 		}
+		row.UsageError = ps.UsageError
 		if ps.Until.After(now) {
 			row.Until, row.Reason = ps.Until, ps.Reason
 		}
@@ -198,10 +200,14 @@ func RecordLogin(ctx context.Context, a tool.Adapter, name string) (LoginResult,
 	if err != nil {
 		return LoginResult{}, err
 	}
-	_ = profiles.Clear(a.ID(), name)
 	acct := a.Account(ctx, profiles.Home(cfg, a, name))
+	if err := ctx.Err(); err != nil {
+		return LoginResult{}, err
+	}
 	res := LoginResult{Email: acct.Email, Plan: acct.Plan}
-	_ = profiles.RecordAccount(a.ID(), name, acct.Email, acct.Plan)
+	if err := profiles.RecordLogin(a.ID(), name, acct); err != nil {
+		return res, err
+	}
 	if acct.Email == "" {
 		return res, nil
 	}

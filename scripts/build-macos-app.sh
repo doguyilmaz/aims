@@ -14,6 +14,17 @@ if [[ ! "$cli_version" =~ ^${core}(-[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?(\+[A-Za-z0
   echo "AIMS_CLI_VERSION must be SemVer" >&2
   exit 2
 fi
+bare_cli=${cli_version%%+*}
+if [[ "$bare_cli" == *-* ]]; then
+  prerelease=${bare_cli#*-}
+  IFS='.' read -r -a identifiers <<< "$prerelease"
+  for identifier in "${identifiers[@]}"; do
+    if [[ "$identifier" =~ ^0[0-9]+$ ]]; then
+      echo "Numeric SemVer prerelease identifiers cannot have leading zeroes" >&2
+      exit 2
+    fi
+  done
+fi
 if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
   echo "AIMS_USAGE_BUILD_NUMBER must be a positive integer" >&2
   exit 2

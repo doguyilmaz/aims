@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 	"time"
@@ -24,12 +25,12 @@ func additionalUsage(raw []byte, p *tool.Probe) {
 		Resets *struct {
 			Available *int64 `json:"availableCount"`
 			Credits   []struct {
-				ID        string `json:"id"`
-				Kind      string `json:"resetType"`
-				Status    string `json:"status"`
-				Title     string `json:"title"`
-				GrantedAt int64  `json:"grantedAt"`
-				ExpiresAt *int64 `json:"expiresAt"`
+				ID        string          `json:"id"`
+				Kind      string          `json:"resetType"`
+				Status    string          `json:"status"`
+				Title     string          `json:"title"`
+				GrantedAt int64           `json:"grantedAt"`
+				ExpiresAt json.RawMessage `json:"expiresAt"`
 			} `json:"credits"`
 		} `json:"rateLimitResetCredits"`
 	}
@@ -78,8 +79,13 @@ func additionalUsage(raw []byte, p *tool.Probe) {
 		if c.GrantedAt > 0 {
 			credit.GrantedAt = time.Unix(c.GrantedAt, 0).UTC()
 		}
-		if c.ExpiresAt != nil && *c.ExpiresAt > 0 {
-			credit.ExpiresAt = time.Unix(*c.ExpiresAt, 0).UTC()
+		if bytes.Equal(bytes.TrimSpace(c.ExpiresAt), []byte("null")) {
+			credit.NoExpiry = true
+		} else {
+			var epoch int64
+			if json.Unmarshal(c.ExpiresAt, &epoch) == nil && epoch > 0 {
+				credit.ExpiresAt = time.Unix(epoch, 0).UTC()
+			}
 		}
 		b.Credits = append(b.Credits, credit)
 	}

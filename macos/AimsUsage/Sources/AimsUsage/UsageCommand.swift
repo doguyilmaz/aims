@@ -22,19 +22,25 @@ final class UsageCommand {
         }
     }
 
-    func run(executable: URL, arguments: [String]) async throws -> Data {
+    func run(executable: URL, arguments: [String], configHome: String = "", additionalPaths: String = "") async throws
+        -> Data
+    {
         try Task.checkCancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 self.continuation = continuation
-                do { try start(executable: executable, arguments: arguments) } catch { finish(.failure(error)) }
+                do {
+                    try start(
+                        executable: executable, arguments: arguments, configHome: configHome,
+                        additionalPaths: additionalPaths)
+                } catch { finish(.failure(error)) }
             }
         } onCancel: {
             Task { @MainActor in self.stop(because: CancellationError()) }
         }
     }
 
-    private func start(executable: URL, arguments: [String]) throws {
+    private func start(executable: URL, arguments: [String], configHome: String, additionalPaths: String) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(
@@ -51,16 +57,10 @@ final class UsageCommand {
         child.executableURL = executable
         child.arguments = arguments
         child.currentDirectoryURL = directory
-        var environment = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let paths = [
-            home + "/.local/bin", home + "/.grok/bin", home + "/.opencode/bin", home + "/.kiro/bin",
-            "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
-        ]
-        environment["PATH"] = paths.joined(separator: ":") + ":" + (environment["PATH"] ?? "")
-        environment["AIMS_NO_UPDATE_CHECK"] = "1"
-        environment["NO_COLOR"] = "1"
-        child.environment = environment
+        child.environment = try UsageEnvironment.make(
+            base: ProcessInfo.processInfo.environment, homeDirectory: home, aimsHome: configHome,
+            additionalPaths: additionalPaths)
         child.standardOutput = handle
         child.standardError = FileHandle.nullDevice
         child.standardInput = FileHandle.nullDevice

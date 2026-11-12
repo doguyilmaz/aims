@@ -6,6 +6,7 @@ public enum UsageError: LocalizedError, Sendable {
     case commandFailed(Int32)
     case outputTooLarge
     case timedOut
+    case invalidDataFolder
 
     public var errorDescription: String? {
         switch self {
@@ -14,6 +15,7 @@ public enum UsageError: LocalizedError, Sendable {
         case .commandFailed(let code): "aims exited with status \(code). Check aims usage --json in Terminal."
         case .outputTooLarge: "The usage response exceeded 4 MB."
         case .timedOut: "The usage refresh timed out. Your last reading is retained."
+        case .invalidDataFolder: "Choose an absolute folder path, or use ~ for your home directory."
         }
     }
 }

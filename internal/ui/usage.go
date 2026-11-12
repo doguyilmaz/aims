@@ -47,16 +47,29 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 			detail := "banked resets: not reported"
 			if p.BankedResets != nil {
 				detail = fmt.Sprintf("banked resets: %d", p.BankedResets.Available)
+				details := 0
 				for _, credit := range p.BankedResets.Credits {
+					if credit.Status == "available" {
+						details++
+					}
 					if credit.Status == "available" && !credit.ExpiresAt.IsZero() {
 						detail += " · expires " + credit.ExpiresAt.Local().Format("Jan 2 15:04 MST")
 					}
+					if credit.Status == "available" && credit.NoExpiry {
+						detail += " · does not expire"
+					}
+				}
+				if int64(details) < p.BankedResets.Available {
+					detail += fmt.Sprintf(" · reset details %d/%d; other expiries not reported", details, p.BankedResets.Available)
 				}
 			}
 			if p.UsageAt.IsZero() {
 				detail += " · not checked"
 			} else if time.Since(p.UsageAt) > staleAfter {
 				detail += " · reported " + profiles.Duration(time.Since(p.UsageAt)) + " ago"
+			}
+			if p.UsageError != "" {
+				detail += " · last check: " + p.UsageError + "; previous reading retained"
 			}
 			sec.rows = append(sec.rows, usageRow{name: p.Name, plan: ShortPlan(p.Plan), detail: detail, windows: p.Usage, slots: usageSlots})
 			for _, g := range p.UsageGroups {

@@ -48,6 +48,9 @@ struct UsageAccountView: View {
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(ResetPresentation.period(window.label)).foregroundStyle(.secondary)
+                if window.limited == true && !expired {
+                    Text("LIMIT").font(.system(size: 8, weight: .semibold)).foregroundStyle(.orange)
+                }
                 Spacer()
                 Text(
                     percent.map { String(format: "%.0f%% used", $0) }
@@ -97,13 +100,20 @@ struct UsageAccountView: View {
                                 ? "Expired · refresh" : "Expires \(ResetPresentation.countdown(to: expiry, now: now))"
                         )
                         .help(expiry.formatted(date: .complete, time: .complete))
+                    } else if credit.noExpiry == true {
+                        Text("Does not expire")
                     } else {
                         Text("No expiry reported")
                     }
                 }.font(.system(size: 9)).foregroundStyle(.secondary)
             }
-            if balance.credits == nil && balance.available > 0 {
-                Text("Expiry details not reported").font(.system(size: 9)).foregroundStyle(.tertiary)
+            if balance.detailsAreIncomplete {
+                Text(
+                    balance.credits == nil
+                        ? "Expiry details not reported"
+                        : "Details reported for \(balance.detailCount) of \(balance.available) resets; remaining expiries unknown"
+                )
+                .font(.system(size: 9)).foregroundStyle(.tertiary)
             }
         } else {
             Text("Banked resets · not reported").font(.system(size: 9)).foregroundStyle(.tertiary)

@@ -39,3 +39,11 @@ func TestResetCountUnknownEmptyAndDetailsAreDistinct(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitNoExpiryDiffersFromMissingExpiry(t *testing.T) {
+	var p tool.Probe
+	additionalUsage([]byte(`{"rateLimitResetCredits":{"availableCount":2,"credits":[{"id":"no-expiry","status":"available","expiresAt":null},{"id":"unknown","status":"available"}]}}`), &p)
+	if p.Resets == nil || len(p.Resets.Credits) != 2 || !p.Resets.Credits[0].NoExpiry || p.Resets.Credits[1].NoExpiry {
+		t.Fatalf("missing expiry was confused with a non-expiring reset: %+v", p.Resets)
+	}
+}

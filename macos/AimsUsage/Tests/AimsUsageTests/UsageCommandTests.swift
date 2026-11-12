@@ -19,3 +19,11 @@ import Testing
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
 }
+
+@MainActor @Test func selectedDataFolderReachesTheOwnedCLI() async throws {
+    let data = try await UsageCommand().run(
+        executable: URL(fileURLWithPath: "/usr/bin/printenv"), arguments: ["AIMS_HOME"],
+        configHome: "/fixture/work-aims")
+    #expect(
+        String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) == "/fixture/work-aims")
+}

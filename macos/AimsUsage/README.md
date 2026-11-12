@@ -28,16 +28,17 @@ Preview uses synthetic bundled data, a separate preferences domain and no provid
 ## Daily use
 
 - Click the gauge in the menu bar. The optional percentage is the highest **current, successfully read** usage among visible providers; stale windows and past reset times do not contribute.
-- Click the pin to show or close the panel on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open. Closing the panel keeps the menu bar app running; Quit stops its in-flight refresh before exiting.
-- Refresh asks Codex and installed meters at most once per refresh, without a model prompt. Automatic refresh runs every five minutes while enabled, including when the menu is closed. It is independent of aims keepalive.
+- The panel opens on first launch. Click the pin to show or close it on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open. Closing the panel keeps the menu bar app running; Quit stops its in-flight refresh before exiting.
+- Refresh asks Codex and installed meters at most once per refresh, without a model prompt. Automatic refresh runs every five minutes while enabled, including when the menu is closed. It is independent of aims keepalive and updates observation caches without clearing manual routing/login marks.
 - Claude uses its last native status-line report. `aims usage claude --live` is the existing optional paid one-word probe; the app does not run it automatically.
 - Reset times use the Mac's local time zone. Hover for the full date. Past times display “refresh needed”; the app never resets percentages locally.
 - Banked reset inventories are separate from normal quota windows. A known zero and unavailable information have different displays. Counts can be known while expiry details are not reported; detail lists can be shorter than the available count. The app only reads them.
 - More → Add custom reset reminder creates a personal reminder. It does not assert that a provider has reset its quota. Reminders are shared with the CLI through `AIMS_HOME/usage-reminders.json`.
-- Settings controls automatic refresh, the menu percentage and an optional explicit aims executable. The bundled CLI is the default. Finder launches also search the usual native CLI installation directories without invoking a shell.
+- Settings controls automatic refresh, the menu percentage and an optional explicit aims executable. The bundled CLI is the default. For a custom `AIMS_HOME`, select that existing data folder in Settings; Finder does not load shell exports. An `AIMS_HOME` inherited on the first launch is remembered. The selected path is displayed in the footer, and changing it never moves files. Apply is disabled during a refresh; applying then clears the display and reads the newly selected cache.
+- Finder launches search the usual provider, Go, Cargo, npm, Bun and Homebrew directories. Add other absolute CLI folders in Settings (one per line). Custom folders take precedence; no shell startup files are executed.
 
 Provider order is Claude (each configured account), Codex (each account), Kiro, Grok, Antigravity (each reported model group), then OpenCode. All Antigravity group IDs and bucket IDs are retained; Gemini, Claude/GPT, Argon and Carbon are displayed separately **when reported by that account's CLI**. An unreported model group is not fabricated. OpenCode shows Go windows, zero-dollar blocking budgets, and separate per-model budgets when returned.
 
-Errors retain the previous reading with its age; they do not turn old percentages into fresh data. Missing quotas and reset inventories stay unknown. The app stores display preferences only. Removing it leaves aims, its caches, custom reminders, credentials, sessions, history and other integrations intact.
+Errors retain the previous reading with its age; they do not turn old percentages into fresh data. Missing quotas and reset inventories stay unknown. A capped reset-detail list is labeled incomplete, and explicit non-expiring credits differ from unknown expiry. The app stores preferences and selected paths only. Removing it leaves aims, its caches, custom reminders, credentials, sessions, history and other integrations intact.
 
 See the [provider support and sources](../../docs/content/macos-usage.md) for API limitations.

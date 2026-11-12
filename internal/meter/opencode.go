@@ -51,7 +51,7 @@ func parseOpenCode(raw []byte) Reading {
 			} `json:"budgets"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(raw, &doc); err != nil || doc.Data.Budgets == nil {
+	if err := json.Unmarshal(raw, &doc); err != nil || (doc.Data.Budgets == nil && doc.Data.Go == nil) {
 		return Reading{Error: "OpenCode did not report its budgets (" + firstLine(raw) + ")"}
 	}
 	var r Reading

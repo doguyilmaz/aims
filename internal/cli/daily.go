@@ -47,7 +47,7 @@ aims status --json`,
 				ids = []tool.ID{a.ID()}
 			}
 			if live {
-				if err := checkLive(cmd.Context(), ids, asJSON); err != nil {
+				if err := checkLive(cmd.Context(), ids, asJSON, false); err != nil {
 					return err
 				}
 			}
@@ -59,7 +59,7 @@ aims status --json`,
 	return cmd
 }
 
-func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
+func checkLive(ctx context.Context, ids []tool.ID, quiet, usageOnly bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -75,7 +75,13 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 		}
 		for _, n := range cfg.Tools[id].Order {
 			var p tool.Probe
-			run := func() { p = profiles.Live(ctx, cfg, a, n) }
+			run := func() {
+				if usageOnly {
+					p = profiles.ReadUsage(ctx, cfg, a, n)
+				} else {
+					p = profiles.Live(ctx, cfg, a, n)
+				}
+			}
 			if quiet || !ui.Interactive() {
 				run()
 			} else {
@@ -152,8 +158,9 @@ aims usage agy --refresh`,
 			return []string{"claude", "codex", "kiro", "grok", "agy", "opencode"}, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
+			parent := cmd.Context()
+			ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+			defer func() { stop(); cmd.SetContext(parent) }()
 			cmd.SetContext(ctx)
 			filter := ""
 			if len(args) > 0 {
@@ -172,12 +179,12 @@ aims usage agy --refresh`,
 			}
 			core := filter == "" || filter == "claude" || filter == "codex"
 			if live && core {
-				if err := checkLive(cmd.Context(), ids, asJSON); err != nil {
+				if err := checkLive(cmd.Context(), ids, asJSON, false); err != nil {
 					return err
 				}
 			}
 			if refresh && (filter == "" || filter == "codex") {
-				if err := checkLive(cmd.Context(), []tool.ID{"codex"}, asJSON); err != nil {
+				if err := checkLive(cmd.Context(), []tool.ID{"codex"}, asJSON, true); err != nil {
 					return err
 				}
 			}

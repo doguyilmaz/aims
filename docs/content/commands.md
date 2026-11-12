@@ -69,7 +69,7 @@ Scheduled resets, banked reset inventory and user reminders are separate. Banked
 | Flag | |
 | --- | --- |
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
-| `--refresh` | Refresh Codex and the other providers without a model prompt. Claude uses its cached native status line. Mutually exclusive with `--live`. |
+| `--refresh` | Refresh Codex and the other providers without a model prompt or clearing manual routing/login marks. Claude uses its cached native status line. Mutually exclusive with `--live`. |
 | `--json` | Versioned usage snapshot: accounts/groups, windows, reset timestamps, banked resets, freshness, errors and custom reminders. Omits credential fields, account email, tenant and profile paths. Reads caches without provider/keychain calls unless refreshing. |
 
 `aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>` adds a custom reminder. Take the row ID from `aims usage --json`; `--at` must include a timezone. `aims usage reset remove <id>` removes it. Both accept `--json` to return the updated snapshot. The reminders live in `AIMS_HOME/usage-reminders.json`, separately from provider data, credentials and session history. Malformed or newer reminder formats are left unchanged.

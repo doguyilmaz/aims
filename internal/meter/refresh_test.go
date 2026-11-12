@@ -65,6 +65,13 @@ func TestLegacyFailureDoesNotClaimAnObservationTime(t *testing.T) {
 	}
 }
 
+func TestOpenCodeKeepsGoMetricsWhenBudgetsAreAbsent(t *testing.T) {
+	r := parseOpenCode([]byte(`{"data":{"workspace":{"name":"Fixture"},"go":{"weekly":{"percent":23,"limited":false,"resetsAt":1793491200000}}}}`))
+	if r.Error != "" || len(r.Rows) != 1 || len(r.Rows[0].Windows) != 1 || r.Rows[0].Windows[0].Percent != 23 {
+		t.Fatalf("available Go quota was discarded with absent Console budgets: %+v", r)
+	}
+}
+
 func TestKiroReadsRootResetInSecondsOrMilliseconds(t *testing.T) {
 	for _, epoch := range []string{"1793491200", "1793491200000"} {
 		r := parseKiro([]byte(`{"nextDateReset":` + epoch + `,"usageBreakdownList":[{"displayNamePlural":"Credits","currentUsageWithPrecision":10,"usageLimitWithPrecision":50}]}`))

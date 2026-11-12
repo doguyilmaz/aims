@@ -10,8 +10,10 @@ struct AimsUsageApp: App {
             UsageDashboard(model: delegate.model, togglePanel: delegate.togglePanel)
                 .frame(width: 390, height: 650)
         } label: {
-            Image(systemName: "gauge.with.dots.needle.33percent")
-            if let summary = delegate.model.menuSummary { Text(summary).monospacedDigit() }
+            HStack(spacing: 4) {
+                Image(systemName: "gauge.with.dots.needle.33percent")
+                if let summary = delegate.model.menuSummary { Text(summary).monospacedDigit() }
+            }
         }
         .menuBarExtraStyle(.window)
         Settings { UsageSettings(model: delegate.model).frame(width: 460) }

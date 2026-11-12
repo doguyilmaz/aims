@@ -7,4 +7,5 @@ public struct ResetCredit: Decodable, Identifiable, Sendable {
     public let title: String?
     public let grantedAt: Date?
     public let expiresAt: Date?
+    public let noExpiry: Bool?
 }
