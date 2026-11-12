@@ -16,6 +16,7 @@ final class UsageModel {
         }
     }
     var error: String?
+    private(set) var summaryDate = Date()
     var isRefreshing = false
     var panelVisible = false
     private(set) var configHome: String
@@ -78,20 +79,19 @@ final class UsageModel {
 
     var menuSummary: String? {
         guard showMenuPercent else { return nil }
-        let now = Date()
-        let values =
-            snapshot?.providers.filter { $0.installed && ($0.error == nil || $0.error == "") }.flatMap(\.rows).filter {
-                !$0.isStale(at: now) && $0.error == nil
-            }
-            .flatMap { $0.windows ?? [] }.filter { !$0.needsRefresh(at: now) }.compactMap(\.validPercent) ?? []
-        return values.max().map { $0 >= 1_000 ? "999%+" : String(format: "%.0f%%", $0) }
+        return MenuSummary.value(snapshot: snapshot, now: summaryDate, globalError: error)
     }
 
     func run() async {
         await refresh(live: false)
+        var nextRefresh = Date()
         while !Task.isCancelled {
-            if automaticRefresh && fixtureURL == nil { await refresh(live: true) }
-            do { try await Task.sleep(for: .seconds(300)) } catch { return }
+            summaryDate = Date()
+            if automaticRefresh && fixtureURL == nil && summaryDate >= nextRefresh {
+                await refresh(live: true)
+                nextRefresh = Date().addingTimeInterval(300)
+            }
+            do { try await Task.sleep(for: .seconds(60)) } catch { return }
         }
     }
 
@@ -115,6 +115,7 @@ final class UsageModel {
             }
             try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
+            summaryDate = Date()
             error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }

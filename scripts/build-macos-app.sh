@@ -5,11 +5,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 version=${AIMS_USAGE_VERSION:-0.2.0}
 cli_version=${AIMS_CLI_VERSION:-0.4.7-dev}
 build_number=${AIMS_USAGE_BUILD_NUMBER:-1}
-source_revision=${AIMS_USAGE_SOURCE_REVISION:-development}
-if [[ -z "${AIMS_USAGE_SOURCE_REVISION:-}" ]] && command -v git >/dev/null; then
-  source_revision=$(git -C "$repo" rev-parse --short=12 HEAD 2>/dev/null || echo development)
-  if ! git -C "$repo" diff --quiet HEAD -- 2>/dev/null; then source_revision="${source_revision}-dirty"; fi
-fi
+source_revision=${AIMS_USAGE_SOURCE_REVISION:-$("$repo/scripts/source-revision.sh" "$repo")}
 if [[ ! "$source_revision" =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "AIMS_USAGE_SOURCE_REVISION must contain only letters, digits, dots, hyphens or underscores" >&2
   exit 2

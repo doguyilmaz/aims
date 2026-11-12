@@ -32,6 +32,9 @@ jobs:
       - name: gofmt
         if: runner.os == 'Linux'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Build revision checks
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: bash scripts/test-source-revision.sh
       - run: go vet ./...
       - name: Race tests
         if: runner.os != 'Linux'
@@ -40,18 +43,23 @@ jobs:
         if: runner.os == 'macOS'
         run: swift test --package-path macos/AimsUsage
       - name: Build macOS usage app
+        id: macos-app
         if: runner.os == 'macOS'
         run: |
           scripts/build-macos-app.sh
           codesign --verify --deep --strict 'dist/Aims Usage.app'
           plutil -lint 'dist/Aims Usage.app/Contents/Info.plist'
-          ditto -c -k --keepParent 'dist/Aims Usage.app' dist/Aims-Usage-0.1.0.zip
+          app_version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' 'dist/Aims Usage.app/Contents/Info.plist')
+          archive="dist/Aims-Usage-${app_version}.zip"
+          ditto -c -k --keepParent 'dist/Aims Usage.app' "$archive"
+          echo "version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
       - name: Upload development app
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: Aims-Usage-0.1.0-macOS-${{ runner.arch }}-development
-          path: dist/Aims-Usage-0.1.0.zip
+          name: Aims-Usage-${{ steps.macos-app.outputs.version }}-macOS-${{ runner.arch }}-development
+          path: ${{ steps.macos-app.outputs.archive }}
           retention-days: 7
       - name: Build isolated macOS usage preview
         if: runner.os == 'macOS'

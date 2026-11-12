@@ -50,7 +50,7 @@ struct UsageDashboard: View {
             if let error = model.snapshot?.customResetsError { notice(error) }
             if let snapshot = model.snapshot {
                 if model.displayStyle == .compact {
-                    VStack(spacing: 12) {
+                    VStack(spacing: maximumBodyHeight < 850 ? 6 : 12) {
                         ForEach(snapshot.displayProviders) { provider in
                             CompactProviderCard(provider: provider, refreshFailed: model.error != nil)
                             if provider.id != snapshot.displayProviders.last?.id {

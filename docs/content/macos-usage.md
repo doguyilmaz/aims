@@ -13,6 +13,8 @@ Choose **Compact** (the default) for airy provider rows with usage bars, or **Ga
 
 The **Edge Dock** parks provider rings at the screen edge, clear of the macOS Dock on any side. Hover for all accounts/models, click to pin details, or open the complete overview. It shows the highest current known usage per provider; a missing/stale-only ratio is an em dash. Enable or hide it in Settings or the toolbar. The app version and Git build revision are visible in More and Settings.
 
+The optional menu-bar percentage also uses current successful readings. It is reevaluated every minute, including with automatic refresh disabled, and hidden after a failed snapshot read. A reset passing removes that window from the summary; it does not invent a new allowance or contact the provider.
+
 | Provider | Data source | Scheduled reset | Banked / other resets |
 | --- | --- | --- | --- |
 | Claude, each configured account | Cached native status line; optional explicit CLI live probe | Reported window timestamps | Not exposed by this status-line reader; shown as unavailable |
@@ -27,7 +29,7 @@ The **Edge Dock** parks provider rings at the screen edge, clear of the macOS Do
 
 The passive `--refresh` path updates observation caches without clearing manual routing/login marks. Successful user-controlled reauthentication invalidates old cached quotas; an explicit Claude live probe checks the native offline account identity before attributing cached windows to a changed login. Credentials and history are not copied or migrated by this bookkeeping.
 
-Finder does not load shell exports. For a custom `AIMS_HOME`, select the existing folder in the app's Settings; its footer shows the selected data location. A custom home inherited on the first launch is remembered. Additional CLI folders can be entered one per line, including Go/Cargo/npm or version-manager paths. No shell startup script is run, and changing the data location never moves files.
+Finder does not load shell exports. For a custom `AIMS_HOME`, select the existing folder in the app's Settings; the selected data location stays in Settings. A custom home inherited on the first launch is remembered. Additional CLI folders can be entered one per line, including Go/Cargo/npm or version-manager paths. No shell startup script is run, and changing the data location never moves files.
 
 The installed Codex CLI 0.167.1 protocol was inspected with `app-server generate-ts --experimental`. It documents that the reset-credit detail list may be absent or capped, and that `availableCount` is independent of the list length. Other Codex versions may not report this field. Additional quota buckets are for display and do not alter the existing main-account failover decision.
 
