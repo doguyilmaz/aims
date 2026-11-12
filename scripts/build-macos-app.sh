@@ -43,6 +43,7 @@ swift build --package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift"
 bin=$(swift build --package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift" -c release --show-bin-path)
 mkdir -p "$build/Aims Usage.app/Contents/MacOS" "$build/Aims Usage.app/Contents/Resources"
 cp "$repo/packaging/AppIcon.icns" "$build/Aims Usage.app/Contents/Resources/AppIcon.icns"
+cp "$repo/LICENSE" "$build/Aims Usage.app/Contents/Resources/LICENSE"
 cp "$bin/AimsUsage" "$build/Aims Usage.app/Contents/MacOS/AimsUsage"
 if [[ -n "${AIMS_USAGE_CLI_BINARY:-}" ]]; then
   if [[ ! -f "$AIMS_USAGE_CLI_BINARY" || ! -x "$AIMS_USAGE_CLI_BINARY" ]]; then
