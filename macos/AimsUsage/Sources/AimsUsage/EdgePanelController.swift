@@ -6,6 +6,9 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private weak var model: UsageModel?
     private var screen: NSScreen?
+    private var isTerminating = false
+
+    func prepareForTermination() { isTerminating = true }
 
     func toggle(model: UsageModel, toggle: @escaping @MainActor () -> Void) {
         if let panel, panel.isVisible {
@@ -55,6 +58,9 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // AppKit also closes the panel when the app quits. Keep the user's
+        // open-panel preference so the next launch can restore it.
+        guard !isTerminating else { return }
         model?.panelVisible = false
         UserDefaults.standard.set(false, forKey: "edgePanelVisible")
     }

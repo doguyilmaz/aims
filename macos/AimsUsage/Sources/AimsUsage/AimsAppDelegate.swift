@@ -19,6 +19,7 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
     func togglePanel() { panel.toggle(model: model, toggle: togglePanel) }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        panel.prepareForTermination()
         refreshTask?.cancel()
         Task {
             await model.shutdown()

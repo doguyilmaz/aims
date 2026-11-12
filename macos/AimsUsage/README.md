@@ -28,7 +28,7 @@ Preview uses synthetic bundled data, a separate preferences domain and no provid
 ## Daily use
 
 - Click the gauge in the menu bar. The optional percentage is the highest **current, successfully read** usage among visible providers; stale windows and past reset times do not contribute.
-- The panel opens on first launch. Click the pin to show or close it on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open. Closing the panel keeps the menu bar app running; Quit stops its in-flight refresh before exiting.
+- The panel opens on first launch. Click the pin to show or close it on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open, including when you quit and relaunch. Closing the panel explicitly keeps it closed on the next launch and leaves the menu bar app running. Quit stops its in-flight refresh before exiting.
 - Refresh asks Codex and installed meters at most once per refresh, without a model prompt. Automatic refresh runs every five minutes while enabled, including when the menu is closed. It is independent of aims keepalive and updates observation caches without clearing manual routing/login marks.
 - Claude uses its last native status-line report. `aims usage claude --live` is the existing optional paid one-word probe; the app does not run it automatically.
 - Reset times use the Mac's local time zone. Hover for the full date. Past times display “refresh needed”; the app never resets percentages locally.
