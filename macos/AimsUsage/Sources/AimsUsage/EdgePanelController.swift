@@ -17,12 +17,13 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
         }
         self.model = model
         if panel == nil {
-            let panel = NSPanel(
-                contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+            let panel = UsagePanel(
+                contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered, defer: false)
             panel.title = "Aims Usage"
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.hasShadow = true
             panel.isFloatingPanel = true
             panel.level = .floating
             panel.hidesOnDeactivate = false
@@ -30,7 +31,8 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate = self
             panel.contentView = NSHostingView(
-                rootView: UsageDashboard(model: model, togglePanel: toggle, surface: .panel))
+                rootView: UsageDashboard(model: model, togglePanel: toggle, surface: .panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 14)).ignoresSafeArea())
             self.panel = panel
             NotificationCenter.default.addObserver(
                 self, selector: #selector(screenChanged), name: NSApplication.didChangeScreenParametersNotification,

@@ -29,6 +29,7 @@ enum ProviderStyle {
         switch row.name {
         case "personal": "Personal"
         case "work": "Work"
+        case "credits": "Credits"
         case "Gemini Models": "Gemini"
         case "Claude and GPT models": "Claude / GPT"
         case "Gemini 4 Argon": "Argon 4"

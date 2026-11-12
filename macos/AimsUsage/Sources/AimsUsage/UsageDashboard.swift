@@ -13,21 +13,15 @@ struct UsageDashboard: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Picker("Display style", selection: $model.displayStyle) {
-                ForEach(UsageDisplayStyle.allCases) { style in
-                    Label(style.title, systemImage: style.symbol).tag(style)
-                }
-            }
-            .pickerStyle(.segmented).controlSize(.small).labelsHidden()
-            .padding(.horizontal, 14).padding(.bottom, 10)
+            Divider().opacity(0.5)
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     if let error = model.error { notice(error) }
                     if let snapshot = model.snapshot {
                         if let error = snapshot.customResetsError { notice(error) }
                         if model.displayStyle == .compact {
                             ForEach(snapshot.displayProviders) { provider in
-                                CompactProviderCard(provider: provider, surface: surface)
+                                CompactProviderCard(provider: provider)
                             }
                         } else {
                             providerWidgets(snapshot)
@@ -40,30 +34,24 @@ struct UsageDashboard: View {
                         )
                         .padding(.vertical, 40)
                     }
-                }.padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 14)
+                }.padding(10)
             }
             .id(model.displayStyle.rawValue)
             footer
         }
-        .background(.regularMaterial)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $editingReminder) { CustomResetEditor(model: model) }
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(surface == .popover ? "Usage" : "Your limits")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                if surface == .panel {
-                    Text("Accounts & model groups").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+        HStack(spacing: 9) {
+            Text("Limits").font(.system(size: 13, weight: .semibold))
+            Spacer(minLength: 0)
+            Picker("Display style", selection: $model.displayStyle) {
+                ForEach(UsageDisplayStyle.allCases) { style in Text(style.title).tag(style) }
             }
-            if model.fixtureURL != nil {
-                Text("PREVIEW").font(.system(size: 8, weight: .semibold))
-                    .padding(.horizontal, 5).padding(.vertical, 3)
-                    .background(.secondary.opacity(0.10), in: Capsule()).foregroundStyle(.secondary)
-            }
-            Spacer()
+            .pickerStyle(.segmented).controlSize(.small).labelsHidden().frame(width: 150)
             Button {
                 Task { await model.refresh() }
             } label: {
@@ -74,9 +62,11 @@ struct UsageDashboard: View {
                 }
             }.disabled(model.isRefreshing).help(
                 "Refresh quotas. Claude uses its last native status line; no model prompt is sent.")
-            Button(action: togglePanel) { Image(systemName: model.panelVisible ? "pin.fill" : "pin") }
-                .help(model.panelVisible ? "Close right-edge panel" : "Pin to the right edge of this screen")
-                .accessibilityLabel("Toggle right-edge panel")
+            Button(action: togglePanel) {
+                Image(systemName: surface == .panel ? "xmark" : model.panelVisible ? "pin.fill" : "pin")
+            }
+            .help(model.panelVisible ? "Close right-edge panel" : "Pin to the right edge of this screen")
+            .accessibilityLabel("Toggle right-edge panel")
             Menu {
                 Button("Add custom reset reminder…") { editingReminder = true }
                     .disabled(
@@ -93,29 +83,16 @@ struct UsageDashboard: View {
             .menuStyle(.borderlessButton).frame(width: 18)
         }
         .buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(.primary)
-        .padding(.horizontal, 18).padding(.top, surface == .panel ? 20 : 15).padding(.bottom, 12)
+        .padding(.horizontal, 12).padding(.vertical, 10)
     }
 
     @ViewBuilder private func providerWidgets(_ snapshot: UsageSnapshot) -> some View {
-        if surface == .panel {
-            ForEach(snapshot.displayProviders.filter { $0.id == "claude" || $0.id == "codex" }) { provider in
-                ProviderCard(provider: provider, surface: surface)
-            }
-        } else {
-            pairedWidgets(snapshot, ids: ["claude", "codex"])
-        }
-        pairedWidgets(snapshot, ids: ["kiro", "grok"])
-        ForEach(snapshot.displayProviders.filter { !["claude", "codex", "kiro", "grok"].contains($0.id) }) { provider in
-            ProviderCard(provider: provider, surface: surface)
-        }
-    }
-
-    private func pairedWidgets(_ snapshot: UsageSnapshot, ids: [String]) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            ForEach(ids, id: \.self) { id in
-                if let provider = snapshot.displayProviders.first(where: { $0.id == id }) {
-                    ProviderCard(provider: provider, surface: surface)
-                }
+        LazyVGrid(
+            columns: [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)],
+            alignment: .leading, spacing: 8
+        ) {
+            ForEach(UsageTileItem.items(from: snapshot)) { item in
+                UsageAccountTile(provider: item.provider, row: item.row)
             }
         }
     }
@@ -159,26 +136,22 @@ struct UsageDashboard: View {
 
     private var footer: some View {
         HStack(spacing: 5) {
-            Circle().fill(model.isRefreshing ? .orange : .secondary.opacity(0.5)).frame(width: 4, height: 4)
+            Text("% used").fontWeight(.medium)
+            Text("·")
             Text(
-                model.isRefreshing ? "Refreshing…" : model.automaticRefresh ? "Refreshes every 5 min" : "Manual refresh"
+                model.isRefreshing ? "Refreshing…" : model.automaticRefresh ? "Every 5 min" : "Manual refresh"
             )
             Spacer()
+            if model.fixtureURL != nil { Text("Preview data") }
             Button {
                 showSettings()
             } label: {
-                Label(
-                    model.configHome.isEmpty
-                        ? "Default data" : URL(fileURLWithPath: model.configHome).lastPathComponent,
-                    systemImage: "folder"
-                )
-                .lineLimit(1).truncationMode(.middle)
+                Image(systemName: "gearshape")
             }
-            .buttonStyle(.borderless)
-            .help(model.configHome.isEmpty ? "Data: ~/.aims · Settings" : "Data: \(model.configHome) · Settings")
+            .buttonStyle(.borderless).help("Settings").accessibilityLabel("Settings")
         }
-        .font(.system(size: 10)).foregroundStyle(.secondary)
-        .padding(.horizontal, 18).padding(.vertical, 11)
+        .font(.system(size: 11)).foregroundStyle(.secondary)
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     private func showSettings() {

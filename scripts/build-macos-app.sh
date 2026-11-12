@@ -33,10 +33,12 @@ build=$(mktemp -d "${TMPDIR:-/tmp}/aims-usage-build.XXXXXX")
 trap 'rm -rf "$build"' EXIT
 app="$repo/dist/Aims Usage.app"
 bundle_id=com.doguyilmaz.aims.usage
+display_name='Aims Usage'
 preview=false
 if [[ "${AIMS_USAGE_PREVIEW:-0}" == 1 ]]; then
   app="$repo/dist/Aims Usage Preview.app"
   bundle_id=com.doguyilmaz.aims.usage.preview
+  display_name='Aims Usage Preview'
   preview=true
 fi
 swift_args=(--package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift" -c release)
@@ -66,8 +68,8 @@ cat > "$build/Aims Usage.app/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>$bundle_id</string>
-  <key>CFBundleName</key><string>Aims Usage</string>
-  <key>CFBundleDisplayName</key><string>Aims Usage</string>
+  <key>CFBundleName</key><string>$display_name</string>
+  <key>CFBundleDisplayName</key><string>$display_name</string>
   <key>CFBundleExecutable</key><string>AimsUsage</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
