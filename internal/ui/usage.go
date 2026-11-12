@@ -115,7 +115,11 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 		if known && !w.PercentUnknown {
 			pct = fmt.Sprintf("%3.0f%%", w.Percent)
 		}
-		out := s.Dim.Render(Pad(w.Label, labelW)) + " " + Bar(s, w.Percent, threshold, barCells) + " " + pct
+		barPercent := w.Percent
+		if !known || w.PercentUnknown {
+			barPercent = 0
+		}
+		out := s.Dim.Render(Pad(w.Label, labelW)) + " " + Bar(s, barPercent, threshold, barCells) + " " + pct
 		if resetW > 0 {
 			out += "  " + s.Dim.Render(Pad(resets(w), resetW))
 		}
