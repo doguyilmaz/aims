@@ -173,8 +173,9 @@ aims               # status and next steps`,
 	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
-	// Commands that run for a tool, or that set the keepalive up themselves.
-	noHeal := []string{"doctor", "bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
+	// Embedded clients and usage displays must not install background services.
+	// Other entries run for a tool or set the keepalive up themselves.
+	noHeal := []string{"usage", "doctor", "bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		top := cmd
 		for top.HasParent() && top.Parent() != root {

@@ -29,10 +29,12 @@ type ProfileStatus struct {
 	Usable  bool     `json:"usable"`
 	Reasons []string `json:"reasons,omitempty"`
 	// ReadyAt is when an unusable profile works again, if known.
-	ReadyAt time.Time     `json:"readyAt,omitzero"`
-	Usage   []tool.Window `json:"usage,omitempty"`
-	UsageAt time.Time     `json:"usageAt,omitzero"`
-	Until   time.Time     `json:"until,omitzero"`
+	ReadyAt      time.Time          `json:"readyAt,omitzero"`
+	Usage        []tool.Window      `json:"usage,omitempty"`
+	UsageAt      time.Time          `json:"usageAt,omitzero"`
+	BankedResets *tool.ResetBalance `json:"bankedResets,omitempty"`
+	UsageGroups  []tool.QuotaGroup  `json:"usageGroups,omitempty"`
+	Until        time.Time          `json:"until,omitzero"`
 	// Reason ("limit", "busy"), MarkedBy and Detail explain a mark.
 	Reason   string    `json:"reason,omitempty"`
 	MarkedBy string    `json:"markedBy,omitempty"`
@@ -135,6 +137,8 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 		}
 		if ps.Usage != nil {
 			row.Usage, row.UsageAt = ps.Usage.Windows, ps.Usage.At
+			row.BankedResets = ps.Usage.Resets
+			row.UsageGroups = ps.Usage.Groups
 		}
 		if ps.Until.After(now) {
 			row.Until, row.Reason = ps.Until, ps.Reason

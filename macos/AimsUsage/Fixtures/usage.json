@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-12T00:00:00Z",
+  "providers": [
+    {"id":"claude","name":"Claude Code","installed":true,"rows":[
+      {"id":"personal","name":"personal","plan":"Pro","observedAt":"2026-11-11T23:58:00Z","windows":[{"label":"5h","pct":72,"resetsAt":"2026-11-12T02:40:00Z"},{"label":"7d","pct":39,"resetsAt":"2026-11-16T17:00:00Z"}],"bankedResets":null},
+      {"id":"work","name":"work","plan":"Team","observedAt":"2026-11-11T23:58:00Z","windows":[{"label":"5h","pct":28,"resetsAt":"2026-11-12T03:12:00Z"},{"label":"7d","pct":70,"resetsAt":"2026-11-15T04:00:00Z"}],"bankedResets":null}]},
+    {"id":"codex","name":"Codex","installed":true,"rows":[
+      {"id":"personal","name":"personal","plan":"Plus","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"5h","pct":61,"resetsAt":"2026-11-12T01:10:00Z"},{"label":"7d","pct":88,"resetsAt":"2026-11-14T12:00:00Z"}],"bankedResets":{"available":2,"credits":[{"id":"preview-credit","kind":"codexRateLimits","status":"available","title":"Full reset","expiresAt":"2026-11-17T00:00:00Z"}]}},
+      {"id":"work","name":"work","plan":"Business","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"7d","pct":46,"resetsAt":"2026-11-18T08:00:00Z"}],"bankedResets":{"available":0,"credits":[]}}]},
+    {"id":"kiro","name":"Kiro","installed":true,"rows":[{"id":"credits","name":"credits","plan":"Pro Max","observedAt":"2026-11-11T23:59:00Z","detail":"2,150 of 5,000 credits","windows":[{"label":"month","pct":43,"resetsAt":"2026-12-01T00:00:00Z"}]}]},
+    {"id":"grok","name":"Grok","installed":true,"rows":[{"id":"credits","name":"credits","plan":"SuperGrok","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"7d","pct":26,"resetsAt":"2026-11-16T20:00:00Z"}]}]},
+    {"id":"agy","name":"Antigravity","installed":true,"rows":[
+      {"id":"gemini","name":"Gemini Models","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"5h","pct":35,"resetsAt":"2026-11-12T04:00:00Z"},{"label":"7d","pct":54,"resetsAt":"2026-11-18T00:00:00Z"}]},
+      {"id":"3p","name":"Claude and GPT models","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"5h","pct":17,"resetsAt":"2026-11-12T04:00:00Z"},{"label":"7d","pct":64,"resetsAt":"2026-11-18T00:00:00Z"}]},
+      {"id":"argon","name":"Gemini 4 Argon","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"7d","pct":22,"resetsAt":"2026-11-18T00:00:00Z"}]},
+      {"id":"carbon","name":"Gemini 4 Carbon","observedAt":"2026-11-11T23:59:00Z","windows":[{"label":"7d","pct":41,"resetsAt":"2026-11-18T00:00:00Z"}]}]},
+    {"id":"opencode","name":"OpenCode","installed":true,"rows":[{"id":"personal-budget","name":"Personal workspace","observedAt":"2026-11-11T23:59:00Z","detail":"$33.50 of $50","windows":[{"label":"budget","pct":67,"resetsAt":"2026-12-01T00:00:00Z"}]}]}
+  ],
+  "customResets": [{"id":"preview-reminder","provider":"codex","row":"personal","label":"Check the next promotional reset","at":"2026-11-13T09:00:00Z"}]
+}

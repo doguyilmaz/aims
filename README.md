@@ -75,6 +75,10 @@ OpenCode
 
 `aims` alone opens a [dashboard](https://aims.apps.doguyilmaz.com/dashboard) with both views (`tab` switches) and keys for everything else.
 
+`aims usage --refresh` refreshes Codex and the other providers without sending a model prompt; Claude keeps its last reported status line. `--live` also checks Claude with a one-word prompt. `aims usage --json` exports a versioned usage snapshot, including provider-reported reset times and Codex banked reset counts. Unknown reset details stay unknown; a past reset time asks for a refresh rather than assuming a full allowance.
+
+The optional **[Aims Usage macOS app](macos/AimsUsage/README.md)** puts the same limits in the menu bar and a right-edge panel, independent of the Dock position. It keeps personal/work accounts and each Antigravity model group separate, and shows OpenCode budgets last. Build it with `scripts/build-macos-app.sh` (macOS 14.0.0+, Swift 6.2.0+, Go from `go.mod`). Custom reminders work in both interfaces: `aims usage reset add codex personal --at 2026-12-01T09:00:00+03:00 --label 'Check reset'`. Reminders never change provider quota or redeem a reset.
+
 ## Install
 
 ```bash

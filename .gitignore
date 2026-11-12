@@ -15,3 +15,7 @@ docs/resources/
 
 # private merged T3 settings exports (may retain existing inline credentials)
 t3-settings.aims.json
+
+# Native menu bar app build products
+macos/AimsUsage/.build/
+macos/AimsUsage/.swiftpm/

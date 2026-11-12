@@ -656,6 +656,8 @@ func firstLine(s string) string {
 func RecordUsage(id tool.ID, name string, windows []tool.Window, source string) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
 		ps.Usage = &config.Usage{Windows: windows, Source: source, At: config.Now().UTC()}
+		ps.UsageError = ""
+		ps.UsageAttemptedAt = ps.Usage.At
 	})
 }
 
@@ -720,9 +722,19 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 // record keeps what a probe found: usage, a limit, a dead login.
 func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
 	id := a.ID()
-	if len(p.Windows) > 0 {
-		_ = RecordUsage(id, name, p.Windows, "live")
-	}
+	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
+	_ = config.UpdateState(id, name, func(ps *config.ProfileState) {
+		ps.UsageAttemptedAt = config.Now().UTC()
+		ps.UsageError = p.UsageError
+		if p.Status == tool.ProbeError || p.Status == tool.ProbeLogin {
+			ps.UsageError = string(p.Status)
+		}
+		if hasUsage {
+			ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
+		} else if ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email) {
+			ps.Usage = nil // a previous login's quotas must not label the new account
+		}
+	})
 	switch p.Status {
 	case tool.ProbeOK:
 		_ = Clear(id, name)

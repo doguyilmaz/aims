@@ -46,6 +46,8 @@ Otherwise use the CLI:
 | Task | Command |
 | --- | --- |
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
+| All provider limits and normal/banked resets | `aims usage --json`; `--refresh` updates free quota readers without a model prompt (Claude remains cached) |
+| Personal reset reminder | `aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>`; this never changes provider quota |
 | Switch the account for new sessions in this project | `aims use work` (every tool) or `aims use claude work`; `--global` for every folder |
 | The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one) |
 | Move this session's conversation now | `aims move work` (only in a session aims moves) |

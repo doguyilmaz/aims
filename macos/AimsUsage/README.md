@@ -1,0 +1,43 @@
+# Aims Usage 0.1.0
+
+A native macOS menu bar app with a panel you can pin to the right edge of a screen. It uses the screen's visible frame, so it stays clear of a Dock on the bottom or either side. It runs as an accessory app with one icon and no Dock tile.
+
+The app reads `aims usage --json` and refreshes with `aims usage --refresh`. Its bundled aims executable uses the existing aims configuration and provider logins. The app does not read or copy credential files, change accounts, reconcile sharing, start a model turn, redeem resets or buy credits. The Kiro adapter in aims reads Kiro's own cached login for its native usage API; the other adapters use their provider CLI. Native CLIs retain responsibility for their own authentication and renewal.
+
+## Build and open
+
+Requires macOS 14.0.0+, Swift 6.2.0+ and the Go version declared in the repository's `go.mod`.
+
+```sh
+scripts/build-macos-app.sh
+open 'dist/Aims Usage.app'
+```
+
+The script builds for the Mac it runs on, bundles the matching aims CLI, uses the existing aims logo as one app icon, and applies an ad hoc signature. It does not install a login item or replace an installed app. Copy the resulting app to `~/Applications` if desired. Distribution signing/notarization is a separate release step; the local build is a development artifact.
+
+Set `AIMS_USAGE_CLI_BINARY` to a prebuilt, executable aims CLI if the matching Go toolchain is unavailable locally. It must target this Mac and support the usage JSON schema. `AIMS_USAGE_VERSION` defaults to `0.1.0`; `AIMS_USAGE_BUILD_NUMBER` is a separate positive integer (default `1`); `AIMS_CLI_VERSION` defaults to `0.4.7-dev`. The builder does not download a Go toolchain automatically. Temporary compilation products are removed on exit.
+
+```sh
+swift test --package-path macos/AimsUsage
+AIMS_USAGE_PREVIEW=1 scripts/build-macos-app.sh
+open 'dist/Aims Usage Preview.app'
+```
+
+Preview uses synthetic bundled data, a separate preferences domain and no provider calls. It opens the side panel automatically. `AIMS_USAGE_FIXTURE=/absolute/path/snapshot.json` can also supply a local fixture for development. Preview data is visibly labeled.
+
+## Daily use
+
+- Click the gauge in the menu bar. The optional percentage is the highest **current, successfully read** usage among visible providers; stale windows and past reset times do not contribute.
+- Click the pin to show or close the panel on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open. Closing the panel keeps the menu bar app running; Quit stops its in-flight refresh before exiting.
+- Refresh asks Codex and installed meters at most once per refresh, without a model prompt. Automatic refresh runs every five minutes while enabled, including when the menu is closed. It is independent of aims keepalive.
+- Claude uses its last native status-line report. `aims usage claude --live` is the existing optional paid one-word probe; the app does not run it automatically.
+- Reset times use the Mac's local time zone. Hover for the full date. Past times display “refresh needed”; the app never resets percentages locally.
+- Banked reset inventories are separate from normal quota windows. A known zero and unavailable information have different displays. Counts can be known while expiry details are not reported; detail lists can be shorter than the available count. The app only reads them.
+- More → Add custom reset reminder creates a personal reminder. It does not assert that a provider has reset its quota. Reminders are shared with the CLI through `AIMS_HOME/usage-reminders.json`.
+- Settings controls automatic refresh, the menu percentage and an optional explicit aims executable. The bundled CLI is the default. Finder launches also search the usual native CLI installation directories without invoking a shell.
+
+Provider order is Claude (each configured account), Codex (each account), Kiro, Grok, Antigravity (each reported model group), then OpenCode. All Antigravity group IDs and bucket IDs are retained; Gemini, Claude/GPT, Argon and Carbon are displayed separately **when reported by that account's CLI**. An unreported model group is not fabricated. OpenCode shows Go windows, zero-dollar blocking budgets, and separate per-model budgets when returned.
+
+Errors retain the previous reading with its age; they do not turn old percentages into fresh data. Missing quotas and reset inventories stay unknown. The app stores display preferences only. Removing it leaves aims, its caches, custom reminders, credentials, sessions, history and other integrations intact.
+
+See the [provider support and sources](../../docs/content/macos-usage.md) for API limitations.
