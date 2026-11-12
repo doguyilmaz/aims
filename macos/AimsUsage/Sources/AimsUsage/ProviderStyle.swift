@@ -37,4 +37,16 @@ enum ProviderStyle {
         default: row.name
         }
     }
+
+    static func planLabel(_ plan: String?) -> String? {
+        guard let plan, !plan.isEmpty else { return nil }
+        switch plan.lowercased() {
+        case "self_serve_business_prolite", "business": return "Business"
+        case "plus": return "Plus"
+        case "pro": return "Pro"
+        case "team": return "Team"
+        case "kiro pro max": return "Pro Max"
+        default: return plan.replacingOccurrences(of: "_", with: " ")
+        }
+    }
 }

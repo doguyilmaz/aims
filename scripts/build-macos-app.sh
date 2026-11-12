@@ -2,9 +2,18 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-version=${AIMS_USAGE_VERSION:-0.1.0}
+version=${AIMS_USAGE_VERSION:-0.2.0}
 cli_version=${AIMS_CLI_VERSION:-0.4.7-dev}
 build_number=${AIMS_USAGE_BUILD_NUMBER:-1}
+source_revision=${AIMS_USAGE_SOURCE_REVISION:-development}
+if [[ -z "${AIMS_USAGE_SOURCE_REVISION:-}" ]] && command -v git >/dev/null; then
+  source_revision=$(git -C "$repo" rev-parse --short=12 HEAD 2>/dev/null || echo development)
+  if ! git -C "$repo" diff --quiet HEAD -- 2>/dev/null; then source_revision="${source_revision}-dirty"; fi
+fi
+if [[ ! "$source_revision" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "AIMS_USAGE_SOURCE_REVISION must contain only letters, digits, dots, hyphens or underscores" >&2
+  exit 2
+fi
 core='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 if [[ ! "$version" =~ ^${core}$ ]]; then
   echo "AIMS_USAGE_VERSION must be MAJOR.MINOR.PATCH" >&2
@@ -50,6 +59,7 @@ bin=$(swift build "${swift_args[@]}" --show-bin-path)
 mkdir -p "$build/Aims Usage.app/Contents/MacOS" "$build/Aims Usage.app/Contents/Resources"
 cp "$repo/packaging/AppIcon.icns" "$build/Aims Usage.app/Contents/Resources/AppIcon.icns"
 cp "$repo/LICENSE" "$build/Aims Usage.app/Contents/Resources/LICENSE"
+cp -R "$repo/packaging/provider-marks" "$build/Aims Usage.app/Contents/Resources/provider-marks"
 cp "$bin/AimsUsage" "$build/Aims Usage.app/Contents/MacOS/AimsUsage"
 if [[ -n "${AIMS_USAGE_CLI_BINARY:-}" ]]; then
   if [[ ! -f "$AIMS_USAGE_CLI_BINARY" || ! -x "$AIMS_USAGE_CLI_BINARY" ]]; then
@@ -75,6 +85,7 @@ cat > "$build/Aims Usage.app/Contents/Info.plist" <<EOF
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$build_number</string>
+  <key>AimsSourceRevision</key><string>$source_revision</string>
   <key>LSMinimumSystemVersion</key><string>14.0.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>

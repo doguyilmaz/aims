@@ -10,7 +10,7 @@ struct UsageMetricView: View {
 
     private var expired: Bool { window.needsRefresh(at: now) }
     private var accent: Color {
-        if stale || expired { return .secondary }
+        if stale || expired { return tint.opacity(0.5) }
         if window.limited == true || (window.validPercent ?? 0) >= 95 { return .red }
         if (window.validPercent ?? 0) >= 85 { return .orange }
         return tint
@@ -31,15 +31,12 @@ struct UsageMetricView: View {
     var body: some View {
         Group {
             if style == .gauges {
-                HStack(spacing: 5) {
-                    UsageGauge(window: window, tint: tint, stale: stale || expired, size: 34)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(label).fontWeight(.medium).foregroundStyle(.primary)
-                        Text(window.validPercent == nil && window.limited == true ? "Blocked" : reset)
-                            .foregroundStyle(expired ? .orange : .secondary).monospacedDigit()
-                    }
-                    .font(.system(size: 10)).lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 2) {
+                    UsageGauge(window: window, tint: tint, stale: stale || expired, size: 44)
+                    Text(label).font(.system(size: 11, weight: .medium)).lineLimit(1).frame(height: 13)
+                    Text(window.validPercent == nil && window.limited == true ? "Blocked" : reset)
+                        .font(.system(size: 11)).foregroundStyle(expired ? .orange : .secondary)
+                        .monospacedDigit().lineLimit(1).frame(height: 13)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 3) {
@@ -47,7 +44,7 @@ struct UsageMetricView: View {
                         Text(label).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
                         Text(value).fontWeight(.semibold).monospacedDigit().fixedSize()
-                    }.font(.system(size: 11))
+                    }.font(.system(size: 12))
                     GeometryReader { geometry in
                         Capsule().fill(tint.opacity(0.12))
                             .overlay(alignment: .leading) {
@@ -56,7 +53,7 @@ struct UsageMetricView: View {
                             }
                     }.frame(height: 4).accessibilityHidden(true)
                     Text(expired ? "Refresh needed" : window.resetsAt == nil ? "Reset unknown" : "Reset \(reset)")
-                        .font(.system(size: 10)).monospacedDigit()
+                        .font(.system(size: 11)).monospacedDigit()
                         .foregroundStyle(expired ? .orange : .secondary).lineLimit(1)
                 }
             }

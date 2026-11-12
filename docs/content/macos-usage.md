@@ -3,13 +3,15 @@ title: macOS usage app
 weight: 9
 ---
 
-Aims Usage 0.1.0 is an optional native menu bar app with a panel you can pin to the right edge of a screen. The Dock can remain on the bottom. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The Dock can remain on the bottom. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
 Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aims Usage.app`. Requirements: macOS 14.0.0+, Swift 6.2.0+, and the Go version in `go.mod`. The app is a locally signed development build; public release signing/notarization is separate. Its menu pin toggles the side panel. More contains Settings, custom reminders and Quit. No login item is installed automatically.
 
 ### Provider data and resets
 
-Choose **Compact** (the default) for provider sections with usage bars or **Gauges** for an equal two-column grid of accounts and model groups. Both show every reported limit window with its reset countdown; Gauges uses small rings rather than selecting a single allowance. Percentages mean **used** in both views. Change the saved choice in the single-row toolbar or in Settings; the menu and right-edge panel update together and follow the system's light/dark appearance. Each account's info button opens the full reading, observation time, errors and any reported banked-reset inventory/expiry details. Unknown values stay unknown, and cached readings are labeled. The borderless edge panel has no title-bar spacer; its × button closes it.
+Choose **Compact** (the default) for airy provider rows with usage bars, or **Gauges** for equal-height account/model cards. Both show every reported window and reset countdown. The overview measures its content and grows to fit; scrolling is enabled only when the screen has insufficient room. Gauges uses two columns when possible and three on shorter screens. The saved style applies to both menu and panel. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
+
+The **Edge Dock** parks provider rings at the screen edge, clear of the macOS Dock on any side. Hover for all accounts/models, click to pin details, or open the complete overview. It shows the highest current known usage per provider; a missing/stale-only ratio is an em dash. Enable or hide it in Settings or the toolbar. The app version and Git build revision are visible in More and Settings.
 
 | Provider | Data source | Scheduled reset | Banked / other resets |
 | --- | --- | --- | --- |

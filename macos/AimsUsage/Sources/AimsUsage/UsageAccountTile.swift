@@ -1,68 +1,76 @@
 import SwiftUI
 import UsageCore
 
-/// One account or model group, regardless of provider. All its windows stay visible.
 struct UsageAccountTile: View {
     let provider: UsageProvider
     let row: UsageRow?
+    let metricRows: Int
+    var refreshFailed = false
+    @Environment(\.colorScheme) private var scheme
+    @State private var hovering = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Image(systemName: ProviderStyle.symbol(provider.id))
-                        .foregroundStyle(ProviderStyle.tint(provider.id))
-                    Text(provider.id == "agy" ? "AGY" : ProviderStyle.title(provider))
-                        .fontWeight(.semibold).fixedSize(horizontal: true, vertical: false)
-                    Text("· \(row.map(ProviderStyle.accountName) ?? emptyLabel)")
-                        .lineLimit(1).truncationMode(.middle)
-                        .help("\(ProviderStyle.title(provider)) · \(row?.name ?? emptyLabel)")
+                HStack(spacing: 6) {
+                    ProviderMark(id: provider.id, size: 16)
+                    Text(ProviderStyle.title(provider)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Spacer(minLength: 0)
                     if let row {
                         UsageReadingDetails(provider: provider, row: row)
                     } else if let error = provider.error {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.orange).help(error)
                     }
-                }
-                .font(.system(size: 11))
-                if let row, let windows = row.windows, !windows.isEmpty {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: min(2, windows.count)),
-                        alignment: .leading, spacing: 8
-                    ) {
-                        ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
-                            UsageMetricView(
-                                window: window, style: .gauges, tint: ProviderStyle.tint(provider.id),
-                                stale: row.isStale(at: context.date) || row.error != nil || provider.error != nil,
-                                now: context.date)
+                }.frame(height: 18)
+                Text(row.map(ProviderStyle.accountName) ?? emptyLabel)
+                    .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    .frame(height: 16).help(row?.name ?? emptyLabel)
+                Group {
+                    if let row, let windows = row.windows, !windows.isEmpty {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                            ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                                UsageMetricView(
+                                    window: window, style: .gauges, tint: ProviderStyle.tint(provider.id),
+                                    stale: refreshFailed || row.isStale(at: context.date) || row.error != nil
+                                        || provider.error != nil,
+                                    now: context.date)
+                            }
                         }
+                    } else {
+                        Text(row == nil ? "Check data and CLI folders in Settings" : "Limits not reported")
+                            .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
                     }
-                } else {
-                    Text(row == nil ? "Check data and CLI folders in Settings" : "Limits not reported")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .frame(height: 34, alignment: .leading)
-                }
+                }.frame(maxWidth: .infinity).frame(
+                    height: CGFloat(metricRows) * 74 + CGFloat(metricRows - 1) * 6, alignment: .top)
                 HStack(spacing: 4) {
-                    if let detail = row?.detail, !detail.isEmpty {
+                    if let row,
+                        refreshFailed || row.isStale(at: context.date) || row.error != nil || provider.error != nil
+                    {
+                        Text("Cached").foregroundStyle(.secondary)
+                    } else if let windows = row?.windows, !windows.isEmpty,
+                        windows.allSatisfy({ $0.validPercent == nil })
+                    {
+                        Text("Quota unavailable").foregroundStyle(.secondary)
+                    } else if let detail = row?.detail, !detail.isEmpty {
                         Text(detail).foregroundStyle(.secondary).help(detail)
-                    } else if let plan = row?.plan, !plan.isEmpty {
+                    } else if let plan = ProviderStyle.planLabel(row?.plan) {
                         Text(plan).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
-                    if let row, row.isStale(at: context.date) || row.error != nil || provider.error != nil {
-                        Text("Cached").foregroundStyle(.secondary)
+                    if let row, row.bankedResets != nil {
+                        UsageReadingDetails(provider: provider, row: row, labelStyle: .banked)
                     }
-                    if let balance = row?.bankedResets {
-                        Label("\(balance.available) banked", systemImage: "tray.full")
-                            .foregroundStyle(ProviderStyle.tint(provider.id))
-                    }
-                }
-                .font(.system(size: 10)).lineLimit(1).frame(height: 12)
+                }.font(.system(size: 11)).lineLimit(1).frame(height: 14)
             }
-            .padding(8).frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.07)))
+            .padding(10).frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14).fill(UsagePalette.card(scheme))
+                RoundedRectangle(cornerRadius: 14).fill(
+                    ProviderStyle.tint(provider.id).opacity(hovering ? 0.075 : 0.025))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(UsagePalette.border(scheme)))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
         }
     }
 

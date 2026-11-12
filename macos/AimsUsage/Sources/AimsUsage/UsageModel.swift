@@ -4,7 +4,17 @@ import UsageCore
 
 @MainActor @Observable
 final class UsageModel {
-    var snapshot: UsageSnapshot?
+    var snapshot: UsageSnapshot? { didSet { presentationDidChange?() } }
+    var presentationDidChange: (@MainActor () -> Void)?
+    var dockVisibilityDidChange: (@MainActor (Bool) -> Void)?
+    var dockProvider: String?
+    var dockPeekPinned = false
+    var edgeDockEnabled = UserDefaults.standard.object(forKey: "edgeDockEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(edgeDockEnabled, forKey: "edgeDockEnabled")
+            dockVisibilityDidChange?(edgeDockEnabled)
+        }
+    }
     var error: String?
     var isRefreshing = false
     var panelVisible = false

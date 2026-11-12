@@ -2,21 +2,33 @@ import SwiftUI
 import UsageCore
 
 struct UsageReadingDetails: View {
+    enum LabelStyle { case info, banked, compactBanked }
     let provider: UsageProvider
     let row: UsageRow
+    var labelStyle: LabelStyle = .info
     @State private var presented = false
 
     var body: some View {
         Button {
             presented.toggle()
         } label: {
-            Image(systemName: row.error != nil || provider.error != nil ? "exclamationmark.circle" : "info.circle")
-                .foregroundStyle(row.error != nil || provider.error != nil ? .orange : .secondary)
-                .frame(width: 16, height: 16).contentShape(Rectangle())
+            if labelStyle != .info, let balance = row.bankedResets {
+                Label(
+                    labelStyle == .banked ? "\(balance.available) banked" : "\(balance.available)",
+                    systemImage: "tray.full"
+                )
+                .font(.system(size: 11)).foregroundStyle(ProviderStyle.tint(provider.id)).fixedSize()
+            } else {
+                Image(systemName: row.error != nil || provider.error != nil ? "exclamationmark.circle" : "info.circle")
+                    .foregroundStyle(row.error != nil || provider.error != nil ? .orange : .secondary)
+                    .frame(width: 18, height: 18).contentShape(Rectangle())
+            }
         }
         .buttonStyle(.plain)
         .help("Reading details and banked resets for \(row.name)")
-        .accessibilityLabel("Details for \(ProviderStyle.title(provider)) \(row.name)")
+        .accessibilityLabel(
+            "\(labelStyle == .info ? "Details" : "Banked resets") for \(ProviderStyle.title(provider)) \(row.name)"
+        )
         .popover(isPresented: $presented) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {

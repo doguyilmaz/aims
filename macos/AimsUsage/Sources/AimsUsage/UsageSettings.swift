@@ -9,6 +9,7 @@ struct UsageSettings: View {
     var body: some View {
         Form {
             Section("Display") {
+                Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
                 Picker("Widget appearance", selection: $model.displayStyle) {
                     ForEach(UsageDisplayStyle.allCases) { style in
                         Label(style.title, systemImage: style.symbol).tag(style)
@@ -66,7 +67,7 @@ struct UsageSettings: View {
             }
             Section {
                 Text(
-                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")"
+                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0") · \(Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development")"
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

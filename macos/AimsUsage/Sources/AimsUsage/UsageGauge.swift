@@ -9,7 +9,7 @@ struct UsageGauge: View {
 
     private var percent: Double? { window?.validPercent }
     private var accent: Color {
-        if stale { return .secondary }
+        if stale { return tint.opacity(0.5) }
         if window?.limited == true || (percent ?? 0) >= 95 { return .red }
         if (percent ?? 0) >= 85 { return .orange }
         return tint
@@ -20,16 +20,16 @@ struct UsageGauge: View {
     }
     var body: some View {
         ZStack {
-            Circle().trim(from: 0, to: 0.90)
+            Circle()
                 .stroke(accent.opacity(0.13), style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
-            Circle().trim(from: 0, to: 0.90 * min(1, max(0, (percent ?? 0) / 100)))
+            Circle().trim(from: 0, to: min(1, max(0, (percent ?? 0) / 100)))
                 .stroke(
                     accent,
                     style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
             Text(value).font(.system(size: size * (value.count > 3 ? 0.25 : 0.34), weight: .semibold))
-                .monospacedDigit().rotationEffect(.degrees(-108))
+                .monospacedDigit().rotationEffect(.degrees(90))
         }
-        .rotationEffect(.degrees(108))
+        .rotationEffect(.degrees(-90))
         .frame(width: size, height: size)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

@@ -3,73 +3,75 @@ import UsageCore
 
 struct CompactProviderCard: View {
     let provider: UsageProvider
+    var showHeading = true
+    var refreshFailed = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: ProviderStyle.symbol(provider.id))
-                        .foregroundStyle(ProviderStyle.tint(provider.id))
-                    Text(ProviderStyle.title(provider)).fontWeight(.semibold)
-                    Spacer()
-                    if let error = provider.error, !error.isEmpty {
-                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(error)
-                    }
-                }.font(.system(size: 12))
+                if showHeading {
+                    HStack(spacing: 8) {
+                        ProviderMark(id: provider.id, size: 20)
+                        Text(ProviderStyle.title(provider)).font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        if provider.rows.count == 1, let detail = provider.rows.first?.detail, !detail.isEmpty {
+                            Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).help(detail)
+                        }
+                        if let error = provider.error, !error.isEmpty {
+                            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(error)
+                        }
+                    }.frame(height: 22)
+                }
                 if provider.rows.isEmpty {
                     Text(
                         provider.id == "claude" || provider.id == "codex"
-                            ? "No accounts · choose data in Settings, or run aims init."
+                            ? "No accounts · select your data folder in Settings"
                             : provider.installed ? "No reading yet" : "CLI unavailable"
                     )
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 ForEach(provider.rows) { row in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 2) {
-                                    Text(ProviderStyle.accountName(row)).fontWeight(.medium)
-                                        .lineLimit(2).truncationMode(.middle).help(row.name)
-                                    UsageReadingDetails(provider: provider, row: row)
-                                }.font(.system(size: 11))
-                                if row.isStale(at: context.date) || row.error != nil || provider.error != nil {
-                                    Label("Cached", systemImage: "clock").foregroundStyle(.secondary)
-                                } else if let plan = row.plan, row.bankedResets == nil {
-                                    Text(plan).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                if let balance = row.bankedResets {
-                                    Text("\(balance.available) banked").foregroundStyle(ProviderStyle.tint(provider.id))
-                                }
+                    HStack(spacing: 18) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 4) {
+                                Text(ProviderStyle.accountName(row)).font(.system(size: 12, weight: .medium))
+                                    .lineLimit(1).truncationMode(.middle).help(row.name)
+                                UsageReadingDetails(provider: provider, row: row)
                             }
-                            .font(.system(size: 10)).frame(width: 84, alignment: .leading)
-                            if let windows = row.windows, !windows.isEmpty {
-                                LazyVGrid(
-                                    columns: Array(
-                                        repeating: GridItem(.flexible(), spacing: 14), count: min(2, windows.count)),
-                                    alignment: .leading, spacing: 10
-                                ) {
-                                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
-                                        UsageMetricView(
-                                            window: window, style: .compact, tint: ProviderStyle.tint(provider.id),
-                                            stale: row.isStale(at: context.date) || row.error != nil
-                                                || provider.error != nil,
-                                            now: context.date)
-                                    }
-                                }.frame(maxWidth: .infinity)
-                            } else {
-                                Text("Limits not reported").font(.system(size: 11)).foregroundStyle(.secondary)
-                            }
+                            HStack(spacing: 4) {
+                                if refreshFailed || row.isStale(at: context.date) || row.error != nil
+                                    || provider.error != nil
+                                {
+                                    Text("Cached")
+                                } else if let plan = ProviderStyle.planLabel(row.plan) {
+                                    Text(plan)
+                                }
+                                if row.bankedResets != nil {
+                                    UsageReadingDetails(provider: provider, row: row, labelStyle: .compactBanked)
+                                }
+                            }.font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).frame(height: 14)
+                        }.frame(width: 128, alignment: .leading)
+                        if let windows = row.windows, !windows.isEmpty {
+                            LazyVGrid(
+                                columns: Array(
+                                    repeating: GridItem(.flexible(), spacing: 18), count: min(2, windows.count)),
+                                spacing: 10
+                            ) {
+                                ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                                    UsageMetricView(
+                                        window: window, style: .compact, tint: ProviderStyle.tint(provider.id),
+                                        stale: refreshFailed || row.isStale(at: context.date) || row.error != nil
+                                            || provider.error != nil,
+                                        now: context.date)
+                                }
+                            }.frame(maxWidth: .infinity)
+                        } else {
+                            Text("Limits not reported").font(.system(size: 12)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        if let detail = row.detail, !detail.isEmpty {
-                            Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).help(detail)
-                        }
-                    }
+                    }.frame(minHeight: 44)
                 }
-            }
-            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.07)))
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
