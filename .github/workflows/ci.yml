@@ -53,6 +53,12 @@ jobs:
           name: Aims-Usage-0.1.0-macOS-${{ runner.arch }}-development
           path: dist/Aims-Usage-0.1.0.zip
           retention-days: 7
+      - name: Build isolated macOS usage preview
+        if: runner.os == 'macOS'
+        run: |
+          AIMS_USAGE_PREVIEW=1 \
+            AIMS_USAGE_CLI_BINARY="$PWD/dist/Aims Usage.app/Contents/Resources/aims" \
+            scripts/build-macos-app.sh
       - name: Race tests with isolated process visibility
         if: runner.os == 'Linux'
         timeout-minutes: 20

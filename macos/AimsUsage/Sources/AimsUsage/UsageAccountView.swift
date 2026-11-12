@@ -3,120 +3,120 @@ import UsageCore
 
 struct UsageAccountView: View {
     let row: UsageRow
-    let showBanked: Bool
     let tint: Color
+    let surface: UsageSurface
+    let tile: Bool
+    let showDetails: Bool
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(row.name).font(.system(size: 12, weight: .medium)).lineLimit(2)
-                    Spacer(minLength: 6)
-                    if let plan = row.plan {
-                        Text(plan.replacingOccurrences(of: "_", with: " ")).font(.system(size: 9)).foregroundStyle(
-                            .secondary
-                        ).lineLimit(1)
+            let window = row.featuredWindow(at: context.date)
+            let stale =
+                row.isStale(at: context.date) || row.error != nil || window?.needsRefresh(at: context.date) == true
+            VStack(alignment: tile ? .center : .leading, spacing: 8) {
+                if tile {
+                    Text(ProviderStyle.accountName(row))
+                        .font(.system(size: 11, weight: .medium)).lineLimit(2).truncationMode(.middle)
+                        .frame(height: 28, alignment: .bottom).multilineTextAlignment(.center)
+                    UsageGauge(window: window, tint: tint, stale: stale, size: surface == .panel ? 76 : 56)
+                    resetCaption(window, now: context.date)
+                    if row.isStale(at: context.date) || row.error != nil {
+                        Label("Cached", systemImage: "clock").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
-                }
-                if (row.windows ?? []).isEmpty {
-                    Text("Usage not reported").font(.caption2).foregroundStyle(.secondary)
-                }
-                if let error = row.error {
-                    Text("Last check: \(error) · previous reading retained").font(.caption2).foregroundStyle(.orange)
-                }
-                ForEach(Array((row.windows ?? []).enumerated()), id: \.offset) { _, window in
-                    windowView(window, now: context.date)
-                }
-                if let detail = row.detail { Text(detail).font(.caption2).foregroundStyle(.secondary) }
-                if showBanked { bankedView(now: context.date) }
-                HStack(spacing: 4) {
-                    Image(systemName: row.isStale(at: context.date) ? "clock.badge.exclamationmark" : "clock")
-                    if let at = row.observedAt {
-                        Text("Reported \(at.formatted(.relative(presentation: .numeric)))")
-                    } else {
-                        Text("Not checked")
-                    }
-                    if row.isStale(at: context.date) { Text("· stale") }
-                }.font(.system(size: 9)).foregroundStyle(row.isStale(at: context.date) ? .orange : .secondary)
-            }
-        }
-    }
-
-    private func windowView(_ window: UsageWindow, now: Date) -> some View {
-        let expired = window.needsRefresh(at: now)
-        let percent = window.validPercent
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(ResetPresentation.period(window.label)).foregroundStyle(.secondary)
-                if window.limited == true && !expired {
-                    Text("LIMIT").font(.system(size: 8, weight: .semibold)).foregroundStyle(.orange)
-                }
-                Spacer()
-                Text(
-                    percent.map { String(format: "%.0f%% used", $0) }
-                        ?? (window.limited == true ? "Blocked" : "Unknown")
-                )
-                .fontWeight(.semibold).monospacedDigit().foregroundStyle(expired ? .secondary : .primary)
-            }.font(.system(size: 10))
-            GeometryReader { geometry in
-                Capsule().fill(.white.opacity(0.08))
-                    .overlay(alignment: .leading) {
-                        Capsule().fill(expired ? Color.gray : (percent ?? 0 >= 90 ? .orange : tint))
-                            .frame(width: geometry.size.width * min(1, max(0, (percent ?? 0) / 100)))
-                    }
-            }.frame(height: 4).accessibilityLabel(
-                "\(window.label), \(percent.map { String(format: "%.0f percent used", $0) } ?? "unknown usage")")
-            HStack(alignment: .firstTextBaseline) {
-                if let reset = window.resetsAt {
-                    Text(
-                        expired
-                            ? "Reset passed · refresh needed"
-                            : "Resets \(ResetPresentation.countdown(to: reset, now: now))")
-                    Spacer(minLength: 4)
-                    Text(reset, format: .dateTime.weekday(.abbreviated).hour().minute())
-                        .help(reset.formatted(date: .complete, time: .complete))
+                    bankedBadge
                 } else {
-                    Text("Reset time not reported")
+                    HStack(spacing: 10) {
+                        UsageGauge(window: window, tint: tint, stale: stale, size: surface == .panel ? 72 : 52)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(ProviderStyle.accountName(row))
+                                .font(.system(size: 12, weight: .medium)).lineLimit(2).truncationMode(.middle)
+                            resetCaption(window, now: context.date)
+                            bankedBadge
+                            if row.error != nil || row.isStale(at: context.date) {
+                                Label("Cached", systemImage: "clock")
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
                 }
-            }.font(.system(size: 9)).foregroundStyle(expired ? .orange : .secondary)
+                if showDetails { limitDetails(now: context.date) }
+                if let detail = row.detail, !detail.isEmpty {
+                    Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3).help(detail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: tile ? .center : .leading)
+            .help(observationDescription)
         }
     }
 
-    @ViewBuilder private func bankedView(now: Date) -> some View {
+    @ViewBuilder private var bankedBadge: some View {
         if let balance = row.bankedResets {
-            HStack(spacing: 5) {
-                Image(systemName: "tray.full")
-                Text("\(balance.available) reported banked reset\(balance.available == 1 ? "" : "s")").fontWeight(
-                    .medium)
-            }.font(.system(size: 10)).foregroundStyle(tint)
-            ForEach(balance.credits ?? []) { credit in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(credit.title ?? "Banked reset").lineLimit(2)
-                    if credit.status != "available" { Text("(\(credit.status))") }
-                    Spacer()
-                    if let expiry = credit.expiresAt {
-                        Text(
-                            expiry <= now
-                                ? "Expired · refresh" : "Expires \(ResetPresentation.countdown(to: expiry, now: now))"
-                        )
-                        .help(expiry.formatted(date: .complete, time: .complete))
-                    } else if credit.noExpiry == true {
-                        Text("Does not expire")
-                    } else {
-                        Text("No expiry reported")
-                    }
-                }.font(.system(size: 9)).foregroundStyle(.secondary)
-            }
-            if balance.detailsAreIncomplete {
-                Text(
-                    balance.credits == nil
-                        ? "Expiry details not reported"
-                        : "Details reported for \(balance.detailCount) of \(balance.available) resets; remaining expiries unknown"
-                )
-                .font(.system(size: 9)).foregroundStyle(.tertiary)
+            Label("\(balance.available) banked", systemImage: "tray.full")
+                .font(.system(size: 10, weight: .medium)).foregroundStyle(tint)
+        }
+    }
+
+    private var observationDescription: String {
+        let age =
+            row.observedAt.map { "Reported \($0.formatted(date: .abbreviated, time: .shortened))" }
+            ?? "No observation reported"
+        return [row.name, row.plan, age, row.error].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    @ViewBuilder private func resetCaption(_ window: UsageWindow?, now: Date) -> some View {
+        if let window {
+            VStack(alignment: tile ? .center : .leading, spacing: 2) {
+                Text(window.label == "month" ? "Monthly" : window.label == "budget" ? "Budget" : window.label)
+                    .font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                if let date = window.resetsAt {
+                    Text(
+                        window.needsRefresh(at: now)
+                            ? "Refresh needed" : ResetPresentation.countdown(to: date, now: now)
+                    )
+                    .font(.system(size: 11)).monospacedDigit()
+                    .foregroundStyle(window.needsRefresh(at: now) ? .orange : .secondary)
+                    .help("Resets \(date.formatted(date: .complete, time: .complete))")
+                } else {
+                    Text("Reset unknown").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
             }
         } else {
-            Text("Banked resets · not reported").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Text("No reading").font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func limitDetails(now: Date) -> some View {
+        VStack(spacing: 6) {
+            ForEach(Array((row.windows ?? []).enumerated()), id: \.offset) { _, window in
+                VStack(spacing: 4) {
+                    HStack {
+                        Text(window.label == "month" ? "Monthly" : window.label)
+                        Spacer(minLength: 4)
+                        Text(
+                            window.validPercent.map { String(format: "%.0f%%", $0) }
+                                ?? (window.limited == true ? "Blocked" : "Unknown")
+                        ).monospacedDigit()
+                    }.font(.system(size: 11))
+                    GeometryReader { geometry in
+                        Capsule().fill(tint.opacity(0.10))
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(window.needsRefresh(at: now) ? Color.secondary : tint)
+                                    .frame(
+                                        width: geometry.size.width * min(1, max(0, (window.validPercent ?? 0) / 100)))
+                            }
+                    }.frame(height: 3).accessibilityHidden(true)
+                    if let date = window.resetsAt {
+                        Text(
+                            window.needsRefresh(at: now)
+                                ? "Refresh needed" : ResetPresentation.countdown(to: date, now: now)
+                        )
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(date.formatted(date: .complete, time: .complete))
+                    }
+                }
+            }
         }
     }
 }

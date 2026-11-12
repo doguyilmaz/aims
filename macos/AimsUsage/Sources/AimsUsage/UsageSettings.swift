@@ -9,6 +9,11 @@ struct UsageSettings: View {
     var body: some View {
         Form {
             Section("Display") {
+                Picker("Widget appearance", selection: $model.displayStyle) {
+                    ForEach(UsageDisplayStyle.allCases) { style in
+                        Label(style.title, systemImage: style.symbol).tag(style)
+                    }
+                }
                 Toggle("Show highest current usage in menu bar", isOn: $model.showMenuPercent)
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
                 Text(

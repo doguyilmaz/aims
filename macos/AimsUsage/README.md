@@ -25,7 +25,12 @@ open 'dist/Aims Usage Preview.app'
 
 Preview uses synthetic bundled data, a separate preferences domain and no provider calls. It opens the side panel automatically. `AIMS_USAGE_FIXTURE=/absolute/path/snapshot.json` can also supply a local fixture for development. Preview data is visibly labeled.
 
+The development preview's More menu also opens a native window containing the exact menu layout. This preview window is compiled only for preview builds and is absent from the production app.
+
 ## Daily use
+
+- Choose **Compact** (the default) or **Gauges** above the widgets, or in Settings. The saved choice applies to the menu and right-edge panel. Compact keeps every window in a dense row layout; Gauges gives each account/model group a circular indicator. The app follows the Mac's light/dark appearance.
+- A gauge features the tightest current allowance. Expand a provider's chevron in the menu to see every window; the side panel includes the complete breakdown. Passed resets and missing values never become locally refilled or zero-percent quotas. The tray button opens reported banked-reset details, with counts kept separate for each account.
 
 - Click the gauge in the menu bar. The optional percentage is the highest **current, successfully read** usage among visible providers; stale windows and past reset times do not contribute.
 - The panel opens on first launch. Click the pin to show or close it on the screen containing the pointer. It stays visible across Spaces and remembers whether it was open, including when you quit and relaunch. Closing the panel explicitly keeps it closed on the next launch and leaves the menu bar app running. Quit stops its in-flight refresh before exiting.

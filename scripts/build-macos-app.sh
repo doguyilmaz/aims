@@ -39,8 +39,12 @@ if [[ "${AIMS_USAGE_PREVIEW:-0}" == 1 ]]; then
   bundle_id=com.doguyilmaz.aims.usage.preview
   preview=true
 fi
-swift build --package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift" -c release
-bin=$(swift build --package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift" -c release --show-bin-path)
+swift_args=(--package-path "$repo/macos/AimsUsage" --scratch-path "$build/swift" -c release)
+if [[ "$preview" == true ]]; then
+  swift_args+=(-Xswiftc -DAIMS_USAGE_PREVIEW)
+fi
+swift build "${swift_args[@]}"
+bin=$(swift build "${swift_args[@]}" --show-bin-path)
 mkdir -p "$build/Aims Usage.app/Contents/MacOS" "$build/Aims Usage.app/Contents/Resources"
 cp "$repo/packaging/AppIcon.icns" "$build/Aims Usage.app/Contents/Resources/AppIcon.icns"
 cp "$repo/LICENSE" "$build/Aims Usage.app/Contents/Resources/LICENSE"

@@ -9,6 +9,8 @@ Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aim
 
 ### Provider data and resets
 
+Choose **Compact** (the default) for dense provider widgets or **Gauges** for a circular indicator per account/model group. Change the saved choice above the widgets or in Settings; both the menu and right-edge panel update together and follow the system's light/dark appearance. A gauge features the tightest current allowance; all windows remain available through the provider chevron in the menu and in the panel's detailed breakdown. The tray button opens reported banked-reset details for each account.
+
 | Provider | Data source | Scheduled reset | Banked / other resets |
 | --- | --- | --- | --- |
 | Claude, each configured account | Cached native status line; optional explicit CLI live probe | Reported window timestamps | Not exposed by this status-line reader; shown as unavailable |

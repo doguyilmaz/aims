@@ -29,7 +29,8 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
             panel.isReleasedWhenClosed = false
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate = self
-            panel.contentView = NSHostingView(rootView: UsageDashboard(model: model, togglePanel: toggle))
+            panel.contentView = NSHostingView(
+                rootView: UsageDashboard(model: model, togglePanel: toggle, surface: .panel))
             self.panel = panel
             NotificationCenter.default.addObserver(
                 self, selector: #selector(screenChanged), name: NSApplication.didChangeScreenParametersNotification,
@@ -49,7 +50,7 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
 
     private func position() {
         guard let panel, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
-        let width = min(380, frame.width - 24)
+        let width = min(400, frame.width - 24)
         let height = min(780, frame.height - 24)
         // visibleFrame excludes the menu bar and the Dock on any edge.
         panel.setFrame(

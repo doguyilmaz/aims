@@ -12,6 +12,11 @@ final class UsageModel {
     private(set) var additionalPaths = UserDefaults.standard.string(forKey: "additionalPaths") ?? ""
     private var command: UsageCommand?
     private var shuttingDown = false
+    var displayStyle =
+        UsageDisplayStyle(rawValue: UserDefaults.standard.string(forKey: "displayStyle") ?? "") ?? .compact
+    {
+        didSet { UserDefaults.standard.set(displayStyle.rawValue, forKey: "displayStyle") }
+    }
 
     init() {
         let stored = UserDefaults.standard.string(forKey: "configHome")
