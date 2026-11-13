@@ -31,6 +31,8 @@ The optional menu-bar percentage also uses current successful readings. It is re
 | OpenCode | Native `/api/experimental/usage/limits` | Each Go meter and budget timestamp | Budget amounts and per-model limits remain distinct; no inferred banked resets |
 | Custom | User-defined reminder | Explicit date with timezone | A reminder only; never changes the provider or recorded usage |
 
+Antigravity retains every reported model-group ID, including separate Gemini, Claude/GPT, Argon 4 and Carbon 4 groups when supplied. Groups keep their own usage and reset timestamps even when their bucket IDs match. An account that does not report a group is not given an invented allowance for it.
+
 `aims usage --refresh` and the app's automatic five-minute refresh do not send a model prompt. Claude therefore remains cached until its native status line or an explicit `--live` updates it. The refresh timestamp of one provider never makes another provider's numbers fresh. A failure retains the original observation time, and a reset timestamp passing does not prove that the provider refreshed the allowance.
 
 The passive `--refresh` path updates observation caches without clearing manual routing/login marks. Successful user-controlled reauthentication invalidates old cached quotas; an explicit Claude live probe checks the native offline account identity before attributing cached windows to a changed login. Credentials and history are not copied or migrated by this bookkeeping.
