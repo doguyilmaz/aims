@@ -74,7 +74,7 @@ final class EdgeDockController: NSObject {
         }
         let dockFrame = EdgeDockLayout.frame(
             in: frame, providerCount: model.snapshot?.providers.count ?? 0,
-            side: model.edgeDockSide, size: model.edgeDockSize)
+            side: model.edgeDockSide, size: model.edgeDockSize, position: model.edgeDockPosition)
         dock.setFrame(dockFrame, display: true)
         handle?.setFrame(EdgeDockLayout.handleFrame(for: dockFrame, side: model.edgeDockSide), display: true)
         if let id = model.dockProvider, model.snapshot?.providers.contains(where: { $0.id == id }) != true {

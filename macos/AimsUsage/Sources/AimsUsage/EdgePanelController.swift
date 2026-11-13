@@ -56,8 +56,8 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
         guard let panel, let model, let toggleAction, let frame = (screen ?? NSScreen.main)?.visibleFrame else {
             return
         }
-        let reserved: CGFloat = model.edgeDockEnabled ? model.edgeDockSize.width + EdgeDockLayout.gap : 12
-        let width = min(model.displayStyle.preferredWidth, frame.width - reserved - 24)
+        let width = EdgePanelLayout.frame(in: frame, width: model.displayStyle.preferredWidth, height: desiredHeight)
+            .width
         let maximumBody = max(160, frame.height - 24 - 84)
         position()
         let root = AnyView(
@@ -81,13 +81,9 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
 
     private func position() {
         guard let panel, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
-        let reserved: CGFloat =
-            model?.edgeDockEnabled == true ? (model?.edgeDockSize.width ?? 64) + EdgeDockLayout.gap : 12
-        let width = min(model?.displayStyle.preferredWidth ?? 400, frame.width - reserved - 24)
-        let height = min(desiredHeight, frame.height - 24)
-        // visibleFrame excludes a Dock at the bottom or either edge.
-        let x = model?.edgeDockSide == .left ? frame.minX + reserved : frame.maxX - reserved - width
-        let nextFrame = NSRect(x: x, y: frame.maxY - height - 12, width: width, height: height)
+        // The overview stays at the upper right, independent of Edge Dock preferences.
+        let nextFrame = EdgePanelLayout.frame(
+            in: frame, width: model?.displayStyle.preferredWidth ?? 400, height: desiredHeight)
         let keyboard = NSApp.currentEvent?.type == .keyDown || NSApp.currentEvent?.type == .keyUp
         let resizeOnly = abs(panel.frame.minX - nextFrame.minX) < 1 && abs(panel.frame.maxY - nextFrame.maxY) < 1
         if panel.isVisible && resizeOnly && !keyboard && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {

@@ -17,12 +17,11 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
         }
         model.dockVisibilityDidChange = { [weak self] visible in
             self?.dock.setVisible(visible)
-            self?.panel.reposition()
         }
         model.dockConfigurationDidChange = { [weak self] in
             self?.dock.configurationChanged()
-            self?.panel.reposition()
         }
+        model.dockPositionDidChange = { [weak self] in self?.dock.update() }
         refreshTask = Task { await model.run() }
         UserDefaults.standard.set(true, forKey: "hasLaunched")
         if model.fixtureURL != nil || UserDefaults.standard.bool(forKey: "edgePanelVisible") {

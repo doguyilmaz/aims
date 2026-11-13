@@ -8,8 +8,17 @@ final class UsageModel {
     var presentationDidChange: (@MainActor () -> Void)?
     var dockVisibilityDidChange: (@MainActor (Bool) -> Void)?
     var dockConfigurationDidChange: (@MainActor () -> Void)?
+    var dockPositionDidChange: (@MainActor () -> Void)?
     var dockProvider: String?
     var dockPeekPinned = false
+    var edgeDockPosition = EdgeDockLayout.normalizedPosition(
+        UserDefaults.standard.object(forKey: "edgeDockPosition") as? Double ?? 0.5)
+    {
+        didSet {
+            UserDefaults.standard.set(EdgeDockLayout.normalizedPosition(edgeDockPosition), forKey: "edgeDockPosition")
+            dockPositionDidChange?()
+        }
+    }
     var edgeDockSide = EdgeDockSide(rawValue: UserDefaults.standard.string(forKey: "edgeDockSide") ?? "") ?? .right {
         didSet {
             UserDefaults.standard.set(edgeDockSide.rawValue, forKey: "edgeDockSide")

@@ -29,6 +29,21 @@ struct UsageSettings: View {
                 Picker("Dock size", selection: $model.edgeDockSize) {
                     ForEach(EdgeDockSize.allCases) { Text($0.title).tag($0) }
                 }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Vertical position")
+                        Spacer()
+                        Button("Center") { model.edgeDockPosition = 0.5 }
+                            .controlSize(.small).accessibilityLabel("Center Edge Dock")
+                    }
+                    HStack {
+                        Text("Top").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: $model.edgeDockPosition, in: 0...1)
+                            .accessibilityLabel("Edge Dock vertical position")
+                            .accessibilityValue("\(Int(model.edgeDockPosition * 100)) percent from top")
+                        Text("Bottom").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Toggle("Automatically hide", isOn: $model.edgeDockAutoHide)
                 Text(
                     model.edgeDockAutoHide
