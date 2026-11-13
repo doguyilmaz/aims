@@ -1,4 +1,4 @@
-# Aims Usage 0.2.0
+# Aims Usage 0.3.0
 
 A native macOS menu bar app with an Edge Dock and an overview you can pin beside it. It uses the screen's visible frame, so it stays clear of a Dock on the bottom or either side. It runs as an accessory app with one icon and no Dock tile.
 
@@ -15,7 +15,7 @@ open 'dist/Aims Usage.app'
 
 The script builds for the Mac it runs on, bundles the matching aims CLI, uses the existing aims logo as one app icon, and applies an ad hoc signature. It does not install a login item or replace an installed app. Copy the resulting app to `~/Applications` if desired. Distribution signing/notarization is a separate release step; the local build is a development artifact.
 
-Set `AIMS_USAGE_CLI_BINARY` to a prebuilt, executable aims CLI if the matching Go toolchain is unavailable locally. It must target this Mac and support the usage JSON schema. `AIMS_USAGE_VERSION` defaults to `0.2.0`; `AIMS_USAGE_BUILD_NUMBER` is a separate positive integer (default `1`); `AIMS_CLI_VERSION` defaults to `0.4.7-dev`. The builder does not download a Go toolchain automatically. Temporary compilation products are removed on exit.
+Set `AIMS_USAGE_CLI_BINARY` to a prebuilt, executable aims CLI if the matching Go toolchain is unavailable locally. It must target this Mac and support the usage JSON schema. `AIMS_USAGE_VERSION` defaults to `0.3.0`; `AIMS_USAGE_BUILD_NUMBER` is a separate positive integer (default `2`); `AIMS_CLI_VERSION` defaults to `0.4.7-dev`. The builder does not download a Go toolchain automatically. Temporary compilation products are removed on exit.
 
 ```sh
 swift test --package-path macos/AimsUsage
@@ -55,3 +55,9 @@ See the [provider support and sources](../../docs/content/macos-usage.md) for AP
 The app version and source revision appear in More and Settings so a running older build can be identified. `AIMS_USAGE_SOURCE_REVISION` can override the development revision label; the builder records the Git revision and a dirty marker for tracked changes or untracked files by default. Ignored build outputs do not mark it dirty; an unreadable Git status is labeled unknown. These are build identifiers, separate from the SemVer app version and integer build number.
 
 Provider marks are the pinned Lobe Icons 1.102.0 SVG assets (MIT); the source metadata and license are bundled from [packaging/provider-marks](../../packaging/provider-marks). The app still ships one application icon. No icon package is downloaded at runtime.
+
+## App updates
+
+Sparkle 2.10.1 is pinned in `Package.resolved` and embedded in the app bundle. Development and fixture preview builds have no update feed and never start the updater. A release with a complete HTTPS feed/public-key configuration enables **Check for Updates…** in More and Settings → App updates. Automatic checking is opt-in; automatic installation and system profiling default to off. Sparkle owns update validation, installation and relaunch. The app, Edge Dock and bundled aims are updated as one bundle; a separately selected aims executable and provider CLIs remain managed by their own installers.
+
+The release builder makes a universal Apple Silicon/Intel app, signs nested Sparkle helpers and aims before signing the app, notarizes/staples it, then signs the final archive and generates an appcast. It does not publish anything. Release setup, required repository variables/secrets and the two-build update smoke test are documented in [macOS release operations](../../docs/macos-release.md). The current development build does not become update-enabled merely because Sparkle is linked.

@@ -67,6 +67,9 @@ struct UsageSettings: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
+            Section("App updates") {
+                AppUpdateSettings(updater: model.updater)
+            }
             Section("aims data folder") {
                 TextField("Default: ~/.aims", text: $configHome).textFieldStyle(.roundedBorder)
                 HStack {
@@ -100,7 +103,7 @@ struct UsageSettings: View {
             }
             Section {
                 Text(
-                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0") · \(Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development")"
+                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0") · \(Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development")"
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

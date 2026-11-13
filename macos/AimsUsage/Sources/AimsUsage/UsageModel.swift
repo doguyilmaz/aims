@@ -4,6 +4,7 @@ import UsageCore
 
 @MainActor @Observable
 final class UsageModel {
+    let updater = AppUpdater()
     var snapshot: UsageSnapshot? { didSet { presentationDidChange?() } }
     var presentationDidChange: (@MainActor () -> Void)?
     var dockVisibilityDidChange: (@MainActor (Bool) -> Void)?

@@ -125,6 +125,9 @@ struct UsageDashboard: View {
                     .disabled(
                         model.fixtureURL != nil || model.snapshot?.providers.allSatisfy { $0.rows.isEmpty } != false)
                 Button("Settings…") { showSettings() }
+                if model.updater.isConfigured {
+                    CheckForUpdatesButton(updater: model.updater)
+                }
                 if Bundle.main.object(forInfoDictionaryKey: "AimsUsagePreview") as? Bool == true {
                     Button("Preview menu layout…") { openWindow(id: "usage-menu-preview") }
                 }
@@ -137,7 +140,7 @@ struct UsageDashboard: View {
                 #endif
                 Divider()
                 Text(
-                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0")"
+                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0")"
                 )
                 Text(
                     "Build \(Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development")"
