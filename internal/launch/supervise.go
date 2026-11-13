@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,6 +62,14 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		return Result{Code: 1, Profile: name}, err
 	}
 	defer os.RemoveAll(root)
+	unlock, owned, err := fsx.Lock(filepath.Join(root, "owner"), 0)
+	if err != nil {
+		return Result{Code: 1, Profile: name}, err
+	}
+	if !owned {
+		return Result{Code: 1, Profile: name}, fmt.Errorf("could not own new session directory")
+	}
+	defer unlock()
 	self, err := selfPath()
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
@@ -452,9 +461,29 @@ func validMove(id tool.ID, name, to string) bool {
 func sweep(runs string) {
 	entries, _ := os.ReadDir(runs)
 	for _, e := range entries {
-		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > 30*24*time.Hour {
-			_ = os.RemoveAll(filepath.Join(runs, e.Name()))
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "run-") {
+			continue
 		}
+		root := filepath.Join(runs, e.Name())
+		info, err := e.Info()
+		if err != nil || time.Since(info.ModTime()) <= 30*24*time.Hour {
+			continue
+		}
+		// Legacy or damaged ownership records cannot prove a session ended.
+		// A live owner keeps this lock for its entire supervised session.
+		if owner := fsx.Lstat(filepath.Join(root, "owner.lock")); owner == nil || !owner.Mode().IsRegular() {
+			continue
+		}
+		unlock, owned, err := fsx.Lock(filepath.Join(root, "owner"), 0)
+		if err != nil || !owned {
+			continue
+		}
+		if current := fsx.Lstat(root); current != nil && current.IsDir() && os.SameFile(info, current) {
+			if busy, known := proc.HoldingTree(root); known && !busy {
+				_ = os.RemoveAll(root)
+			}
+		}
+		unlock()
 	}
 }
 

@@ -62,7 +62,7 @@ func Apart(cfg *config.Config, id tool.ID, name string) []string {
 				return false
 			}
 		}
-		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
+		return p != nil && p.Purge == nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
 			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, a, n))
 	}
 	// Shared transcript files alone do not prove that persistent memory and
@@ -188,7 +188,7 @@ func ShareSettings(cfg *config.Config, a tool.Adapter) ([]string, error) {
 	homes := []tool.Home{HubHome(cfg, a)}
 	t := cfg.Tools[a.ID()]
 	for _, n := range t.Order {
-		if p := t.Profiles[n]; p != nil && !p.Existing && p.ShareMode() != config.ShareNone {
+		if p := t.Profiles[n]; p != nil && p.Purge == nil && !p.Existing && p.ShareMode() != config.ShareNone {
 			homes = append(homes, Home(cfg, a, n))
 		}
 	}
@@ -216,6 +216,9 @@ func HubHome(cfg *config.Config, a tool.Adapter) tool.Home {
 // should no longer share (a sharing mode or exclude changed later).
 func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Report {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	if p != nil && p.Purge != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "profile purge is pending; retry aims rm --purge"}}
+	}
 	if p == nil || p.Existing {
 		return nil
 	}
@@ -256,6 +259,9 @@ func CheckSharing(cfg *config.Config, a tool.Adapter, name string) []links.Repor
 // never choose a winner between two settings, histories, or databases.
 func RepairSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	if p != nil && p.Purge != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "profile purge is pending; doctor keeps its files"}}
+	}
 	if p == nil || p.Existing {
 		return nil
 	}
@@ -382,6 +388,9 @@ func (e Evaluation) Busy() bool {
 // Evaluate checks login, cooldown and usage for one profile.
 func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.Adapter, name string) Evaluation {
 	ps := st.Get(a.ID(), name)
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return Evaluation{Name: name, State: ps, Reasons: []string{"profile purge is pending; retry aims rm --purge"}}
+	}
 	acct := a.Account(ctx, Home(cfg, a, name))
 	ev := Evaluation{Name: name, Account: acct, State: ps}
 	now := config.Now()
@@ -429,7 +438,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
 			other := st.Get(a.ID(), n)
-			if n == name || other.Account == nil || !sameLogin(*other.Account, id) {
+			if n == name || cfg.Tools[a.ID()].Profiles[n].Purge != nil || other.Account == nil || !sameLogin(*other.Account, id) {
 				continue
 			}
 			// What aims stored can be out of date; the login itself decides.
@@ -683,6 +692,9 @@ func RecordLogin(id tool.ID, name string, acct tool.Account) error {
 }
 
 func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "profile purge is pending; retry aims rm --purge"}
+	}
 	h := Home(cfg, a, name)
 	p := a.Probe(ctx, h)
 	if err := ctx.Err(); err != nil {
@@ -750,6 +762,9 @@ const RefreshDue = 10 * time.Minute
 // request for a login that is fresh, logged out or of unknown age, and
 // reports whether it renewed this one.
 func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, tool.Account, bool) {
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "profile purge is pending; retry aims rm --purge"}, tool.Account{}, false
+	}
 	h := Home(cfg, a, name)
 	acct := a.Account(ctx, h)
 	if acct.LoggedIn == nil || !*acct.LoggedIn || acct.Expires.IsZero() || acct.Expires.After(config.Now().Add(RefreshDue)) {

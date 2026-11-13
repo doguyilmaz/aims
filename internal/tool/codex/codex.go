@@ -109,7 +109,10 @@ func (*Adapter) HeadlessArgs(o tool.HeadlessOptions) []string {
 	return append(args, "--", o.Prompt)
 }
 
-func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
+func (*Adapter) Account(ctx context.Context, h tool.Home) tool.Account {
+	if ctx.Err() != nil {
+		return tool.Account{}
+	}
 	if h.ProfileEnv["CODEX_API_KEY"] != "" || h.ProfileEnv["OPENAI_API_KEY"] != "" {
 		return tool.Account{LoggedIn: tool.Known(true), Method: "token"}
 	}
@@ -136,7 +139,7 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	if h.Bin == "" {
 		return tool.Account{}
 	}
-	_, code, err := proc.Output(h.Bin, []string{"login", "status"}, h.Env, 15*time.Second)
+	_, code, err := proc.OutputContext(ctx, h.Bin, []string{"login", "status"}, h.Env, 15*time.Second)
 	switch {
 	case err != nil:
 		return tool.Account{}
@@ -197,8 +200,11 @@ var (
 // RegisterMCP runs `codex mcp add`, then adds what it cannot set to the entry
 // it wrote: codex starts MCP servers with only HOME, PATH and a few other
 // variables, and gives up on a tool call after 60 seconds.
-func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, s tool.MCPServer) error {
-	if _, err := runMCP(h, append([]string{"mcp", "add", s.Name, "--"}, s.Command...), alreadyRe); err != nil {
+func (*Adapter) RegisterMCP(ctx context.Context, h tool.Home, s tool.MCPServer) error {
+	if _, err := runMCP(ctx, h, append([]string{"mcp", "add", s.Name, "--"}, s.Command...), alreadyRe); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	path := filepath.Join(h.Dir, "config.toml")
@@ -212,6 +218,9 @@ func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, s tool.MCPServer) er
 	}
 	if out == string(b) {
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return fsx.WriteFile(path, []byte(out), 0o600)
 }
@@ -302,17 +311,20 @@ func completeMCP(toml string, s tool.MCPServer) (out string, ok bool) {
 	return out, true
 }
 
-func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) (bool, error) {
-	return runMCP(h, []string{"mcp", "remove", name}, missingRe)
+func (*Adapter) UnregisterMCP(ctx context.Context, h tool.Home, name string) (bool, error) {
+	return runMCP(ctx, h, []string{"mcp", "remove", name}, missingRe)
 }
 
 // runMCP runs an mcp subcommand. changed is false when it failed with an
 // expected message (already there, nothing to remove).
-func runMCP(h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
+func runMCP(ctx context.Context, h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if h.Bin == "" {
 		return false, &tool.CommandError{Output: "codex is not installed"}
 	}
-	out, code, err := proc.CombinedOutput(h.Bin, args, h.Env, time.Minute)
+	out, code, err := proc.CombinedOutputContext(ctx, h.Bin, args, h.Env, time.Minute)
 	switch {
 	case err != nil:
 		return false, err

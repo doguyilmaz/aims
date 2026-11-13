@@ -55,14 +55,19 @@ func changed(prev *config.Usage, next []tool.Window) bool {
 	if prev == nil || time.Since(prev.At) > time.Minute {
 		return true
 	}
+	if len(prev.Windows) != len(next) {
+		return true
+	}
+	matched := make([]bool, len(prev.Windows))
 	for _, w := range next {
 		found := false
-		for _, p := range prev.Windows {
-			if p.Label == w.Label {
+		for i, p := range prev.Windows {
+			if !matched[i] && p.ID == w.ID && p.Label == w.Label &&
+				p.PercentUnknown == w.PercentUnknown && p.Limited == w.Limited &&
+				math.Abs(p.Percent-w.Percent) < 1 && p.ResetsAt.Equal(w.ResetsAt) {
 				found = true
-				if math.Abs(p.Percent-w.Percent) >= 1 || !p.ResetsAt.Equal(w.ResetsAt) {
-					return true
-				}
+				matched[i] = true
+				break
 			}
 		}
 		if !found {

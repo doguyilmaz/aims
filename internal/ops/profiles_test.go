@@ -38,8 +38,15 @@ func TestPurgeLogoutHelper(t *testing.T) {
 	if mode == "fail" {
 		os.Exit(3)
 	}
+	_, alreadyRan := os.Stat(os.Getenv("AIMS_TEST_LOGOUT_MARKER"))
 	if err := os.WriteFile(os.Getenv("AIMS_TEST_LOGOUT_MARKER"), []byte("logged out"), 0o600); err != nil {
 		os.Exit(4)
+	}
+	if mode == "break-config-once" && os.IsNotExist(alreadyRan) {
+		path := os.Getenv("AIMS_TEST_CONFIG_PATH")
+		if os.Rename(path, path+".saved") != nil || os.Mkdir(path, 0o700) != nil {
+			os.Exit(5)
+		}
 	}
 	os.Exit(0)
 }

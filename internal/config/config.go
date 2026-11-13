@@ -22,7 +22,10 @@ import (
 
 // Profile is one account of one tool.
 type Profile struct {
-	CreatedAt string `json:"createdAt,omitempty"`
+	// Purge checkpoints an explicitly requested removal. Pending profiles may
+	// not launch; rm --purge resumes without repeating a completed logout.
+	Purge     *PurgeState `json:"purge,omitempty"`
+	CreatedAt string      `json:"createdAt,omitempty"`
 	// Existing profiles use the tool's own home and the login already in it.
 	Existing bool `json:"existing,omitempty"`
 	// Share is what the profile shares with the hub: ShareAll (default),
@@ -36,6 +39,12 @@ type Profile struct {
 	Exclude []string `json:"exclude,omitempty"`
 	// Env is extra environment for this profile, e.g. an API key account.
 	Env map[string]string `json:"env,omitempty"`
+}
+
+// PurgeState is a durable removal checkpoint, kept with the original profile
+// until cleanup and state deletion complete. It contains no credential copies.
+type PurgeState struct {
+	LoggedOut bool `json:"loggedOut"`
 }
 
 // Sharing modes.
@@ -338,13 +347,16 @@ func (c *Config) ProfileForHomeEnv(id tool.ID, value string) string {
 	want := norm(value)
 	t := c.Tools[id]
 	for _, n := range t.Order {
+		if t.Profiles[n].Purge != nil {
+			continue
+		}
 		if norm(c.HomeEnv(id, n)) == want {
 			return n
 		}
 	}
 	if !exact && want != "" && t.Hub != "" && want == fsx.Abs(t.Hub) {
 		for _, n := range t.Order {
-			if t.Profiles[n].Existing {
+			if t.Profiles[n].Existing && t.Profiles[n].Purge == nil {
 				return n
 			}
 		}
@@ -376,15 +388,26 @@ func (c *Config) Preferred(id tool.ID, explicit string) (string, error) {
 		if t.Profiles[explicit] == nil {
 			return "", fmt.Errorf("no %s profile %q (see: aims status)", id, explicit)
 		}
+		if t.Profiles[explicit].Purge != nil {
+			return "", fmt.Errorf("%s/%s has a pending purge; retry aims rm %s %s --purge", id, explicit, id, explicit)
+		}
 		return explicit, nil
 	}
-	for _, n := range []string{Pinned(id), t.Active} {
-		if n != "" && t.Profiles[n] != nil {
+	if n := Pinned(id); n != "" && t.Profiles[n] != nil {
+		if t.Profiles[n].Purge != nil {
+			return "", fmt.Errorf("pinned %s/%s has a pending purge; finish its removal before launching it", id, n)
+		}
+		return n, nil
+	}
+	for _, n := range []string{t.Active} {
+		if n != "" && t.Profiles[n] != nil && t.Profiles[n].Purge == nil {
 			return n, nil
 		}
 	}
-	if len(t.Order) > 0 {
-		return t.Order[0], nil
+	for _, n := range t.Order {
+		if t.Profiles[n].Purge == nil {
+			return n, nil
+		}
 	}
 	return "", nil
 }

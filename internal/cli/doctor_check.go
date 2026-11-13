@@ -50,6 +50,9 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		for _, a := range tools.All() {
 			for _, name := range cfg.Tools[a.ID()].Order {
 				p := cfg.Tools[a.ID()].Profiles[name]
+				if p.Purge != nil {
+					continue // only another explicitly confirmed rm --purge may delete this home
+				}
 				if v, ok := profiles.EnvOverride(p, a.Layout().HomeEnv); ok && v != cfg.HomeEnv(a.ID(), name) {
 					continue
 				}
@@ -94,6 +97,10 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		for _, name := range t.Order {
 			key := string(id) + "/" + name
 			p := t.Profiles[name]
+			if p.Purge != nil {
+				add(key+"/purge", "problem", key+": profile purge is pending; normal launches are disabled and doctor keeps its files", "aims rm "+string(id)+" "+name+" --purge")
+				continue
+			}
 			if err := profiles.RequireIsolation(cfg, a, name); err != nil {
 				add(key+"/isolation", "problem", err.Error(), "")
 			}
