@@ -28,7 +28,7 @@ struct UsageDashboard: View {
             }
             .frame(height: min(contentHeight, maximumBodyHeight))
             .scrollDisabled(contentHeight <= maximumBodyHeight + 1)
-            .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .visible : .hidden)
+            .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .automatic : .hidden)
             .scrollBounceBehavior(.basedOnSize)
             .id(model.displayStyle.rawValue)
             footer.frame(height: 32)
@@ -41,7 +41,9 @@ struct UsageDashboard: View {
         .onChange(of: maximumBodyHeight) { heightDidChange(min(contentHeight, maximumBodyHeight) + 84) }
         .frame(width: width)
         .background(UsageBackdrop())
+        .background(UsageScrollStyle())
         .sheet(isPresented: $editingReminder) { CustomResetEditor(model: model) }
+        .environment(\.usageSlimScrollbars, model.slimScrollbars)
     }
 
     @ViewBuilder private var content: some View {

@@ -6,6 +6,7 @@ struct UsageReadingDetails: View {
     let provider: UsageProvider
     let row: UsageRow
     var labelStyle: LabelStyle = .info
+    @Environment(\.usageSlimScrollbars) private var slimScrollbars
     @State private var presented = false
 
     var body: some View {
@@ -51,6 +52,8 @@ struct UsageReadingDetails: View {
                 }
                 .font(.system(size: 12)).padding(16).frame(maxWidth: .infinity, alignment: .leading)
             }.frame(width: 290).frame(maxHeight: 360)
+                .scrollIndicators(.automatic).background(UsageScrollStyle())
+                .environment(\.usageSlimScrollbars, slimScrollbars)
         }
     }
 }

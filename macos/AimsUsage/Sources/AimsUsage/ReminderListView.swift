@@ -30,5 +30,7 @@ struct ReminderListView: View {
                     .secondary)
             }.padding(16)
         }.frame(maxHeight: 360)
+            .scrollIndicators(.automatic).background(UsageScrollStyle())
+            .environment(\.usageSlimScrollbars, model.slimScrollbars)
     }
 }

@@ -45,6 +45,8 @@ struct CustomResetEditor: View {
             }
         }
         .padding(24).frame(width: 420)
+        .scrollIndicators(.automatic).background(UsageScrollStyle())
+        .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
             if model.snapshot?.providers.first(where: { $0.id == provider })?.rows.isEmpty != false {
                 provider = model.snapshot?.providers.first(where: { !$0.rows.isEmpty })?.id ?? "codex"

@@ -15,6 +15,9 @@ struct UsageSettings: View {
                     }
                 }
                 Toggle("Show highest current usage in menu bar", isOn: $model.showMenuPercent)
+                Toggle("Use slim scrollbars", isOn: $model.slimScrollbars)
+                    .help(
+                        "Use compact overlay indicators. Turn off to follow macOS scrollbar appearance and visibility.")
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
                 Text(
                     "Claude uses its cached native status line. Automatic refresh never sends a model prompt, buys credits or redeems resets."
@@ -101,7 +104,9 @@ struct UsageSettings: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).padding(12)
+        }.formStyle(.grouped).scrollIndicators(.automatic).padding(12)
+            .background(UsageScrollStyle())
+            .environment(\.usageSlimScrollbars, model.slimScrollbars)
             .onAppear {
                 configHome = model.configHome
                 additionalPaths = model.additionalPaths

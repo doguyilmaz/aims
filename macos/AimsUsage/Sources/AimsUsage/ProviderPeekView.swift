@@ -43,7 +43,7 @@ struct ProviderPeekView: View {
             }
             .frame(height: min(contentHeight, maximumBodyHeight))
             .scrollDisabled(contentHeight <= maximumBodyHeight + 1)
-            .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .visible : .hidden)
+            .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .automatic : .hidden)
             .simultaneousGesture(
                 TapGesture().onEnded {
                     if model.dockProvider == providerID { model.dockPeekPinned = true }
@@ -53,6 +53,7 @@ struct ProviderPeekView: View {
         }
         .frame(width: EdgeDockLayout.peekWidth)
         .background(UsageBackdrop(inkOpacity: 0.72)).clipShape(RoundedRectangle(cornerRadius: 18))
+        .background(UsageScrollStyle())
         .onPreferenceChange(ContentHeightKey.self) { value in
             guard value > 0 else { return }
             if abs(contentHeight - value) > 0.5 { contentHeight = value }
@@ -60,5 +61,6 @@ struct ProviderPeekView: View {
         }
         .onChange(of: maximumBodyHeight) { heightDidChange(min(contentHeight, maximumBodyHeight) + 80) }
         .onExitCommand(perform: close)
+        .environment(\.usageSlimScrollbars, model.slimScrollbars)
     }
 }

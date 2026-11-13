@@ -49,6 +49,9 @@ final class UsageModel {
     private(set) var summaryDate = Date()
     var isRefreshing = false
     var panelVisible = false
+    var slimScrollbars = UserDefaults.standard.object(forKey: "slimScrollbars") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(slimScrollbars, forKey: "slimScrollbars") }
+    }
     private(set) var configHome: String
     private(set) var additionalPaths = UserDefaults.standard.string(forKey: "additionalPaths") ?? ""
     private var command: UsageCommand?
