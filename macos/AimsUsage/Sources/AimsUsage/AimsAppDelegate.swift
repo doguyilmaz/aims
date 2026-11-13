@@ -11,7 +11,10 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         ProviderAssets.prepare()
         dock.start(model: model, openOverview: togglePanel)
-        model.presentationDidChange = { [weak self] in self?.dock.update() }
+        model.presentationDidChange = { [weak self] in
+            self?.dock.update()
+            self?.panel.reposition()
+        }
         model.dockVisibilityDidChange = { [weak self] visible in
             self?.dock.setVisible(visible)
             self?.panel.reposition()

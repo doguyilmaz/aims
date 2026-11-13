@@ -6,7 +6,7 @@ struct UsageDashboard: View {
     @Bindable var model: UsageModel
     let togglePanel: @MainActor () -> Void
     let surface: UsageSurface
-    var width: CGFloat = 560
+    var width: CGFloat = 400
     var maximumBodyHeight: CGFloat = 1_100
     var heightDidChange: @MainActor (CGFloat) -> Void = { _ in }
     @Environment(\.openSettings) private var openSettings
@@ -96,7 +96,7 @@ struct UsageDashboard: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
@@ -110,18 +110,14 @@ struct UsageDashboard: View {
                     Image(systemName: "arrow.clockwise")
                 }
             }.disabled(model.isRefreshing).help("Refresh quotas without a model prompt")
-            Button {
-                model.edgeDockEnabled.toggle()
-            } label: {
-                Image(systemName: "sidebar.right")
-                    .foregroundStyle(model.edgeDockEnabled ? .cyan : .secondary)
-            }.help(model.edgeDockEnabled ? "Hide Edge Dock" : "Show Edge Dock")
-                .accessibilityLabel("Toggle Edge Dock")
             Button(action: togglePanel) {
                 Image(systemName: surface == .panel ? "xmark" : model.panelVisible ? "pin.fill" : "pin")
             }.help(surface == .panel ? "Close panel" : "Pin this overview")
                 .accessibilityLabel("Toggle overview panel")
             Menu {
+                Button(model.edgeDockEnabled ? "Hide Edge Dock" : "Show Edge Dock", systemImage: "sidebar.right") {
+                    model.edgeDockEnabled.toggle()
+                }
                 Button("Add custom reset reminder…") { editingReminder = true }
                     .disabled(
                         model.fixtureURL != nil || model.snapshot?.providers.allSatisfy { $0.rows.isEmpty } != false)

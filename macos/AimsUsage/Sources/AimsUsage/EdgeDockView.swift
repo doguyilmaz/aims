@@ -11,14 +11,6 @@ struct EdgeDockView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Capsule().fill(.secondary.opacity(0.35)).frame(width: 22, height: 3)
-            Group {
-                if let error = model.error {
-                    Label("aims", systemImage: "exclamationmark.triangle").foregroundStyle(.orange).help(error)
-                } else {
-                    Text("aims").foregroundStyle(.secondary)
-                }
-            }.font(.system(size: 11, weight: .bold))
             if let providers = model.snapshot?.displayProviders {
                 ScrollView {
                     VStack(spacing: 4) {
@@ -29,7 +21,7 @@ struct EdgeDockView: View {
                                 Button {
                                     selectProvider(provider.id)
                                 } label: {
-                                    VStack(spacing: 5) {
+                                    VStack(spacing: 4) {
                                         ZStack {
                                             Circle().stroke(ProviderStyle.tint(provider.id).opacity(0.14), lineWidth: 3)
                                             if let percent = summary.percent {
@@ -40,12 +32,12 @@ struct EdgeDockView: View {
                                                     )
                                                     .rotationEffect(.degrees(-90))
                                             }
-                                            ProviderMark(id: provider.id, size: 20)
-                                        }.frame(width: 40, height: 40)
+                                            ProviderMark(id: provider.id, size: 19)
+                                        }.frame(width: 38, height: 38)
                                         Text(summary.value).font(.system(size: 12, weight: .semibold)).monospacedDigit()
                                             .foregroundStyle(summary.blocked ? .orange : .primary).lineLimit(1)
                                     }
-                                    .frame(width: 58, height: 68)
+                                    .frame(width: 54, height: 60)
                                     .background(
                                         ProviderStyle.tint(provider.id).opacity(
                                             model.dockProvider == provider.id ? 0.13 : 0),
@@ -63,8 +55,15 @@ struct EdgeDockView: View {
                         }
                     }
                 }
-                .frame(height: min(max(0, CGFloat(providers.count) * 72 - 4), max(0, maximumHeight - 80)))
-                .scrollDisabled(CGFloat(providers.count) * 72 - 4 <= maximumHeight - 80)
+                .frame(
+                    height: min(
+                        max(0, CGFloat(providers.count) * EdgeDockLayout.rowStride - 4),
+                        max(0, maximumHeight - EdgeDockLayout.chromeHeight - 4))
+                )
+                .scrollDisabled(
+                    CGFloat(providers.count) * EdgeDockLayout.rowStride - 4
+                        <= maximumHeight - EdgeDockLayout.chromeHeight - 4
+                )
                 .scrollIndicators(.hidden)
             } else if let error = model.error {
                 Button(action: openOverview) {
@@ -77,20 +76,25 @@ struct EdgeDockView: View {
             } else {
                 ProgressView().controlSize(.small).frame(height: 50)
             }
-            HStack(spacing: 14) {
-                Button(action: openOverview) { Image(systemName: "square.grid.2x2") }
-                    .help("Open overview").accessibilityLabel("Open overview")
+            HStack(spacing: 12) {
+                Button(action: openOverview) {
+                    Image(systemName: model.error == nil ? "square.grid.2x2" : "exclamationmark.triangle")
+                        .foregroundStyle(model.error == nil ? Color.secondary : Color.orange).frame(
+                            width: 20, height: 20)
+                }
+                .help(model.error ?? "Open overview").accessibilityLabel("Open overview")
                 Button {
                     model.edgeDockEnabled = false
                 } label: {
-                    Image(systemName: "xmark")
+                    Image(systemName: "xmark").frame(width: 20, height: 20)
                 }
                 .help("Hide Edge Dock").accessibilityLabel("Hide Edge Dock")
-            }.buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(.secondary)
+            }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).frame(height: 20)
         }
-        .padding(.vertical, 12).frame(width: 78)
-        .background(UsageBackdrop())
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(UsagePalette.border(scheme)))
+        .padding(.vertical, EdgeDockLayout.contentInset).frame(width: EdgeDockLayout.width)
+        .frame(maxHeight: .infinity)
+        .background(UsageBackdrop(inkOpacity: 0.58))
+        .clipShape(EdgeDockShape())
+        .overlay(EdgeDockShape().stroke(UsagePalette.border(scheme), lineWidth: 1))
     }
 }

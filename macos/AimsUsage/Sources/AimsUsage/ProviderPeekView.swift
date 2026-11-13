@@ -50,8 +50,8 @@ struct ProviderPeekView: View {
             Text("% used · reset countdowns").font(.system(size: 11)).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).frame(height: 30)
         }
-        .frame(width: 450)
-        .background(UsageBackdrop()).clipShape(RoundedRectangle(cornerRadius: 18))
+        .frame(width: EdgeDockLayout.peekWidth)
+        .background(UsageBackdrop(inkOpacity: 0.72)).clipShape(RoundedRectangle(cornerRadius: 18))
         .onPreferenceChange(ContentHeightKey.self) { value in
             guard value > 0 else { return }
             if abs(contentHeight - value) > 0.5 { contentHeight = value }

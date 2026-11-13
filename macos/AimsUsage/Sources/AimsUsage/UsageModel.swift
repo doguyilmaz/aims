@@ -26,7 +26,10 @@ final class UsageModel {
     var displayStyle =
         UsageDisplayStyle(rawValue: UserDefaults.standard.string(forKey: "displayStyle") ?? "") ?? .compact
     {
-        didSet { UserDefaults.standard.set(displayStyle.rawValue, forKey: "displayStyle") }
+        didSet {
+            UserDefaults.standard.set(displayStyle.rawValue, forKey: "displayStyle")
+            presentationDidChange?()
+        }
     }
 
     init() {

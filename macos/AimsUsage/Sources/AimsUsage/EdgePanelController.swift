@@ -56,8 +56,8 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
         guard let panel, let model, let toggleAction, let frame = (screen ?? NSScreen.main)?.visibleFrame else {
             return
         }
-        let reserved: CGFloat = model.edgeDockEnabled ? 106 : 12
-        let width = min(560, frame.width - reserved - 24)
+        let reserved: CGFloat = model.edgeDockEnabled ? EdgeDockLayout.width + EdgeDockLayout.gap : 12
+        let width = min(model.displayStyle.preferredWidth, frame.width - reserved - 24)
         let maximumBody = max(160, frame.height - 24 - 84)
         position()
         let root = AnyView(
@@ -81,8 +81,8 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
 
     private func position() {
         guard let panel, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
-        let reserved: CGFloat = model?.edgeDockEnabled == true ? 106 : 12
-        let width = min(560, frame.width - reserved - 24)
+        let reserved: CGFloat = model?.edgeDockEnabled == true ? EdgeDockLayout.width + EdgeDockLayout.gap : 12
+        let width = min(model?.displayStyle.preferredWidth ?? 400, frame.width - reserved - 24)
         let height = min(desiredHeight, frame.height - 24)
         // visibleFrame excludes a Dock at the bottom or either edge.
         let nextFrame = NSRect(

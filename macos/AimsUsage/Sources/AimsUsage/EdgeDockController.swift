@@ -31,7 +31,7 @@ final class EdgeDockController: NSObject {
         guard let dock, let model, let openOverview else { return }
         dock.contentView = NSHostingView(
             rootView: EdgeDockView(
-                model: model, maximumHeight: (screen?.visibleFrame.height ?? 800) - 24,
+                model: model, maximumHeight: (screen?.visibleFrame.height ?? 800) - 16,
                 hoverProvider: { [weak self] id in self?.present(id, pin: false) },
                 selectProvider: { [weak self] id in self?.present(id, pin: true) },
                 openOverview: { [weak self] in
@@ -53,8 +53,7 @@ final class EdgeDockController: NSObject {
     func update() {
         guard let dock, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
         let count = model?.snapshot?.providers.count ?? 0
-        let height = min(frame.height - 24, count == 0 ? 130 : CGFloat(count) * 72 + 78)
-        dock.setFrame(NSRect(x: frame.maxX - 90, y: frame.midY - height / 2, width: 78, height: height), display: true)
+        dock.setFrame(EdgeDockLayout.frame(in: frame, providerCount: count), display: true)
         if let id = model?.dockProvider, model?.snapshot?.providers.contains(where: { $0.id == id }) != true {
             closePeek()
         }
@@ -138,10 +137,12 @@ final class EdgeDockController: NSObject {
             let index = model?.snapshot?.displayProviders.firstIndex(where: { $0.id == id })
         else { return }
         let height = min(peekHeight, frame.height - 24)
-        let anchorY = dock.frame.maxY - 78 - CGFloat(index) * 72
+        let anchorY = dock.frame.maxY - EdgeDockLayout.contentInset - 30 - CGFloat(index) * EdgeDockLayout.rowStride
         let y = min(frame.maxY - height - 12, max(frame.minY + 12, anchorY - height / 2))
         peek.setFrame(
-            NSRect(x: max(frame.minX + 12, dock.frame.minX - 462), y: y, width: 450, height: height), display: true)
+            NSRect(
+                x: max(frame.minX + 12, dock.frame.minX - EdgeDockLayout.peekWidth - EdgeDockLayout.gap), y: y,
+                width: EdgeDockLayout.peekWidth, height: height), display: true)
     }
 
     private func installMonitors() {

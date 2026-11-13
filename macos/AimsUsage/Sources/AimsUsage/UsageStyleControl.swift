@@ -19,7 +19,7 @@ struct UsageStyleControl: View {
                 } label: {
                     Text(style.title).font(.system(size: 12, weight: .medium))
                         .foregroundStyle(selection == style ? .primary : .secondary)
-                        .frame(width: 76, height: 28)
+                        .frame(width: 60, height: 28)
                         .background {
                             if selection == style {
                                 RoundedRectangle(cornerRadius: 7).fill(.cyan.opacity(0.16))

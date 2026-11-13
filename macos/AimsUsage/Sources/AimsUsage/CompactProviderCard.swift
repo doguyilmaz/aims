@@ -31,7 +31,7 @@ struct CompactProviderCard: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 ForEach(provider.rows) { row in
-                    HStack(spacing: 18) {
+                    HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 4) {
                                 Text(ProviderStyle.accountName(row)).font(.system(size: 12, weight: .medium))
@@ -50,11 +50,11 @@ struct CompactProviderCard: View {
                                     UsageReadingDetails(provider: provider, row: row, labelStyle: .compactBanked)
                                 }
                             }.font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).frame(height: 14)
-                        }.frame(width: 128, alignment: .leading)
+                        }.frame(width: 124, alignment: .leading)
                         if let windows = row.windows, !windows.isEmpty {
                             LazyVGrid(
                                 columns: Array(
-                                    repeating: GridItem(.flexible(), spacing: 18), count: min(2, windows.count)),
+                                    repeating: GridItem(.flexible(), spacing: 12), count: min(2, windows.count)),
                                 spacing: 10
                             ) {
                                 ForEach(Array(windows.enumerated()), id: \.offset) { _, window in

@@ -9,9 +9,9 @@ struct AimsUsageApp: App {
         MenuBarExtra {
             UsageDashboard(
                 model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
+                width: delegate.model.displayStyle.preferredWidth,
                 maximumBodyHeight: maximumBodyHeight()
             )
-            .frame(width: 560)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "gauge.with.dots.needle.33percent")
@@ -24,14 +24,15 @@ struct AimsUsageApp: App {
             Window("Menu preview", id: "usage-menu-preview") {
                 UsageDashboard(
                     model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
+                    width: delegate.model.displayStyle.preferredWidth,
                     maximumBodyHeight: maximumBodyHeight()
                 )
-                .frame(width: 560)
             }
             .windowResizability(.contentSize)
             Window("Small-screen preview", id: "usage-small-preview") {
                 UsageDashboard(
-                    model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover, width: 560,
+                    model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
+                    width: delegate.model.displayStyle.preferredWidth,
                     maximumBodyHeight: 300)
             }
             .windowResizability(.contentSize)
