@@ -30,8 +30,10 @@ func parseAgy(raw []byte) Reading {
 		Command struct {
 			Data struct {
 				Groups []struct {
+					ID      string `json:"id"`
 					Name    string `json:"name"`
 					Buckets []struct {
+						ID        string    `json:"id"`
 						Window    string    `json:"window"`
 						Remaining *float64  `json:"remaining_fraction"`
 						ResetTime time.Time `json:"reset_time"`
@@ -46,16 +48,20 @@ func parseAgy(raw []byte) Reading {
 	}
 	var r Reading
 	for _, g := range doc.Command.Data.Groups {
-		row := Row{Name: g.Name}
+		row := Row{ID: g.ID, Name: g.Name}
+		if row.ID == "" {
+			row.ID = g.Name
+		}
 		for _, b := range g.Buckets {
 			if b.Disabled || b.Remaining == nil {
 				continue
 			}
-			row.Windows = append(row.Windows, tool.Window{Label: label(b.Window), Percent: pct(1-*b.Remaining, 1), ResetsAt: b.ResetTime})
+			if *b.Remaining < 0 || *b.Remaining > 1 {
+				continue
+			}
+			row.Windows = append(row.Windows, tool.Window{ID: b.ID, Label: label(b.Window), Percent: pct(1-*b.Remaining, 1), ResetsAt: b.ResetTime})
 		}
-		if len(row.Windows) > 0 {
-			r.Rows = append(r.Rows, row)
-		}
+		r.Rows = append(r.Rows, row)
 	}
 	return r
 }

@@ -10,8 +10,8 @@ aims handles the logins of your personal and work accounts, so it is built to to
 ## Logins
 
 - **Never copied.** Each account logs in once, with the tool's own login, into its own folder. Claude Code and Codex rotate refresh tokens, so a copied login would also log the original out; aims refuses to do it and the skill tells the model not to.
-- **Never read for their secrets.** aims checks that a login exists and reads the e-mail and plan stored next to it, to show you which account is which. Token values are not used.
-- **Removed cleanly.** `aims rm --purge` runs the tool's own logout before deleting the folder, so no login stays behind in the macOS keychain or an OS keyring.
+- **Read locally when needed.** Account inspection reads local login files and, for Claude Code on macOS, its keychain entry to identify login state and plan. Live checks run through the native CLIs: Codex's app-server account API and a one-word Claude Code prompt. Credential contents are not printed by bridge inspection or the default doctor check, and login files are never copied between profiles.
+- **Removed through the tool.** `aims rm --purge` requires the tool's own logout before deleting the folder. If logout fails or the executable is unavailable, registration and remaining files stay for retry, including when the folder is already missing but a keychain/keyring entry may remain.
 - **Kept apart.** Variables that would override a profile's login (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY`) are removed from the tool's environment, and aims tells you when it does, unless the profile sets them itself.
 
 ## Network
@@ -29,13 +29,14 @@ Everything else, including your prompts and conversations, goes from the tools t
 ## Files
 
 - `~/.aims`, its `config.json` and `state.json`, and the profile folders are created readable by you only. If you put an API key in a profile's `env`, it is stored in `config.json` in plain text, as the tools store their own.
-- Writes are atomic (a temporary file, then a rename), so an interrupted aims never leaves a half-written file. A file you keep as a symlink (dotfiles) is written through, not replaced.
+- Writes use a private temporary file and a rename. Existing file access controls are retained, including Unix ACLs/group ownership and Windows DACLs. A file you keep as a symlink (dotfiles) is written through, not replaced.
+- Directory adoption preserves Unix ACLs, ownership, group/setgid and Windows DACLs. Copies are populated privately before their final access controls are restored; if aims cannot preserve those controls, it reports a conflict. T3 exports and recovery files are created privately even in a directory with inherited read grants.
 - aims deletes only what it created: `--purge` refuses folders outside `~/.aims/profiles`, and shared content is moved to the hub before a profile folder goes. When it repairs a link it never overwrites: the other version is kept under a new name.
 - A custom profile folder (`--dir`) must be new, empty or a config folder of that tool, and may not overlap your home folder, `~/.aims` or the tool's folder, also through a symlink or a different letter case.
 
 ## Sessions and the model
 
-The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, switch the account for new sessions, and run a prompt with another account. It cannot log in, read logins or change the account of the running session. `aims_run` is read-only unless the call asks for `write`, so a restricted session cannot use it to edit files; see [AI integration](../ai-integration#mcp-server).
+The MCP server lets the model see your account names, the e-mail addresses of your logins and their usage, choose the account for new sessions, request a conversation move in a supervised session, and run a prompt with another account. It exposes no login or raw-credential-reading tool. By default, `aims_run` requests Claude Code's plan mode or Codex's read-only sandbox; aims does not add operating-system isolation. The installed CLI's permission, trust and hook settings enforce those controls, and your MCP client controls call approval. With `write: true`, the run uses the CLI's normal settings. See [AI integration](../ai-integration#mcp-server).
 
 Codex reviews new or changed hooks before they run. aims skips that review only on the restarts it makes itself, and only when you turn on `failover.trustHooks` (`aims setup --trust-hooks`); see [Failover](../failover#codex-hooks).
 
@@ -46,3 +47,5 @@ If one account must never see another's conversations, give it `share: settings`
 ## Reporting a problem
 
 Please report security issues privately through [GitHub security advisories](https://github.com/doguyilmaz/aims/security/advisories/new) rather than in a public issue.
+
+Integration changes preserve MCP settings in private, content-addressed files under `~/.aims/recovery/mcp`. Skill updates retain previous text beside the installed skill directory. These recovery copies survive clean; MCP settings can contain inline secrets, so they should remain private. The mechanism never copies `auth.json`, `.credentials.json` or keychain credentials. A failed clean retains aims configuration and account marks for retry.

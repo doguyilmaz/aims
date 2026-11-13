@@ -72,7 +72,7 @@ aims --version
 aims doctor
 ```
 
-`doctor` lists what aims found: the tools and their versions, your logins, the shared folders and the integrations, with the command to fix anything that is off. Then go on with the [Quick start](../quick-start).
+`doctor` checks paths, shared folders and integrations without changes or credential access. Use `aims doctor --fix` for conservative repairs and `aims doctor --logins` for explicit local login/version inspection. Then go on with the [Quick start](../quick-start).
 
 ## Supported platforms
 

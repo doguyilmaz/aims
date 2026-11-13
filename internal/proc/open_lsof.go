@@ -56,6 +56,15 @@ func Writing(pids ...int) (map[int][]string, bool) {
 // Holding reports whether a process has a file in dir open. ok is false
 // when this system cannot tell.
 func Holding(dir string) (held, ok bool) {
+	return holdingDirectory(dir, false)
+}
+
+// HoldingTree also checks nested transcripts and plugin state before a merge.
+func HoldingTree(dir string) (held, ok bool) {
+	return holdingDirectory(dir, true)
+}
+
+func holdingDirectory(dir string, recursive bool) (held, ok bool) {
 	bin, err := exec.LookPath("lsof")
 	if err != nil {
 		bin = "/usr/sbin/lsof"
@@ -65,7 +74,11 @@ func Holding(dir string) (held, ok bool) {
 	}
 	// -t prints only pids; lsof exits 1 both when nothing has the folder's
 	// files open and on an error, which prints a message instead.
-	out, code, err := CombinedOutput(bin, []string{"-w", "-n", "-P", "-t", "+d", dir}, nil, 10*time.Second)
+	flag := "+d"
+	if recursive {
+		flag = "+D"
+	}
+	out, code, err := CombinedOutput(bin, []string{"-w", "-n", "-P", "-t", flag, dir}, nil, 10*time.Second)
 	if err != nil || (code != 0 && code != 1) {
 		return false, false
 	}

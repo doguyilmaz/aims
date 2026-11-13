@@ -227,6 +227,14 @@ type Layout struct {
 	// directory name under $HOME used when it is unset.
 	HomeEnv     string
 	DefaultHome string
+	// ExactHomeEnv means the login identity depends on the literal home
+	// variable (including unset vs. an explicit default), not just its path.
+	ExactHomeEnv bool
+	// TranscriptDir holds the primary conversation files inside the home.
+	TranscriptDir string
+	// ACPBin is the optional upstream adapter. The adapter, not aims, owns
+	// its ACP implementation and any bundled native runtime version.
+	ACPBin string
 	// Shared entries are linked from every profile to the hub. Anything not
 	// listed, above all the login files, stays private to the profile.
 	Shared []Entry
@@ -252,6 +260,8 @@ type Layout struct {
 	ConflictingEnv []string
 	// SkillsDir is where skills live inside the home ("" if unsupported).
 	SkillsDir string
+	// SettingsFile is the shared settings entry used by integrations.
+	SettingsFile string
 	// Markers are entries only the tool's own folder has. An existing folder
 	// given as a profile's --dir must hold one, so a code repository (with its
 	// own CLAUDE.md or plugins/) is never mistaken for a config folder.
@@ -353,9 +363,12 @@ func Known(b bool) *bool { return &b }
 
 // Window is one plan usage window, e.g. "5h" or "7d".
 type Window struct {
-	Label    string    `json:"label"`
-	Percent  float64   `json:"pct"`
-	ResetsAt time.Time `json:"resetsAt,omitzero"`
+	ID             string    `json:"id,omitempty"`
+	Label          string    `json:"label"`
+	Percent        float64   `json:"pct"`
+	PercentUnknown bool      `json:"pctUnknown,omitempty"`
+	Limited        bool      `json:"limited,omitempty"`
+	ResetsAt       time.Time `json:"resetsAt,omitzero"`
 }
 
 // Short reports whether the window is the short one, the five hours of
@@ -386,6 +399,12 @@ type Probe struct {
 	Email   string
 	Plan    string
 	Windows []Window
+	Groups  []QuotaGroup
+	Resets  *ResetBalance
+	// UsageReported distinguishes a complete, empty report from an unavailable
+	// report. UsageError does not change the provider's session eligibility.
+	UsageReported bool
+	UsageError    string
 }
 
 // MCPScope is where a tool keeps user-level MCP servers.
@@ -407,6 +426,12 @@ type MCPServer struct {
 // nil when it is complete or not there.
 type MCPAuditor interface {
 	MCPMissing(h Home, s MCPServer) []string
+}
+
+// MCPConfigLocator identifies settings to preserve before a provider changes
+// its MCP registration. It never identifies a credential file.
+type MCPConfigLocator interface {
+	MCPConfigPath(Home) string
 }
 
 const (

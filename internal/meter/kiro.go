@@ -115,7 +115,8 @@ func kiroUsage(ctx context.Context, url, token, arn string) ([]byte, error) {
 
 func parseKiro(raw []byte) Reading {
 	var doc struct {
-		Sub struct {
+		Resets float64 `json:"nextDateReset"`
+		Sub    struct {
 			Title string `json:"subscriptionTitle"`
 		} `json:"subscriptionInfo"`
 		Usage []struct {
@@ -136,8 +137,12 @@ func parseKiro(raw []byte) Reading {
 		}
 		plan := u.Used - u.Over
 		w := tool.Window{Label: "month", Percent: pct(plan, u.Limit)}
-		if u.Resets > 0 {
-			w.ResetsAt = time.Unix(int64(u.Resets), 0).UTC()
+		reset := u.Resets
+		if reset <= 0 {
+			reset = doc.Resets
+		}
+		if reset > 0 {
+			w.ResetsAt = tool.ParseTime(reset)
 		}
 		name := strings.ToLower(u.Name)
 		if name == "" {

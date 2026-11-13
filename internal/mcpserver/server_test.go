@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +15,13 @@ import (
 	"github.com/doguyilmaz/aims/internal/tools"
 )
 
-func TestMain(m *testing.M) { testutil.Main(m) }
+func TestMain(m *testing.M) {
+	if os.Getenv("AIMS_TEST_MCP_CONTEXT_WORKER") == "1" {
+		contextWorker()
+		return
+	}
+	testutil.Main(m)
+}
 
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
@@ -89,30 +96,42 @@ func TestTools(t *testing.T) {
 }
 
 func TestStatusAndSwitch(t *testing.T) {
-	setup(t)
-	t.Setenv("AIMS_SESSION_PROFILE", "claude:work")
-	cs := connect(t)
+	for _, repository := range []bool{true, false} {
+		where := map[bool]string{true: "project", false: "folder"}[repository]
+		t.Run(where, func(t *testing.T) {
+			setup(t)
+			cwd := t.TempDir()
+			if repository {
+				if err := os.Mkdir(filepath.Join(cwd, ".git"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Chdir(cwd)
+			t.Setenv("AIMS_SESSION_PROFILE", "claude:work")
+			cs := connect(t)
 
-	out, isErr := call(t, cs, "aims_status", map[string]any{"tool": "claude"})
-	if isErr || !strings.Contains(out, "This session runs as claude:work") || !strings.Contains(out, "* personal: me@gmail.com (pro), ready") {
-		t.Fatalf("status:\n%s", out)
-	}
+			out, isErr := call(t, cs, "aims_status", map[string]any{"tool": "claude"})
+			if isErr || !strings.Contains(out, "This session runs as claude:work") || !strings.Contains(out, "* personal: me@gmail.com (pro), ready") {
+				t.Fatalf("status:\n%s", out)
+			}
 
-	out, isErr = call(t, cs, "aims_switch", map[string]any{"profile": "work"})
-	if isErr || !strings.Contains(out, `Claude Code sessions in this project (`) || !strings.Contains(out, `now use "work"`) {
-		t.Fatalf("switch: %s", out)
-	}
-	out, _ = call(t, cs, "aims_status", nil)
-	if !strings.Contains(out, "* work") {
-		t.Fatalf("switch did not stick:\n%s", out)
-	}
+			out, isErr = call(t, cs, "aims_switch", map[string]any{"profile": "work"})
+			if isErr || !strings.Contains(out, "Claude Code sessions in this "+where+" (") || !strings.Contains(out, `now use "work"`) {
+				t.Fatalf("switch: %s", out)
+			}
+			out, _ = call(t, cs, "aims_status", nil)
+			if !strings.Contains(out, "* work") {
+				t.Fatalf("switch did not stick:\n%s", out)
+			}
 
-	out, isErr = call(t, cs, "aims_switch", map[string]any{"tool": "claude", "profile": "nobody"})
-	if !isErr || !strings.Contains(out, `no claude profile "nobody"`) {
-		t.Fatalf("unknown profile: %s", out)
-	}
-	if out, isErr = call(t, cs, "aims_status", map[string]any{"tool": "gemini"}); !isErr {
-		t.Fatalf("unknown tool accepted: %s", out)
+			out, isErr = call(t, cs, "aims_switch", map[string]any{"tool": "claude", "profile": "nobody"})
+			if !isErr || !strings.Contains(out, `no claude profile "nobody"`) {
+				t.Fatalf("unknown profile: %s", out)
+			}
+			if out, isErr = call(t, cs, "aims_status", map[string]any{"tool": "gemini"}); !isErr {
+				t.Fatalf("unknown tool accepted: %s", out)
+			}
+		})
 	}
 }
 

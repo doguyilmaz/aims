@@ -1,6 +1,8 @@
-//go:build !darwin && !linux && !freebsd && !openbsd && !netbsd
+//go:build !windows && !darwin && !linux && !freebsd && !openbsd && !netbsd
 
 package proc
+
+func HoldingTree(dir string) (bool, bool) { return Holding(dir) }
 
 // Writing lists the files pids have open for writing, by the pid holding
 // them. ok is false when this system cannot tell.

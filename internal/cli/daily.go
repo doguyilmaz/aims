@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"slices"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -20,6 +23,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 	"github.com/doguyilmaz/aims/internal/ui"
+	"github.com/doguyilmaz/aims/internal/usage"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -43,7 +47,7 @@ aims status --json`,
 				ids = []tool.ID{a.ID()}
 			}
 			if live {
-				if err := checkLive(cmd.Context(), ids, asJSON); err != nil {
+				if err := checkLive(cmd.Context(), ids, asJSON, false); err != nil {
 					return err
 				}
 			}
@@ -55,7 +59,7 @@ aims status --json`,
 	return cmd
 }
 
-func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
+func checkLive(ctx context.Context, ids []tool.ID, quiet, usageOnly bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -71,7 +75,13 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 		}
 		for _, n := range cfg.Tools[id].Order {
 			var p tool.Probe
-			run := func() { p = profiles.Live(ctx, cfg, a, n) }
+			run := func() {
+				if usageOnly {
+					p = profiles.ReadUsage(ctx, cfg, a, n)
+				} else {
+					p = profiles.Live(ctx, cfg, a, n)
+				}
+			}
 			if quiet || !ui.Interactive() {
 				run()
 			} else {
@@ -83,10 +93,14 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet bool) error {
 		}
 	}
 	if everything {
+		var err error
 		if quiet || !ui.Interactive() {
-			meter.Refresh(ctx)
+			_, err = meter.Refresh(ctx)
 		} else {
-			ui.Spin("checking other tools", func() { meter.Refresh(ctx) })
+			ui.Spin("checking other tools", func() { _, err = meter.Refresh(ctx) })
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -128,40 +142,91 @@ func otherTools() []string {
 }
 
 func newUsageCmd() *cobra.Command {
-	var live bool
+	var live, refresh, asJSON bool
 	cmd := &cobra.Command{
-		Use:   "usage [tool]",
+		Use:   "usage [provider]",
 		Short: "Show every limit and when it resets, also for Antigravity, Grok, Kiro and OpenCode",
 		Example: `aims usage
-aims usage --live
-aims usage codex`,
-		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: completeTools,
+aims usage --refresh --json
+aims usage codex
+aims usage agy --refresh`,
+		Args: cobra.MaximumNArgs(1),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+			if len(args) > 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return []string{"claude", "codex", "kiro", "grok", "agy", "opencode"}, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			parent := cmd.Context()
+			ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+			defer func() { stop(); cmd.SetContext(parent) }()
+			cmd.SetContext(ctx)
+			filter := ""
+			if len(args) > 0 {
+				filter = args[0]
+			}
+			if _, err := usage.Load(filter); err != nil {
+				return err
+			}
 			var ids []tool.ID
-			if len(args) == 1 {
+			if filter == "claude" || filter == "codex" {
 				a, err := parseTool(args[0])
 				if err != nil {
 					return err
 				}
 				ids = []tool.ID{a.ID()}
 			}
-			if live {
-				if err := checkLive(cmd.Context(), ids, false); err != nil {
+			core := filter == "" || filter == "claude" || filter == "codex"
+			if live && core {
+				if err := checkLive(cmd.Context(), ids, asJSON, false); err != nil {
 					return err
 				}
 			}
-			report, err := ops.Status(cmd.Context(), ids)
-			if err != nil {
+			if refresh && (filter == "" || filter == "codex") {
+				if err := checkLive(cmd.Context(), []tool.ID{"codex"}, asJSON, true); err != nil {
+					return err
+				}
+			}
+			if (refresh || live) && (!core || (refresh && filter == "")) {
+				var err error
+				if filter == "" {
+					_, err = meter.Refresh(cmd.Context())
+				} else {
+					_, err = meter.Refresh(cmd.Context(), filter)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			if err := cmd.Context().Err(); err != nil {
 				return err
+			}
+			if asJSON {
+				s, err := usage.Load(filter)
+				if err != nil {
+					return err
+				}
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(s)
+			}
+			var report []ops.ToolStatus
+			var err error
+			if core {
+				report, err = ops.Status(cmd.Context(), ids)
+				if err != nil {
+					return err
+				}
 			}
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
 			var ms []meter.Status
-			if len(ids) == 0 {
+			if filter == "" || !core {
 				ms = meter.Load()
+				if filter != "" {
+					ms = slices.DeleteFunc(ms, func(m meter.Status) bool { return m.ID != filter })
+				}
 			}
 			out := cmd.OutOrStdout()
 			width := 0
@@ -169,10 +234,24 @@ aims usage codex`,
 				width = ui.Width()
 			}
 			fmt.Fprint(out, ui.RenderUsage(ui.NewStyles(out), report, ms, cfg.Failover.Threshold, width))
+			snapshot, err := usage.Load(filter)
+			if err != nil {
+				return err
+			}
+			if snapshot.CustomResetsError != "" {
+				fmt.Fprintln(out, snapshot.CustomResetsError)
+			}
+			for _, r := range snapshot.CustomResets {
+				fmt.Fprintf(out, "Custom reset · %s/%s · %s · %s (user reminder)\n", r.Provider, r.Row, r.At.Local().Format(time.RFC3339), r.Label)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&live, "live", false, "ask the providers first (Codex: free account API; Claude: a one-word prompt; other tools: their usage commands)")
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "refresh Codex and other tools without a model prompt; Claude uses its last reported status line")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the versioned usage snapshot without credentials or account e-mail")
+	cmd.MarkFlagsMutuallyExclusive("live", "refresh")
+	cmd.AddCommand(newUsageResetCmd())
 	return cmd
 }
 

@@ -1,0 +1,71 @@
+# Inspection from an orchestrator's home must not repair or set anything up.
+exec aims bridge --json
+stdout '"tool": "codex"'
+! exists $HOME/.aims
+! exists $HOME/.t3
+
+exec aims add claude default --existing
+exec aims add claude work
+exec aims add codex default --existing
+exec aims add codex work
+exec aims login codex work
+
+cp t3.json $WORK/t3-settings.json
+exec aims bridge t3 --settings $WORK/t3-settings.json --output $WORK/export.json
+stdout 'existing CLI login'
+stdout 'Shared transcript files do not automatically create T3 threads'
+cmp $WORK/t3-settings.json t3.json
+grep '"unknownFutureSetting"' $WORK/export.json
+grep '"managed-token-ref"' $WORK/export.json
+grep '"setupMode": "existing"' $WORK/export.json
+grep '"name": "CLAUDE_CONFIG_DIR"' $WORK/export.json
+! exists $HOME/.t3
+
+# No secrets or unknown settings from T3 appear in the public plan.
+exec aims bridge t3 --settings $WORK/t3-settings.json --json
+stdout '"providerInstances"'
+! stdout 'managed-token-ref'
+! stdout 'unknownFutureSetting'
+cmp $WORK/t3-settings.json t3.json
+
+# Re-exporting is idempotent and never rewrites an existing destination.
+exec aims bridge t3 --settings $WORK/export.json
+! stdout '  add:'
+stdout 'keep existing connection'
+! exec aims bridge t3 --settings $WORK/t3-settings.json --output $WORK/export.json
+cmp $WORK/t3-settings.json t3.json
+
+# Even a missing live file cannot be used as the export destination.
+! exec aims bridge t3 --output $HOME/.t3/userdata/settings.json
+stderr 'never live T3 settings'
+! exists $HOME/.t3
+
+# Programs receive explicit CLI profiles, not the enclosing session's markers.
+env AIMS_RUN=$WORK/parent-run
+env AIMS_SESSION_PROFILE=codex:default
+env AIMS_SESSION_MODE=watched
+exec aims exec --codex work -- codex
+stdout '^codex interactive as work session=$'
+! exists $WORK/parent-run
+
+# Flags and prompts after the program name pass through untouched.
+exec aims exec --codex work -- codex --version
+stdout '^codex-cli 0.200.0$'
+exec aims exec --codex work -- codex exec --json -- -not-an-aims-flag
+stdout 'answer from work: -not-an-aims-flag'
+! exec aims exec --codex missing -- codex
+stderr 'no codex profile "missing"'
+
+# Dry-run reports routing choices, without running or printing arbitrary args.
+exec aims exec --codex work --dry-run -- never-run --token PRIVATE-ARGUMENT
+stdout '"profile": "work"'
+! stdout 'PRIVATE-ARGUMENT'
+
+# The child's exit code propagates rather than starting it a second time.
+env FAKE_EXIT=7
+! exec aims exec --claude work -- claude
+stdout '^claude interactive as work'
+! stderr 'exit status'
+
+-- t3.json --
+{"unknownFutureSetting":{"preserve":[1,true]},"providerInstances":{"managed":{"driver":"codex","config":{"setupMode":"managed"},"secretRef":"managed-token-ref"}}}

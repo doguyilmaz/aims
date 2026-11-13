@@ -46,6 +46,8 @@ Otherwise use the CLI:
 | Task | Command |
 | --- | --- |
 | Accounts, logins, plan usage | `aims status` (`--live` asks the providers, `--json` for scripts) |
+| All provider limits and normal/banked resets | `aims usage --json`; `--refresh` updates free quota readers without a model prompt (Claude remains cached) |
+| Personal reset reminder | `aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>`; this never changes provider quota |
 | Switch the account for new sessions in this project | `aims use work` (every tool) or `aims use claude work`; `--global` for every folder |
 | The current account hit its limit | `aims failover claude` (marks it; new sessions use the next one) |
 | Move this session's conversation now | `aims move work` (only in a session aims moves) |
@@ -53,7 +55,39 @@ Otherwise use the CLI:
 | Run something as a given account | `aims claude@work -p "prompt"`, `aims codex@personal exec "prompt"` |
 | Log an account in again | tell the user: `aims login claude work` |
 | Pin only this terminal | `eval "$(aims env work)"`; undo with `eval "$(aims env --reset)"` |
-| Check everything | `aims doctor` |
+| Check paths and integrations without changes | `aims doctor --check` (`--json` for scripts) |
+| Repair missing links and sharing-policy changes | `aims doctor --fix` (independent data and recovery copies stay) |
+| Inspect local logins and CLI versions | `aims doctor --logins` |
+
+If a privacy change is incomplete, close affected tools and run `aims doctor --fix` before launching the profile or exporting it to another app. Purge/wipe stop when native logout cannot complete; keep the registration for retry. For duplicate labels that use the same login folder, remove only the duplicate label without `--purge`.
+
+## Editors, SDKs and orchestrators
+
+Use `aims bridge` (or `--json`) to inspect the actual homes and shared
+transcript paths without running a provider, probing a login or repairing files.
+For a program that inherits CLI environment, use `aims exec -- <program>`.
+
+For machine protocols, use `aims bridge run <tool>[@profile] -- <args>`:
+it passes through stdin/stdout/stderr without buffering, retries or supervision.
+For ACP clients, use `aims bridge acp <tool>[@profile]` with an already installed
+upstream adapter. It preserves the adapter's bundled CLI and explicit runtime
+overrides. Do not configure Codex app-server as an ACP agent.
+
+`aims bridge install` creates dedicated executable links under aims' own
+directory for clients that accept a single CLI path. It does not modify global
+PATH, editor settings or credential files. `aims bridge commands --json` prints
+credential-free command/argument/environment entries for client setup, including
+a custom `AIMS_HOME`. `aims exec --launchers -- <program>` opts into those links
+on that child's PATH only; `aims bridge uninstall` removes the owned links.
+Install from a persistent aims binary, not `go run`.
+
+These connections keep their account for the lifetime of the client's process;
+aims preference changes apply to new processes. The client owns import/resume
+and its sidebar's session list, even when conversation files are shared.
+Managed application logins and API-native agents can keep separate credentials.
+Use their supported CLI/provider connection instead of copying tokens or
+rewriting session databases. `aims bridge t3` is an optional T3 settings preview;
+it does not activate or modify a running app.
 
 ## Limits and login errors
 

@@ -3,6 +3,7 @@ package ops
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,23 +74,24 @@ type Step struct {
 	Err    error
 }
 
-// homes returns the logins an integration goes into: the hub, plus isolated
-// profiles, which do not see the hub's files.
-func homes(cfg *config.Config, a tool.Adapter) []tool.Home {
+// IntegrationHomes lists the hub and profiles keeping this specific entry
+// private. An exclusion is as significant as a fully isolated profile.
+func IntegrationHomes(cfg *config.Config, a tool.Adapter, entry string) []tool.Home {
 	out := []tool.Home{profiles.HubHome(cfg, a)}
 	for _, n := range cfg.Tools[a.ID()].Order {
-		if cfg.Tools[a.ID()].Profiles[n].ShareMode() == config.ShareNone {
+		p := cfg.Tools[a.ID()].Profiles[n]
+		if !p.Existing && profiles.Private(p, a.Layout())(entry) {
 			out = append(out, profiles.Home(cfg, a, n))
 		}
 	}
 	return out
 }
 
-// mcpHomes is where a tool's MCP servers must be registered: every login when
+// MCPHomes is where a tool's MCP servers must be registered: every login when
 // the tool keeps them per login, otherwise the shared homes.
-func mcpHomes(cfg *config.Config, a tool.Adapter) []tool.Home {
+func MCPHomes(cfg *config.Config, a tool.Adapter) []tool.Home {
 	if a.MCPScope() == tool.MCPShared {
-		return homes(cfg, a)
+		return IntegrationHomes(cfg, a, a.Layout().SettingsFile)
 	}
 	var out []tool.Home
 	if cfg.ExistingProfile(a.ID()) == "" {
@@ -121,20 +123,19 @@ func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		a := tools.Get(id)
 		installed := profiles.Bin(a) != ""
 		if in.Skill && a.Layout().SkillsDir != "" {
-			for _, h := range homes(cfg, a) {
+			for _, h := range IntegrationHomes(cfg, a, a.Layout().SkillsDir) {
 				p := filepath.Join(h.Dir, a.Layout().SkillsDir, "aims", "SKILL.md")
-				steps = append(steps, Step{Tool: id, What: "skill", Target: fsx.Tildify(p), Err: fsx.WriteFile(p, []byte(aims.Skill), 0o644)})
+				steps = append(steps, Step{Tool: id, What: "skill", Target: fsx.Tildify(p), Err: writeSkill(p, []byte(aims.Skill))})
 			}
 		}
 		if in.MCP && installed {
-			for _, h := range mcpHomes(cfg, a) {
-				_, _ = a.UnregisterMCP(ctx, h, MCPName)
-				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: a.RegisterMCP(ctx, h, server)})
+			for _, h := range MCPHomes(cfg, a) {
+				steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: updateMCP(ctx, a, h, server, true)})
 			}
 		}
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {
 			cmd := shellJoin(append(command, "statusline"))
-			for _, h := range homes(cfg, a) {
+			for _, h := range IntegrationHomes(cfg, a, a.Layout().SettingsFile) {
 				prev, err := sl.InstallStatusLine(h.Dir, cmd)
 				if err == nil && prev != "" {
 					_, err = config.Update(func(c *config.Config) error { c.Status.Chain = prev; return nil })
@@ -204,20 +205,38 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 			continue
 		}
 		if in.Skill && a.Layout().SkillsDir != "" {
-			for _, h := range homes(cfg, a) {
+			for _, h := range IntegrationHomes(cfg, a, a.Layout().SkillsDir) {
 				dir := filepath.Join(h.Dir, a.Layout().SkillsDir, "aims")
 				if fsx.Lstat(dir) == nil {
 					continue
 				}
-				err := os.Remove(filepath.Join(dir, "SKILL.md"))
+				path := filepath.Join(dir, "SKILL.md")
+				b, readErr := os.ReadFile(path)
+				if readErr != nil || !bundledSkill(b) || managedSkill(path) {
+					steps = append(steps, Step{Tool: id, What: "skill", Target: fsx.Tildify(dir), Err: fmt.Errorf("skill was changed or is externally managed; kept it")})
+					continue
+				}
+				err := os.Remove(path)
 				if err == nil || errors.Is(err, os.ErrNotExist) {
-					err = os.Remove(dir) // only if empty: never delete files aims did not write
+					// Recovery copies and user additions stay. A nonempty folder
+					// is a successful conservative uninstall, not a failed step.
+					if entries, e := os.ReadDir(dir); e != nil {
+						err = e
+					} else if len(entries) == 0 {
+						err = os.Remove(dir)
+					} else {
+						err = nil
+					}
 				}
 				steps = append(steps, Step{Tool: id, What: "skill", Target: fsx.Tildify(dir), Err: err})
 			}
 		}
 		if in.MCP && profiles.Bin(a) != "" {
-			for _, h := range mcpHomes(cfg, a) {
+			for _, h := range MCPHomes(cfg, a) {
+				if _, err := backupMCP(a, h); err != nil {
+					steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: err})
+					continue
+				}
 				if removed, err := a.UnregisterMCP(ctx, h, MCPName); removed || err != nil {
 					steps = append(steps, Step{Tool: id, What: "MCP server", Target: label(h), Err: err})
 				}
@@ -225,7 +244,7 @@ func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 		}
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {
 			cmd := shellJoin(append(command, "statusline"))
-			for _, h := range homes(cfg, a) {
+			for _, h := range IntegrationHomes(cfg, a, a.Layout().SettingsFile) {
 				if removed, err := sl.RemoveStatusLine(h.Dir, cmd, cfg.Status.Chain); removed || err != nil {
 					steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
 				}

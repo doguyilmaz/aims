@@ -35,6 +35,9 @@ func TestAdapters(t *testing.T) {
 		unique("id", string(id), id)
 		unique("home variable", l.HomeEnv, id)
 		unique("home folder", l.DefaultHome, id)
+		if l.TranscriptDir == "" || !l.IsShared(l.TranscriptDir) || !l.IsHistory(l.TranscriptDir) || !slices.Contains(l.SharedDirs, l.TranscriptDir) {
+			t.Errorf("%s: TranscriptDir must be a shared history directory created up front", id)
+		}
 
 		// History must be shared to be detachable, and shared dirs must be shared.
 		for _, h := range l.History {

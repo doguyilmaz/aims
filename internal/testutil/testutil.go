@@ -14,7 +14,8 @@ import (
 // cleared are variables that would make aims or a tool read real state.
 var cleared = []string{
 	"AIMS_HOME", "AIMS_CLAUDE_PROFILE", "AIMS_CODEX_PROFILE", "AIMS_SESSION_PROFILE",
-	"CLAUDE_CONFIG_DIR", "CODEX_HOME",
+	"AIMS_RUN", "AIMS_SESSION_MODE", "AIMS_RUN_NESTED",
+	"CLAUDE_CONFIG_DIR", "CLAUDE_CODE_REMOTE_MEMORY_DIR", "CODEX_HOME", "CODEX_SQLITE_HOME", "T3CODE_HOME",
 	"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY",
 	"ZDOTDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "SHELL", "NO_COLOR",
 }
@@ -39,7 +40,11 @@ var missing = map[string]string{
 // that does not call Sandbox still cannot reach the real one. Started as
 // claude or codex (see Fakes), the test binary is that fake instead.
 func Main(m *testing.M) {
-	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
+	name := filepath.Base(os.Args[0])
+	if runtime.GOOS == "windows" {
+		name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	}
+	switch name {
 	case "claude":
 		os.Exit(fake.Claude())
 	case "codex":

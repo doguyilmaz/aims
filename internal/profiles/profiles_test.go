@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +18,30 @@ import (
 
 func TestMain(m *testing.M) { testutil.Main(m) }
 
+type canceledProbe struct {
+	tool.Adapter
+	cancel context.CancelFunc
+}
+
+func (a canceledProbe) Probe(context.Context, tool.Home) tool.Probe {
+	a.cancel()
+	return tool.Probe{Status: tool.ProbeOK, Email: "dummy@example.test"}
+}
+
+func TestCanceledLiveCheckDoesNotClearExistingLoginMark(t *testing.T) {
+	cfg, a := setup(t)
+	if err := MarkNeedsLogin(a.ID(), "a", "fixture", "expired"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	p := Live(ctx, cfg, canceledProbe{a, cancel}, "a")
+	ps := config.LoadState().Get(a.ID(), "a")
+	if p.Status != tool.ProbeError || !ps.NeedsLogin || ps.Account != nil {
+		t.Fatal("canceled result changed account state")
+	}
+}
+
 func TestApartHonorsHistoryExclusions(t *testing.T) {
 	cfg, _ := setup(t)
 	for _, name := range []string{"sessions", "archived_sessions", "state_5.sqlite", "thread_history_1.sqlite", "thread-writer-locks"} {
@@ -31,6 +56,36 @@ func TestApartHonorsHistoryExclusions(t *testing.T) {
 	cfg.Tools["codex"].Profiles["b"].Exclude = []string{"config.toml"}
 	if got := Apart(cfg, "codex", "a"); len(got) != 0 {
 		t.Fatalf("private settings should not block shared history: %v", got)
+	}
+}
+
+func TestApartRequiresMatchingPersistentStorageRouting(t *testing.T) {
+	cfg, _ := setup(t)
+	shared := filepath.Join(t.TempDir(), "shared-databases")
+	cfg.Tools["codex"].Profiles["a"].Env = map[string]string{"CODEX_SQLITE_HOME": shared}
+	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_SQLITE_HOME": shared + "-private"}
+	if !slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("move could leave goals and memory in another database home")
+	}
+	cfg.Tools["codex"].Profiles["b"].Env["CODEX_SQLITE_HOME"] = shared
+	if slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("matching explicit storage homes were rejected")
+	}
+	cfg.Tools["codex"].Profiles["b"].Env["CODEX_HOME"] = shared + "-another-login"
+	if !slices.Contains(Apart(cfg, "codex", "a"), "b") {
+		t.Fatal("ambiguous login-home override was allowed to move")
+	}
+	cfg.Tools["claude"].Profiles = map[string]*config.Profile{
+		"a": {Env: map[string]string{"CLAUDE_CODE_REMOTE_MEMORY_DIR": shared}},
+		"b": {Env: map[string]string{"CLAUDE_CODE_REMOTE_MEMORY_DIR": shared + "-private"}},
+	}
+	cfg.Tools["claude"].Order = []string{"a", "b"}
+	if !slices.Contains(Apart(cfg, "claude", "a"), "b") {
+		t.Fatal("move could change Claude's memory home")
+	}
+	cfg.Tools["claude"].Profiles["b"].Env["CLAUDE_CODE_REMOTE_MEMORY_DIR"] = shared
+	if slices.Contains(Apart(cfg, "claude", "a"), "b") {
+		t.Fatal("matching Claude memory homes rejected")
 	}
 }
 
@@ -206,18 +261,21 @@ func TestMarkLimitedUsesKnownReset(t *testing.T) {
 
 func TestEnv(t *testing.T) {
 	cfg, a := setup(t)
-	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_API_KEY": "own"}
-	base := []string{"PATH=/bin", "CODEX_API_KEY=shell", "CODEX_HOME=/somewhere"}
+	cfg.Tools["codex"].Profiles["b"].Env = map[string]string{"CODEX_API_KEY": "own", "OPENAI_API_KEY": "own-openai"}
+	base := []string{"PATH=/bin", "CODEX_API_KEY=shell", "OPENAI_API_KEY=shell-openai", "CODEX_HOME=/somewhere"}
 
 	env, dropped := Env(cfg, a, "a", base)
 	if !slices.Contains(dropped, "CODEX_API_KEY") || slices.Contains(env, "CODEX_API_KEY=shell") {
 		t.Fatalf("conflicting key kept: %v", env)
 	}
+	if !slices.Contains(dropped, "OPENAI_API_KEY") || slices.Contains(env, "OPENAI_API_KEY=shell-openai") {
+		t.Fatal("an inherited OpenAI API key can override the selected Codex/ACP account")
+	}
 	if !slices.Contains(env, "CODEX_HOME="+cfg.Dir("codex", "a")) || !slices.Contains(env, "AIMS_SESSION_PROFILE=codex:a") || !slices.Contains(env, "PATH=/bin") {
 		t.Fatalf("env: %v", env)
 	}
 	env, dropped = Env(cfg, a, "b", base)
-	if len(dropped) != 0 || !slices.Contains(env, "CODEX_API_KEY=own") {
+	if len(dropped) != 0 || !slices.Contains(env, "CODEX_API_KEY=own") || !slices.Contains(env, "OPENAI_API_KEY=own-openai") {
 		t.Fatalf("profile's own key: %v %v", env, dropped)
 	}
 }
@@ -256,6 +314,16 @@ func TestEnvDatabases(t *testing.T) {
 	if v := get("a", []string{"CODEX_SQLITE_HOME=/mine"}); v != "/mine" {
 		t.Errorf("the user's own folder: %q", v)
 	}
+	t.Setenv("CODEX_SQLITE_HOME", "/mine")
+	if StateShared(cfg, a, "a") {
+		t.Fatal("external inherited database home was considered the shared hub")
+	}
+	t.Setenv("CODEX_SQLITE_HOME", "")
+	cfg.Tools["codex"].Profiles["a"].Env = map[string]string{"CODEX_SQLITE_HOME": ""}
+	if StateShared(cfg, a, "a") {
+		t.Fatal("explicit empty database override was ignored")
+	}
+	cfg.Tools["codex"].Profiles["a"].Env = nil
 	if v := get("b", base); v != "unset" {
 		t.Errorf("own history: %q", v)
 	}

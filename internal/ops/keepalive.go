@@ -143,6 +143,6 @@ func KeepAlive(ctx context.Context) ([]KeepAliveResult, error) {
 			out = append(out, KeepAliveResult{Tool: a.ID(), Profile: n, Renewed: renewed, Probe: p, Expires: acct.Expires, LoggedIn: acct.LoggedIn})
 		}
 	}
-	meter.Refresh(ctx)
-	return out, nil
+	_, err = meter.Refresh(ctx)
+	return out, err
 }

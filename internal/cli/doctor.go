@@ -37,15 +37,23 @@ func toolVersion(bin string) string {
 }
 
 func newDoctorCmd(version string) *cobra.Command {
-	var fix bool
+	var fix, check, asJSON, logins bool
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check that every account and shared folder is in order",
-		Long: "Checks the tools, each profile's login and shared folders, and the\n" +
-			"integrations. It repairs shared folders as it goes; --fix also adopts\n" +
-			"databases that look open.",
+		Long: "Read-only checks of shared folders, routing, launchers and integrations.\n" +
+			"--check is an explicit spelling of the default; --json is for automation.\n" +
+			"--fix repairs missing links and explicit sharing-policy changes, without\n" +
+			"merging independent files or databases. --logins additionally asks the\n" +
+			"installed CLIs for local versions/login status and may read the keychain.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if check && fix || logins && (fix || asJSON || check) {
+				return fmt.Errorf("use --fix, --check/--json, or --logins separately")
+			}
+			if !logins {
+				return runDoctorCheck(cmd, version, fix, asJSON)
+			}
 			s := ui.Out
 			problems := 0
 			section := func(t string) { fmt.Println("\n" + s.Bold.Render(t)) }
@@ -115,9 +123,9 @@ func newDoctorCmd(version string) *cobra.Command {
 						label += " " + s.Dim.Render(ev.Account.Email)
 					}
 					var conflicts, unused []links.Report
-					for _, r := range profiles.Sync(cfg, a, name, fix) {
+					for _, r := range profiles.CheckSharing(cfg, a, name) {
 						switch r.Action {
-						case links.Conflict:
+						case links.Conflict, links.Missing:
 							conflicts = append(conflicts, r)
 						case links.Unused:
 							unused = append(unused, r)
@@ -208,7 +216,10 @@ func newDoctorCmd(version string) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "also adopt databases that look open (close the tools first)")
+	cmd.Flags().BoolVar(&fix, "fix", false, "repair missing links and explicit sharing-policy changes; keep independent content")
+	cmd.Flags().BoolVar(&check, "check", false, "read-only checks without provider commands or credential access (default)")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print a versioned check/repair report without credentials")
+	cmd.Flags().BoolVar(&logins, "logins", false, "also inspect local login status and CLI versions (may invoke providers and the keychain)")
 	return cmd
 }
 
