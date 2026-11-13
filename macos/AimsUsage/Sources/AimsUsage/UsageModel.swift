@@ -7,8 +7,29 @@ final class UsageModel {
     var snapshot: UsageSnapshot? { didSet { presentationDidChange?() } }
     var presentationDidChange: (@MainActor () -> Void)?
     var dockVisibilityDidChange: (@MainActor (Bool) -> Void)?
+    var dockConfigurationDidChange: (@MainActor () -> Void)?
     var dockProvider: String?
     var dockPeekPinned = false
+    var edgeDockSide = EdgeDockSide(rawValue: UserDefaults.standard.string(forKey: "edgeDockSide") ?? "") ?? .right {
+        didSet {
+            UserDefaults.standard.set(edgeDockSide.rawValue, forKey: "edgeDockSide")
+            dockConfigurationDidChange?()
+        }
+    }
+    var edgeDockSize =
+        EdgeDockSize(rawValue: UserDefaults.standard.string(forKey: "edgeDockSize") ?? "") ?? .standard
+    {
+        didSet {
+            UserDefaults.standard.set(edgeDockSize.rawValue, forKey: "edgeDockSize")
+            dockConfigurationDidChange?()
+        }
+    }
+    var edgeDockAutoHide = UserDefaults.standard.object(forKey: "edgeDockAutoHide") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(edgeDockAutoHide, forKey: "edgeDockAutoHide")
+            dockConfigurationDidChange?()
+        }
+    }
     var edgeDockEnabled = UserDefaults.standard.object(forKey: "edgeDockEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(edgeDockEnabled, forKey: "edgeDockEnabled")

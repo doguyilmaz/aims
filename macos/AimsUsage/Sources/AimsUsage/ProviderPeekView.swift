@@ -24,8 +24,9 @@ struct ProviderPeekView: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Button(action: togglePin) { Image(systemName: model.dockPeekPinned ? "pin.fill" : "pin") }
-                    .foregroundStyle(model.dockPeekPinned ? .cyan : .secondary).help("Pin provider details")
-                    .accessibilityLabel("Pin provider details")
+                    .foregroundStyle(model.dockPeekPinned ? .cyan : .secondary)
+                    .help(model.dockPeekPinned ? "Unpin provider details" : "Pin provider details")
+                    .accessibilityLabel(model.dockPeekPinned ? "Unpin provider details" : "Pin provider details")
                 Button(action: close) { Image(systemName: "xmark") }.help("Close provider details")
                     .accessibilityLabel("Close provider details")
             }.buttonStyle(.borderless).font(.system(size: 12)).padding(.horizontal, 18).frame(height: 50)

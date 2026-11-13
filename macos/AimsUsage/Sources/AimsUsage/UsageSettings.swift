@@ -9,7 +9,6 @@ struct UsageSettings: View {
     var body: some View {
         Form {
             Section("Display") {
-                Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
                 Picker("Widget appearance", selection: $model.displayStyle) {
                     ForEach(UsageDisplayStyle.allCases) { style in
                         Label(style.title, systemImage: style.symbol).tag(style)
@@ -19,6 +18,22 @@ struct UsageSettings: View {
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
                 Text(
                     "Claude uses its cached native status line. Automatic refresh never sends a model prompt, buys credits or redeems resets."
+                )
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Edge Dock") {
+                Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
+                Picker("Screen edge", selection: $model.edgeDockSide) {
+                    ForEach(EdgeDockSide.allCases) { Text($0.title).tag($0) }
+                }
+                Picker("Dock size", selection: $model.edgeDockSize) {
+                    ForEach(EdgeDockSize.allCases) { Text($0.title).tag($0) }
+                }
+                Toggle("Automatically hide", isOn: $model.edgeDockAutoHide)
+                Text(
+                    model.edgeDockAutoHide
+                        ? "Hover over the edge marker to reveal the Dock. Pinned details keep it open."
+                        : "The Dock stays visible. Provider details open toward the screen interior."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

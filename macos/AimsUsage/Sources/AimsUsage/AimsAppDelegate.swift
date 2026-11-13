@@ -19,6 +19,10 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
             self?.dock.setVisible(visible)
             self?.panel.reposition()
         }
+        model.dockConfigurationDidChange = { [weak self] in
+            self?.dock.configurationChanged()
+            self?.panel.reposition()
+        }
         refreshTask = Task { await model.run() }
         UserDefaults.standard.set(true, forKey: "hasLaunched")
         if model.fixtureURL != nil || UserDefaults.standard.bool(forKey: "edgePanelVisible") {

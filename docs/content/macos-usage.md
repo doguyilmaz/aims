@@ -3,7 +3,7 @@ title: macOS usage app
 weight: 9
 ---
 
-Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to the usable right edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
 Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aims Usage.app`. Requirements: macOS 14.0.0+, Swift 6.2.0+, and the Go version in `go.mod`. The app is a locally signed development build; public release signing/notarization is separate. Its menu pin toggles the side panel. More contains Settings, custom reminders and Quit. No login item is installed automatically.
 
@@ -11,7 +11,11 @@ Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aim
 
 Choose **Compact** (the default) for a narrower 400-point surface with provider rows and usage bars, or **Gauges** for a 560-point account/model grid. Switching modes resizes the menu/panel. Both show every reported window and reset countdown. The overview measures its content and grows to fit; scrolling is enabled only when the screen has insufficient room. Gauges uses two columns when possible and three on shorter screens. The saved style applies to both menu and panel. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
 
-The **Edge Dock** is a 64-point translucent rail attached to the usable right edge, with curved shoulders and a rounded inner edge. It stays clear of the macOS Dock on any side. Hover for all accounts/models, click to pin 400-point details, or open the complete overview. It shows the highest current known usage per provider; a missing/stale-only ratio is an em dash. Enable or hide it in Settings or More. The app version and Git build revision are visible in More and Settings.
+The **Edge Dock** can attach to the usable **left or right** edge. Settings → Edge Dock offers **Standard** (64 points) or **Mini** (44 points), plus **Automatically hide**. The shape, detail-card direction and overview placement follow the selected side. Mini keeps the same providers and values with shorter rows; a blocked quota uses `!` and exposes the full state in its tooltip/details. These preferences are saved independently of Compact/Gauges.
+
+Automatic hiding is enabled by default. Hover the thin marker in the selected edge region to reveal the rail; it hides after the pointer leaves the Dock and its detail card. Crossing into details and pinned cards keep it visible. Uncheck the option for an always-visible Dock. Disabling Edge Dock removes both rail and marker. Short fades respect reduced motion and keyboard actions. Mouse-movement monitors are removed when no longer needed; no keyboard events are monitored or suppressed.
+
+The rail stays clear of the macOS Dock on any side. Hover a provider for all accounts/models, click to pin 400-point details, or open the complete overview. It shows the highest current known usage per provider; a missing/stale-only ratio is an em dash. Enable or hide it in Settings or More. The app version and Git build revision are visible in More and Settings.
 
 The optional menu-bar percentage also uses current successful readings. It is reevaluated every minute, including with automatic refresh disabled, and hidden after a failed snapshot read. A reset passing removes that window from the summary; it does not invent a new allowance or contact the provider.
 
