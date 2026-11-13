@@ -32,12 +32,23 @@ func Run(ctx context.Context, w io.Writer) error {
 		return nil
 	}
 	name := cfg.ProfileForHomeEnv(claude.ID, os.Getenv("CLAUDE_CONFIG_DIR"))
+	changedProfile := false
+	if name != "" {
+		generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
+		expected := cfg.Tools[claude.ID].Profiles[name].Generation
+		if (supplied || expected != "") && generation != expected {
+			name, changedProfile = "", true
+		}
+	}
 	windows := claude.ParseStatusLine(raw)
-	if name != "" && len(windows) > 0 && changed(config.LoadState().Get(claude.ID, name).Usage, windows) {
-		_ = profiles.RecordUsage(claude.ID, name, windows, "statusline")
+	if name != "" && len(windows) > 0 && changed(config.LoadStateFor(cfg).Get(claude.ID, name).Usage, windows) {
+		_ = profiles.RecordUsage(claude.ID, name, windows, "statusline", cfg)
 	}
 
 	var parts []string
+	if changedProfile {
+		parts = append(parts, "aims: profile changed; restart via aims")
+	}
 	if chain := cfg.Status.Chain; chain != "" && !claude.IsAimsStatusLine(chain) {
 		if out := runChain(ctx, chain, raw); out != "" {
 			parts = append(parts, out)
@@ -104,8 +115,8 @@ func segment(ctx context.Context, cfg *config.Config, name string, windows []too
 			break
 		}
 	}
-	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), sessionMode(), other, func() string {
-		return profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}).Name
+	return render(cfg, name, windows, config.LoadStateFor(cfg).Get(claude.ID, name), sessionMode(), other, func() string {
+		return profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), tools.Get(claude.ID), "", []string{name}).Name
 	}, config.Now(), os.Getenv("NO_COLOR") == "")
 }
 

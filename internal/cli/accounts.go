@@ -246,7 +246,7 @@ func logout(t target) error {
 		}
 		return err
 	}
-	_ = config.UpdateState(t.a.ID(), t.name, func(ps *config.ProfileState) { ps.Account = nil })
+	_ = config.UpdateStateFor(cfg, t.a.ID(), t.name, func(ps *config.ProfileState) { ps.Account = nil })
 	ui.Done("%s is logged out", t)
 	return nil
 }
@@ -465,7 +465,7 @@ func askFailover(ctx context.Context, r *ui.Rail, a tool.Adapter, reason string)
 	if err != nil {
 		return "", "", err
 	}
-	last := ops.LastUsed(cfg, config.LoadState(), a.ID())
+	last := ops.LastUsed(cfg, config.LoadStateFor(cfg), a.ID())
 	desc := "aims started " + last + " last."
 	if last == "" {
 		last = cfg.Tools[a.ID()].Active

@@ -174,6 +174,9 @@ func TestPurgeKeepsHistoryWhenCheckpointFailsAfterLogoutAndCanResume(t *testing.
 	if err := profiles.RequireIsolation(loaded, a, "work"); err == nil {
 		t.Fatal("interrupted purge remained launchable")
 	}
+	// The completion journal survives config replacement failure. A retry
+	// must not require a provider command that already completed successfully.
+	t.Setenv("AIMS_TEST_LOGOUT_BIN", filepath.Join(t.TempDir(), "no-provider"))
 	if result, err = RemoveProfile(t.Context(), a, "work", true, true); err != nil || !result.Purged {
 		t.Fatalf("explicit retry failed: %+v %v", result, err)
 	}
@@ -204,6 +207,18 @@ func TestCompletedLogoutPurgeResumesWithoutProviderAndNeverRepairsItsHome(t *tes
 	if _, err := Use(a, "work", ""); err == nil {
 		t.Fatal("pending profile could become the selected account")
 	}
+	if _, err := SetOrder(a, []string{"work"}, ""); err == nil {
+		t.Fatal("order selected a pending purge")
+	}
+	if _, err := Failover(t.Context(), a, "work", "work", 0, "", "", ""); err == nil {
+		t.Fatal("failover selected a pending purge")
+	}
+	if _, err := Clean(t.Context()); err == nil {
+		t.Fatal("clean destroyed a pending purge checkpoint")
+	}
+	if loaded, err := config.Load(); err != nil || loaded.Tools["codex"].Profiles["work"].Purge == nil {
+		t.Fatal("clean lost the purge checkpoint")
+	}
 	if evaluation := profiles.Evaluate(t.Context(), cfg, config.LoadState(), a, "work"); evaluation.Usable {
 		t.Fatal("pending purge is usable")
 	}
@@ -216,6 +231,16 @@ func TestCompletedLogoutPurgeResumesWithoutProviderAndNeverRepairsItsHome(t *tes
 	}
 	if _, _, renewed := profiles.KeepAlive(t.Context(), cfg, probeAdapter, "work"); renewed {
 		t.Fatal("keepalive renewed a pending purge")
+	}
+	for _, home := range IntegrationHomes(cfg, a, a.Layout().SkillsDir) {
+		if home.Dir == cfg.Dir("codex", "work") {
+			t.Fatal("integration setup would recreate a pending purge home")
+		}
+	}
+	for _, home := range MCPHomes(cfg, a) {
+		if home.Dir == cfg.Dir("codex", "work") {
+			t.Fatal("MCP setup would recreate a pending purge home")
+		}
 	}
 	if err := os.RemoveAll(cfg.Dir("codex", "work")); err != nil {
 		t.Fatal(err)

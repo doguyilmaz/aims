@@ -326,10 +326,10 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 	const by = "a session"
 	switch f {
 	case tool.FailLogin:
-		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text)
+		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text, cfg)
 	case tool.FailLimit:
 		var windows []tool.Window
-		if u := config.LoadState().Get(a.ID(), name).Usage; u != nil {
+		if u := config.LoadStateFor(cfg).Get(a.ID(), name).Usage; u != nil {
 			windows = u.Windows
 		}
 		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
@@ -340,14 +340,14 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 		// A rate limit that comes back soon after the last is not passing:
 		// rest longer, so the conversation does not bounce between accounts.
 		rest := busyFor
-		if ps := config.LoadState().Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
+		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
 			rest = busyAgain
 		}
 		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
 	apart := profiles.Apart(cfg, a.ID(), name)
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+	pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, apart)
 	if pick.Name == "" && len(apart) > 0 {
 		o.tell(Warn, "%s: %s cannot receive this conversation because history is not fully shared (aims doctor)", a.ID(), profiles.Names(apart, ", "))
 	}
@@ -380,7 +380,7 @@ func onWait(ctx context.Context, o Options, name string, live bool) profiles.Pic
 		profiles.AskFree(ctx, cfg, a, names)
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
-	return profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+	return profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, apart)
 }
 
 func tellWait(o Options, pick profiles.Pick) {
@@ -410,7 +410,7 @@ func onStop(ctx context.Context, o Options, name, held string) (next, why string
 	if held != "" {
 		preferred = held
 	}
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), o.Tool, preferred, profiles.Apart(cfg, o.Tool.ID(), name))
+	pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), o.Tool, preferred, profiles.Apart(cfg, o.Tool.ID(), name))
 	switch {
 	case pick.Name == "" || pick.Name == name:
 		return "", ""
@@ -474,14 +474,22 @@ func sweep(runs string) {
 		if owner := fsx.Lstat(filepath.Join(root, "owner.lock")); owner == nil || !owner.Mode().IsRegular() {
 			continue
 		}
+		owner, err := os.ReadFile(filepath.Join(root, "owner.lock"))
+		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(owner)))
+		if err != nil || parseErr != nil || pid <= 0 || proc.Alive(pid) {
+			continue
+		}
+		// Do not consume the dead owner's record while a surviving worker is
+		// busy or inspection is inconclusive; a later sweep can retry it.
+		if busy, known := proc.HoldingTree(root); !known || busy {
+			continue
+		}
 		unlock, owned, err := fsx.Lock(filepath.Join(root, "owner"), 0)
 		if err != nil || !owned {
 			continue
 		}
 		if current := fsx.Lstat(root); current != nil && current.IsDir() && os.SameFile(info, current) {
-			if busy, known := proc.HoldingTree(root); known && !busy {
-				_ = os.RemoveAll(root)
-			}
+			_ = os.RemoveAll(root)
 		}
 		unlock()
 	}

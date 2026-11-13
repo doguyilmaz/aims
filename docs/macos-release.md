@@ -4,7 +4,15 @@ The menu, Edge Dock and pinned overview are surfaces of one app, `com.doguyilmaz
 
 Development builds use ad hoc signing and have no active update feed. Preview also explicitly refuses updater configuration and uses a different bundle ID. Linking Sparkle does not enable update checks. Configured release builds expose manual checks and an opt-in automatic-check preference; installation still uses Sparkle's standard user flow. System profiling and automatic installation default to off.
 
-## One-time setup
+## Distribution ownership
+
+The existing CLI release already uses the central [Tapster hub](https://github.com/doguyilmaz/homebrew-tap/blob/main/tapster.yml). Keep its certificate, notarization and publishing secrets there. The Usage app is a separate bundle/version stream; the current hub entry describes the CLI/keepalive wrapper and does not register this app.
+
+Tapster supports Sparkle, but its current [app validation](https://github.com/doguyilmaz/tapster/blob/c19b315fdf14dd7b6613e4fc33d13115f6e17d94/src/appcheck.ts#L141) expects the app marketing version **and build** to equal a `vMAJOR.MINOR.PATCH` tag and derives the feed from the repository's latest release. Aims Usage keeps an integer build number separate from its SemVer marketing version and shares this repository with independently versioned CLI releases. Do not route it through that contract unchanged or reuse the CLI's generic latest-release feed. Central adoption needs explicit integer-build and independent release/feed support, plus the Usage bundle and nested Sparkle helpers registered in the hub. This repository does not change the hub or relocate its credentials.
+
+The manual preparation workflow below is an **optional standalone preparation path**, not an active replacement for Tapster. It only produces reviewable artifacts and is unconfigured by default. Prefer the central signing service once its app contract accommodates this bundle; do not copy hub secrets into the project merely to make this workflow runnable. No production updater channel is activated by these changes.
+
+## Optional standalone preparation setup
 
 Use the pinned [Sparkle 2.10.1 distribution](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.1). Its release archive SHA-256 is `1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27`; the workflow verifies it before extracting tools. SwiftPM separately verifies the pinned framework artifact checksum.
 
@@ -18,7 +26,7 @@ Use the pinned [Sparkle 2.10.1 distribution](https://github.com/sparkle-project/
 | `AIMS_USAGE_PUBLIC_ED_KEY` | Dedicated Sparkle public Ed25519 key, base64, 32 decoded bytes |
 | `AIMS_USAGE_SIGNING_IDENTITY` | Developer ID Application identity SHA-1 or full identity name |
 
-4. Configure repository secrets, limited to trusted release runners:
+4. Only if deliberately choosing this standalone preparation path, configure these secrets on trusted release runners. They are not required for development/CI builds and must not be copied from the central hub as routine setup:
 
 | Secret | Value |
 | --- | --- |

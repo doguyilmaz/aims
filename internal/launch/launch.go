@@ -139,7 +139,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	name := preferred
 	if auto {
 		name = choose(ctx, o, cfg, preferred)
-	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, name); !ev.Usable {
+	} else if ev := profiles.Evaluate(ctx, cfg, config.LoadStateFor(cfg), a, name); !ev.Usable {
 		o.say(Warn, "%s profile %q may not work: %s", a.ID(), name, strings.Join(ev.Reasons, ", "))
 	}
 
@@ -215,7 +215,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	if cap.Code == 0 && !an.ResultFailed() {
 		cap.Flush()
 		// It just worked, so any limit or login mark on it is out of date.
-		if ps := config.LoadState().Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
+		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
 			_ = profiles.Clear(a.ID(), name)
 		}
 		return res, profiles.Pick{}, nil
@@ -224,10 +224,10 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	const by = "a failed run"
 	switch res.Failure {
 	case tool.FailLogin:
-		_ = profiles.MarkNeedsLogin(a.ID(), name, by, res.ErrorText)
+		_ = profiles.MarkNeedsLogin(a.ID(), name, by, res.ErrorText, cfg)
 	case tool.FailLimit:
 		var windows []tool.Window
-		if u := config.LoadState().Get(a.ID(), name).Usage; u != nil {
+		if u := config.LoadStateFor(cfg).Get(a.ID(), name).Usage; u != nil {
 			windows = u.Windows
 		}
 		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
@@ -244,7 +244,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	// login error can come mid-run (a refresh token rotated by another session).
 	safe := !cap.AnalysisIncomplete && an.Activity() == tool.ActivityNone
 	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
-		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
+		if next := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, "", tried); next.Name != "" {
 			return res, next, nil
 		}
 	}
@@ -291,7 +291,7 @@ func sessionEnv(o Options, cfg *config.Config, name string) ([]string, error) {
 		o.say(Info, "ignoring %s from your shell so the %q login is used", strings.Join(dropped, ", "), name)
 	}
 	usedAt := config.Now().UTC()
-	_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.LastUsedAt = usedAt })
+	_ = config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) { ps.LastUsedAt = usedAt })
 	return env, nil
 }
 
@@ -300,9 +300,9 @@ func sessionEnv(o Options, cfg *config.Config, name string) ([]string, error) {
 // limited, the one that works again first.
 func choose(ctx context.Context, o Options, cfg *config.Config, preferred string) string {
 	a := o.Tool
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
+	pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, nil)
 	if pick.Name == "" && profiles.AskFree(ctx, cfg, a, cfg.Tools[a.ID()].Order) {
-		pick = profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, nil)
+		pick = profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, nil)
 	}
 	switch {
 	case pick.Name == preferred:

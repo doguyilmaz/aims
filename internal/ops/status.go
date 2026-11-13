@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"crypto/rand"
 	"strings"
 	"sync"
 	"time"
@@ -85,7 +86,7 @@ func Status(ctx context.Context, ids []tool.ID) ([]ToolStatus, error) {
 	if len(ids) == 0 {
 		ids = tools.IDs()
 	}
-	st := config.LoadState()
+	st := config.LoadStateFor(cfg)
 	open := profiles.OpenSessions()
 	out := make([]ToolStatus, len(ids))
 	var wg sync.WaitGroup
@@ -200,19 +201,36 @@ func RecordLogin(ctx context.Context, a tool.Adapter, name string) (LoginResult,
 	if err != nil {
 		return LoginResult{}, err
 	}
+	if p, err := cfg.Profile(a.ID(), name); err != nil {
+		return LoginResult{}, err
+	} else if p.Purge != nil {
+		return LoginResult{}, config.ErrProfileChanged
+	}
 	acct := a.Account(ctx, profiles.Home(cfg, a, name))
 	if err := ctx.Err(); err != nil {
 		return LoginResult{}, err
 	}
 	res := LoginResult{Email: acct.Email, Plan: acct.Plan}
-	if err := profiles.RecordLogin(a.ID(), name, acct); err != nil {
+	// Invalidate probes and statusline processes started before this login.
+	before := cfg
+	cfg, err = config.Update(func(c *config.Config) error {
+		if err := sameProfile(before, c, a.ID(), name); err != nil {
+			return err
+		}
+		c.Tools[a.ID()].Profiles[name].Generation = rand.Text()
+		return nil
+	})
+	if err != nil {
+		return res, err
+	}
+	if err := profiles.RecordLogin(a.ID(), name, acct, cfg); err != nil {
 		return res, err
 	}
 	if acct.Email == "" {
 		return res, nil
 	}
 	for _, other := range cfg.Tools[a.ID()].Order {
-		if other == name {
+		if other == name || cfg.Tools[a.ID()].Profiles[other].Purge != nil {
 			continue
 		}
 		if o := a.Account(ctx, profiles.Home(cfg, a, other)); strings.EqualFold(o.Email, acct.Email) && o.Tenant == acct.Tenant {
