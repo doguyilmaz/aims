@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -45,5 +46,24 @@ func TestDoctorFixKeepsPendingPurgeUnavailableWithoutRecreatingItsHome(t *testin
 	}
 	if _, err := os.Stat(cfg.Dir("codex", "work")); !os.IsNotExist(err) {
 		t.Fatal("doctor recreated the pending profile home")
+	}
+}
+
+func TestLogoutCommandRejectsPendingPurgeBeforeProviderLookup(t *testing.T) {
+	testutil.Sandbox(t)
+	if _, err := config.Update(func(c *config.Config) error {
+		c.Tools["codex"].Profiles["work"] = &config.Profile{Purge: &config.PurgeState{}}
+		c.Tools["codex"].Order = []string{"work"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newLogoutCmd()
+	cmd.SetArgs([]string{"codex", "work"})
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "purge is pending") {
+		t.Fatalf("pending logout did not stop before provider lookup: %v", err)
 	}
 }

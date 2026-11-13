@@ -216,7 +216,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 		cap.Flush()
 		// It just worked, so any limit or login mark on it is out of date.
 		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
-			_ = profiles.Clear(a.ID(), name)
+			_ = profiles.Clear(a.ID(), name, cfg)
 		}
 		return res, profiles.Pick{}, nil
 	}

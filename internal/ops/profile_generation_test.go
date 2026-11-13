@@ -118,3 +118,22 @@ func TestDelayedProbeCannotOverwriteRecreatedOrPendingProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestLogoutRejectsObservationsStartedBeforeNativeLogout(t *testing.T) {
+	testutil.Sandbox(t)
+	before, _ := purgeFixture(t)
+	a := logoutAdapter{tools.Get("codex")}
+	if err := Logout(t.Context(), a, "work"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := config.Load()
+	if before.Tools["codex"].Profiles["work"].Generation == after.Tools["codex"].Profiles["work"].Generation {
+		t.Fatal("logout retained old observation identity")
+	}
+	if err := profiles.RecordAccount("codex", "work", "old@example.test", "plus", before); err == nil {
+		t.Fatal("old observation restored logged-out identity")
+	}
+	if state := config.LoadStateFor(after).Get("codex", "work"); state.Account != nil || state.Usage != nil {
+		t.Fatalf("old account survived logout: %+v", state)
+	}
+}

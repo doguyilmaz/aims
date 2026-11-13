@@ -378,6 +378,17 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 		if err := nativeLogout(ctx, cfg, a, name); err != nil {
 			return err
 		}
+		before := cfg
+		cfg, err = config.Update(func(c *config.Config) error {
+			if err := sameProfile(before, c, a.ID(), name); err != nil {
+				return err
+			}
+			c.Tools[a.ID()].Profiles[name].Generation = rand.Text()
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("native logout completed; observation identity could not be changed: %w", err)
+		}
 		if err := config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil }); err != nil {
 			return fmt.Errorf("native logout completed; cached account could not be cleared: %w", err)
 		}

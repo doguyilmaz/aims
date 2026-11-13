@@ -15,7 +15,8 @@ cmp $HOME/.aims/state.json before.json
 # The adopted login still matches the exact, unset home variable.
 env CLAUDE_CONFIG_DIR=
 stdin usage.json
-exec aims statusline
+[!windows] exec sh -c 'eval "$(aims env --shell bash claude default)"; exec aims statusline'
+[windows] exec aims exec --claude default -- cmd /c aims statusline
 stdout '^default '
 exists $HOME/.aims/state.json
 grep '"default"' $HOME/.aims/state.json

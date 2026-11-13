@@ -175,7 +175,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 					running, wake = true, nil
 				case ev.Failure != tool.FailNone:
 					running, held, chosen = false, "", ""
-					next, prompt, why, wake = onFailure(ctx, o, name, ev)
+					next, prompt, why, wake = onFailure(ctx, o, cfg, name, ev)
 					if early {
 						probeEvery = min(2*probeEvery, time.Hour)
 					}
@@ -316,23 +316,27 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 // onFailure handles a turn that ended on an error: it marks the profile and
 // names the profile to continue on, or, when every one is limited, what to
 // wait for and why.
-func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
+func onFailure(ctx context.Context, o Options, started *config.Config, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
 	a := o.Tool
 	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return "", "", "", nil
 	}
+	old, current := started.Tools[a.ID()].Profiles[name], cfg.Tools[a.ID()].Profiles[name]
+	if old == nil || current == nil || current.Purge != nil || old.Generation != current.Generation || old.CreatedAt != current.CreatedAt {
+		return "", "", "", nil // an event belongs to the child that emitted it
+	}
 	f := ev.Failure
 	const by = "a session"
 	switch f {
 	case tool.FailLogin:
-		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text, cfg)
+		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text, started)
 	case tool.FailLimit:
 		var windows []tool.Window
 		if u := config.LoadStateFor(cfg).Get(a.ID(), name).Usage; u != nil {
 			windows = u.Windows
 		}
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
+		_ = profiles.MarkLimited(started, a.ID(), name, profiles.Limit{
 			ResetsAt: tool.ResetTime(ev.Text, config.Now()), Window: profiles.LimitWindow(cfg, ev.Text, windows),
 			By: by, Detail: ev.Text,
 		})
@@ -343,7 +347,7 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
 			rest = busyAgain
 		}
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
+		_ = profiles.MarkLimited(started, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
 	apart := profiles.Apart(cfg, a.ID(), name)

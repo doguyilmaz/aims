@@ -44,8 +44,15 @@ func (identityProbe) Account(context.Context, tool.Home) tool.Account {
 
 func TestClaudeLiveProbeBindsItsOfflineAccountIdentity(t *testing.T) {
 	cfg, _ := setup(t)
-	cfg.Tools["claude"].Profiles["a"] = &config.Profile{}
-	cfg.Tools["claude"].Order = []string{"a"}
+	var err error
+	cfg, err = config.Update(func(c *config.Config) error {
+		c.Tools["claude"].Profiles["a"] = &config.Profile{}
+		c.Tools["claude"].Order = []string{"a"}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = RecordAccount("claude", "a", "old@example.test", "pro")
 	_ = RecordUsage("claude", "a", []tool.Window{{Label: "7d", Percent: 100}}, "fixture")
 	p := Live(t.Context(), cfg, identityProbe{tools.Get("claude")}, "a")
