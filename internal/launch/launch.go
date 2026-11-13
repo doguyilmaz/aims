@@ -242,7 +242,7 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	// Retry only when the failed run provably changed nothing: structured
 	// output that shows no tool call. Plain output hides tool calls, and even a
 	// login error can come mid-run (a refresh token rotated by another session).
-	safe := an.Activity() == tool.ActivityNone
+	safe := !cap.AnalysisIncomplete && an.Activity() == tool.ActivityNone
 	if res.Failure != tool.FailNone && auto && !cap.Committed && safe {
 		if next := profiles.Choose(ctx, cfg, config.LoadState(), a, "", tried); next.Name != "" {
 			return res, next, nil
