@@ -193,7 +193,10 @@ type Captured struct {
 	Code int
 	// Committed: stdout was already passed through, too late to retry cleanly.
 	Committed bool
-	flush     func()
+	// AnalysisIncomplete: an oversized line was skipped by OnLine. Raw output
+	// is unchanged, but its analysis cannot establish that retrying is safe.
+	AnalysisIncomplete bool
+	flush              func()
 }
 
 // Flush passes held-back stdout through.
@@ -209,7 +212,8 @@ type CaptureOptions struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Timeout time.Duration
-	// OnLine sees every complete line of output.
+	// OnLine sees complete lines up to maxAnalysisLineBytes. Larger lines are
+	// streamed unchanged but skipped for analysis; see AnalysisIncomplete.
 	OnLine func(stderr bool, line string)
 }
 
@@ -318,11 +322,12 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	}
 
 	readers := make(chan struct{})
+	var outSkipped, errSkipped bool
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pump(outR, func(chunk []byte) {
+		outSkipped = pump(outR, func(chunk []byte) {
 			mu.Lock()
 			if committed {
 				mu.Unlock()
@@ -340,7 +345,7 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	}()
 	go func() {
 		defer wg.Done()
-		pump(errR, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
+		errSkipped = pump(errR, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
 	}()
 	go func() { wg.Wait(); close(readers) }()
 
@@ -361,7 +366,7 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	mu.Lock()
 	wasCommitted := committed
 	mu.Unlock()
-	return &Captured{Code: code, Committed: wasCommitted, flush: commit}, ctx.Err()
+	return &Captured{Code: code, Committed: wasCommitted, AnalysisIncomplete: outSkipped || errSkipped, flush: commit}, ctx.Err()
 }
 
 // pipeGrace is how long output may keep arriving after the tool exits.
@@ -378,10 +383,18 @@ func emit(fn func(bool, string), stderr bool, line string) {
 	fn(stderr, line)
 }
 
-// pump copies r chunk by chunk to onChunk and reports complete lines to onLine.
-func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
+// maxAnalysisLineBytes bounds the additional memory used to analyze one line.
+// It does not limit or truncate the raw output passed to the caller.
+const maxAnalysisLineBytes = 1 << 20
+
+// pump copies r chunk by chunk to onChunk and reports bounded lines to onLine.
+// An oversized line is discarded through its newline, never reported as
+// fragments that could be mistaken for independent events. It returns whether
+// any line was skipped, including an oversized final line without a newline.
+func pump(r io.Reader, onChunk func([]byte), onLine func(string)) (skipped bool) {
 	buf := make([]byte, 32<<10)
 	var partial strings.Builder
+	discarding := false
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
@@ -390,19 +403,43 @@ func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
 			data := chunk
 			for {
 				i := bytes.IndexByte(data, '\n')
+				part := data
+				if i >= 0 {
+					part = data[:i]
+				}
+				if !discarding {
+					// Keep one possible CRLF terminator byte across reads. A
+					// content byte beyond the limit still discards the line.
+					if len(part) > maxAnalysisLineBytes+1-partial.Len() {
+						skipped, discarding = true, true
+						partial.Reset()
+					} else {
+						partial.Write(part)
+						if partial.Len() > maxAnalysisLineBytes && !strings.HasSuffix(partial.String(), "\r") {
+							skipped, discarding = true, true
+							partial.Reset()
+						}
+					}
+				}
 				if i < 0 {
-					partial.Write(data)
 					break
 				}
-				partial.Write(data[:i])
-				onLine(strings.TrimSuffix(partial.String(), "\r"))
+				if !discarding {
+					onLine(strings.TrimSuffix(partial.String(), "\r"))
+				}
 				partial.Reset()
+				discarding = false
 				data = data[i+1:]
 			}
 		}
 		if err != nil {
-			if partial.Len() > 0 {
-				onLine(partial.String())
+			if !discarding && partial.Len() > 0 {
+				if partial.Len() > maxAnalysisLineBytes {
+					// Without a newline, the pending CR is content.
+					skipped = true
+				} else {
+					onLine(partial.String())
+				}
 			}
 			return
 		}
