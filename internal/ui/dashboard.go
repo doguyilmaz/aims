@@ -114,7 +114,10 @@ type flashMsg struct {
 	bad  bool
 }
 
-type liveDoneMsg struct{ key string }
+type liveDoneMsg struct {
+	key string
+	err error
+}
 
 type execDoneMsg struct{ err error }
 
@@ -220,6 +223,9 @@ func (m *dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flash, m.flashBad = msg.text, msg.bad
 		return m, m.reload()
 	case liveDoneMsg:
+		if msg.err != nil {
+			m.flash, m.flashBad = msg.err.Error(), true
+		}
 		delete(m.checking, msg.key)
 		return m, m.reload()
 	case execDoneMsg:
@@ -263,8 +269,8 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			k := "meters"
 			m.checking[k] = true
 			return m, tea.Batch(m.checkAll(), func() tea.Msg {
-				meter.Refresh(m.ctx)
-				return liveDoneMsg{k}
+				_, err := meter.Refresh(m.ctx)
+				return liveDoneMsg{key: k, err: err}
 			})
 		}
 		return m, nil
@@ -388,7 +394,7 @@ func (m *dashboard) checkAll() tea.Cmd {
 			m.checking[k] = true
 			cmds = append(cmds, func() tea.Msg {
 				profiles.Live(m.ctx, cfg, a, p.Name)
-				return liveDoneMsg{k}
+				return liveDoneMsg{key: k}
 			})
 		}
 	}

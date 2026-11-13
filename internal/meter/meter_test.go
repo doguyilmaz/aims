@@ -28,6 +28,28 @@ func TestParseAgy(t *testing.T) {
 	}
 }
 
+func TestParseAgyKeepsArgonAndCarbonSeparateFromOtherModelGroups(t *testing.T) {
+	r := parseAgy([]byte(`{"status":"SUCCESS","command":{"data":{"groups":[
+		{"id":"gemini","name":"Gemini Models","buckets":[{"id":"weekly","window":"weekly","remaining_fraction":0.9,"reset_time":"2030-01-01T01:00:00Z"}]},
+		{"id":"claude-gpt","name":"Claude and GPT models","buckets":[{"id":"weekly","window":"weekly","remaining_fraction":0.8,"reset_time":"2030-01-01T02:00:00Z"}]},
+		{"id":"argon","name":"Gemini 4 Argon","buckets":[{"id":"weekly","window":"weekly","remaining_fraction":0.7,"reset_time":"2030-01-01T03:00:00Z"}]},
+		{"id":"carbon","name":"Gemini 4 Carbon","buckets":[{"id":"weekly","window":"weekly","remaining_fraction":0.6,"reset_time":"2030-01-01T04:00:00Z"}]}
+	]}}}`))
+	if r.Error != "" || len(r.Rows) != 4 {
+		t.Fatalf("model groups were omitted or combined: %+v", r)
+	}
+	for i, id := range []string{"gemini", "claude-gpt", "argon", "carbon"} {
+		row := r.Rows[i]
+		if row.ID != id || len(row.Windows) != 1 {
+			t.Fatalf("group identity lost: %+v", row)
+		}
+		w := row.Windows[0]
+		if w.ID != "weekly" || w.Percent != float64((i+1)*10) || !w.ResetsAt.Equal(time.Date(2030, 1, 1, i+1, 0, 0, 0, time.UTC)) {
+			t.Fatalf("%s inherited another group's percentage or reset: %+v", id, w)
+		}
+	}
+}
+
 func TestParseOpenCode(t *testing.T) {
 	r := parseOpenCode([]byte(`{"data":{"workspace":{"name":"Acme"},"budgets":[{"limit":50,"spent":33.4996,"per":"set","resetsAt":1793491200000}]}}`))
 	if len(r.Rows) != 1 {

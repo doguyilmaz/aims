@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/doguyilmaz/aims/internal/meter"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -43,7 +44,37 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 		}
 		sec := usageSection{head: s.Bold.Render(t.Title)}
 		for _, p := range t.Profiles {
-			sec.rows = append(sec.rows, usageRow{name: p.Name, plan: ShortPlan(p.Plan), windows: p.Usage, slots: usageSlots})
+			detail := "banked resets: not reported"
+			if p.BankedResets != nil {
+				detail = fmt.Sprintf("banked resets: %d", p.BankedResets.Available)
+				details := 0
+				for _, credit := range p.BankedResets.Credits {
+					if credit.Status == "available" {
+						details++
+					}
+					if credit.Status == "available" && !credit.ExpiresAt.IsZero() {
+						detail += " · expires " + credit.ExpiresAt.Local().Format("Jan 2 15:04 MST")
+					}
+					if credit.Status == "available" && credit.NoExpiry {
+						detail += " · does not expire"
+					}
+				}
+				if int64(details) < p.BankedResets.Available {
+					detail += fmt.Sprintf(" · reset details %d/%d; other expiries not reported", details, p.BankedResets.Available)
+				}
+			}
+			if p.UsageAt.IsZero() {
+				detail += " · not checked"
+			} else if time.Since(p.UsageAt) > staleAfter {
+				detail += " · reported " + profiles.Duration(time.Since(p.UsageAt)) + " ago"
+			}
+			if p.UsageError != "" {
+				detail += " · last check: " + p.UsageError + "; previous reading retained"
+			}
+			sec.rows = append(sec.rows, usageRow{name: p.Name, plan: ShortPlan(p.Plan), detail: detail, windows: p.Usage, slots: usageSlots})
+			for _, g := range p.UsageGroups {
+				sec.rows = append(sec.rows, usageRow{name: p.Name + " · " + g.Name, windows: g.Windows})
+			}
 		}
 		secs = append(secs, sec)
 	}
@@ -81,10 +112,14 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 	}
 	cell := func(w tool.Window, known bool) string {
 		pct := "   –"
-		if known {
+		if known && !w.PercentUnknown {
 			pct = fmt.Sprintf("%3.0f%%", w.Percent)
 		}
-		out := s.Dim.Render(Pad(w.Label, labelW)) + " " + Bar(s, w.Percent, threshold, barCells) + " " + pct
+		barPercent := w.Percent
+		if !known || w.PercentUnknown {
+			barPercent = 0
+		}
+		out := s.Dim.Render(Pad(w.Label, labelW)) + " " + Bar(s, barPercent, threshold, barCells) + " " + pct
 		if resetW > 0 {
 			out += "  " + s.Dim.Render(Pad(resets(w), resetW))
 		}
@@ -118,7 +153,7 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 			for _, w := range r.cells() {
 				cells = append(cells, cell(w, r.has(w.Label)))
 			}
-			if r.detail != "" {
+			if r.detail != "" && width == 0 {
 				cells = append(cells, s.Dim.Render(r.detail))
 			}
 			for j := 0; j < len(cells) || j == 0; j += perLine {
@@ -131,6 +166,11 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 				}
 				b.WriteString(strings.TrimRight(line, " ") + "\n")
 			}
+			if r.detail != "" && width > 0 {
+				for _, line := range strings.Split(ansi.Wrap(r.detail, max(10, width-lead), ""), "\n") {
+					b.WriteString(strings.Repeat(" ", lead) + s.Dim.Render(line) + "\n")
+				}
+			}
 		}
 	}
 	return b.String()
@@ -139,16 +179,24 @@ func RenderUsage(s *Styles, report []ops.ToolStatus, ms []meter.Status, threshol
 // cells are the row's windows, with an empty one for each missing slot.
 func (r usageRow) cells() []tool.Window {
 	var out []tool.Window
+	used := make([]bool, len(r.windows))
 	for _, l := range r.slots {
 		w := tool.Window{Label: l}
-		for _, x := range r.windows {
-			if x.Label == l {
+		for i, x := range r.windows {
+			if !used[i] && x.Label == l {
 				w = x
+				used[i] = true
+				break
 			}
 		}
 		out = append(out, w)
 	}
-	rest := slices.DeleteFunc(slices.Clone(r.windows), func(w tool.Window) bool { return slices.Contains(r.slots, w.Label) })
+	var rest []tool.Window
+	for i, w := range r.windows {
+		if !used[i] {
+			rest = append(rest, w)
+		}
+	}
 	slices.SortStableFunc(rest, func(a, b tool.Window) int { return span(a.Label) - span(b.Label) })
 	return append(out, rest...)
 }
@@ -166,8 +214,11 @@ func span(label string) int {
 }
 
 func resets(w tool.Window) string {
-	if !w.ResetsAt.After(time.Now()) {
+	if w.ResetsAt.IsZero() {
 		return ""
+	}
+	if !w.ResetsAt.After(time.Now()) {
+		return "reset passed; refresh"
 	}
 	return "resets " + profiles.Duration(time.Until(w.ResetsAt))
 }

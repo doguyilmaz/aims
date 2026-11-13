@@ -30,7 +30,7 @@ func probe(ctx context.Context, h tool.Home, refresh bool) tool.Probe {
 	defer cancel()
 	res, err := rpc(ctx, h, []call{
 		{"account/read", map[string]any{"refreshToken": refresh}},
-		{"account/rateLimits/read", map[string]any{"excludeResetCreditDetails": true}},
+		{"account/rateLimits/read", map[string]any{"excludeResetCreditDetails": false}},
 	})
 	if err != nil && res["account/read"] == nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
@@ -163,6 +163,7 @@ func interpret(acct, limits *reply) tool.Probe {
 		p.Plan = a.Account.Type
 	}
 	if limits == nil {
+		p.UsageError = "unavailable"
 		return p
 	}
 	if limits.Error != nil {
@@ -171,6 +172,7 @@ func interpret(acct, limits *reply) tool.Probe {
 			f.Status = tool.ProbeOK // rate limits are optional (API key accounts)
 		}
 		f.Email, f.Plan = p.Email, p.Plan
+		f.UsageError = "unavailable"
 		return f
 	}
 	var l struct {
@@ -182,8 +184,11 @@ func interpret(acct, limits *reply) tool.Probe {
 		} `json:"rateLimits"`
 	}
 	if json.Unmarshal(limits.Result, &l) != nil {
+		p.UsageError = "unavailable"
 		return p
 	}
+	p.UsageReported = true
+	additionalUsage(limits.Result, &p)
 	for _, w := range []struct {
 		w        *window
 		fallback string
@@ -192,7 +197,7 @@ func interpret(acct, limits *reply) tool.Probe {
 			continue
 		}
 		win := tool.Window{Label: label(w.w.WindowDurationMins, w.fallback), Percent: w.w.UsedPercent}
-		if w.w.ResetsAt != nil {
+		if w.w.ResetsAt != nil && *w.w.ResetsAt > 0 {
 			win.ResetsAt = time.Unix(*w.w.ResetsAt, 0).UTC()
 		}
 		p.Windows = append(p.Windows, win)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,14 +29,16 @@ type Meter interface {
 
 // Reading is what a tool reported. Rows are model groups or workspaces.
 type Reading struct {
-	Plan  string    `json:"plan,omitempty"`
-	Rows  []Row     `json:"rows,omitempty"`
-	Error string    `json:"error,omitempty"`
-	At    time.Time `json:"at,omitzero"`
+	Plan        string    `json:"plan,omitempty"`
+	Rows        []Row     `json:"rows,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	At          time.Time `json:"at,omitzero"`
+	AttemptedAt time.Time `json:"attemptedAt,omitzero"`
 }
 
 // Row is one set of windows: a model group, a workspace.
 type Row struct {
+	ID      string        `json:"id,omitempty"`
 	Name    string        `json:"name"`
 	Windows []tool.Window `json:"windows"`
 	// Detail is the amount behind the percentage, "$33.50 of $50".
@@ -44,15 +47,16 @@ type Row struct {
 
 // Status is one installed tool and its last reading.
 type Status struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Installed bool   `json:"installed"`
 	Reading
 }
 
 // readTimeout bounds one tool's read.
 const readTimeout = 45 * time.Second
 
-var all = []Meter{agy{}, grok{}, kiro{}, opencode{}}
+var all = []Meter{kiro{}, grok{}, agy{}, opencode{}}
 
 // binOf finds the tool's CLI; AIMS_<ID>_BIN names another one.
 func binOf(m Meter) string {
@@ -68,24 +72,31 @@ func path() string { return filepath.Join(config.Home(), "meters.json") }
 
 // Load returns the last reading of every installed tool.
 func Load() []Status {
+	return slices.DeleteFunc(Cached(), func(s Status) bool { return !s.Installed })
+}
+
+// Cached keeps previous readings visible when a native CLI is temporarily
+// absent from PATH. It does not contact any provider.
+func Cached() []Status {
 	var cache map[string]Reading
 	fsx.ReadJSONLenient(path(), &cache)
 	var out []Status
 	for _, m := range all {
-		if binOf(m) != "" {
-			out = append(out, Status{ID: m.ID(), Title: m.Title(), Reading: cache[m.ID()]})
-		}
+		out = append(out, Status{ID: m.ID(), Title: m.Title(), Installed: binOf(m) != "", Reading: observedReading(cache[m.ID()])})
 	}
 	return out
 }
 
 // Refresh asks every installed tool at once and saves what they report. A
 // tool that fails keeps its last numbers, with the error beside them.
-func Refresh(ctx context.Context) []Status {
+func Refresh(ctx context.Context, ids ...string) ([]Status, error) {
 	var mu sync.Mutex
 	got := map[string]Reading{}
 	var wg sync.WaitGroup
 	for _, m := range all {
+		if len(ids) > 0 && !slices.Contains(ids, m.ID()) {
+			continue
+		}
 		bin := binOf(m)
 		if bin == "" {
 			continue
@@ -95,6 +106,7 @@ func Refresh(ctx context.Context) []Status {
 			defer cancel()
 			r := m.Read(c, bin)
 			r.At = config.Now().UTC()
+			r.AttemptedAt = r.At
 			mu.Lock()
 			got[m.ID()] = r
 			mu.Unlock()
@@ -102,20 +114,32 @@ func Refresh(ctx context.Context) []Status {
 	}
 	wg.Wait()
 	if len(got) == 0 {
-		return nil
+		return nil, nil
 	}
-	_ = fsx.WithLock(path(), func() error {
+	err := fsx.WithLock(path(), func() error {
 		cache := map[string]Reading{}
 		fsx.ReadJSONLenient(path(), &cache)
 		for id, r := range got {
 			if r.Error != "" && len(r.Rows) == 0 {
-				r.Plan, r.Rows = cache[id].Plan, cache[id].Rows
+				old := observedReading(cache[id])
+				r.Plan, r.Rows = old.Plan, old.Rows
+				r.At = old.At // retain the age of the numbers, not the failed attempt
 			}
 			cache[id] = r
 		}
 		return fsx.WriteJSON(path(), cache, 0o600)
 	})
-	return Load()
+	return Load(), err
+}
+
+// Older caches overwrote At on failure. That observation time cannot be
+// recovered, so retain the numbers with unknown age instead of inventing one.
+func observedReading(r Reading) Reading {
+	if r.Error != "" && r.AttemptedAt.IsZero() {
+		r.AttemptedAt = r.At
+		r.At = time.Time{}
+	}
+	return r
 }
 
 // pct is the percent of limit used, to one decimal, as tool.Window holds it.

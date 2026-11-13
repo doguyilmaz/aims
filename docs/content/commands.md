@@ -58,15 +58,23 @@ What is going on, in a few lines. Alias: `aims ls`.
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
 | `--json` | Everything, as JSON: emails, every usage window, marks and who set them |
 
-### `aims usage [tool]`
+### `aims usage [provider]`
 
 Every usage window of every account with its bar and when it resets, and under them the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. Columns line up across all of them, and on a narrow terminal the windows wrap under each other.
 
-aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. The numbers are from the last `aims keepalive` or `--live`.
+aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. Filter by `claude`, `codex`, `kiro`, `grok`, `agy` or `opencode`. The numbers are cached until `aims keepalive`, `--refresh` or `--live` updates them.
+
+Scheduled resets, banked reset inventory and user reminders are separate. Banked reset counts come from Codex's account API when available; detail lists can be absent or capped. aims never redeems or buys a reset. A reset time in the past means the reading needs refreshing, not that usage is now zero. Failed refreshes retain the previous numbers **and their original observation time**.
 
 | Flag | |
 | --- | --- |
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
+| `--refresh` | Refresh Codex and the other providers without a model prompt or clearing manual routing/login marks. Claude uses its cached native status line. Mutually exclusive with `--live`. |
+| `--json` | Versioned usage snapshot: accounts/groups, windows, reset timestamps, banked resets, freshness, errors and custom reminders. Omits credential fields, account email, tenant and profile paths. Reads caches without provider/keychain calls unless refreshing. |
+
+`aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>` adds a custom reminder. Take the row ID from `aims usage --json`; `--at` must include a timezone. `aims usage reset remove <id>` removes it. Both accept `--json` to return the updated snapshot. The reminders live in `AIMS_HOME/usage-reminders.json`, separately from provider data, credentials and session history. Malformed or newer reminder formats are left unchanged.
+
+For the optional menu bar and pinned panel, see [macOS usage app](../macos-usage).
 
 ### `aims use [tool] <profile>`
 

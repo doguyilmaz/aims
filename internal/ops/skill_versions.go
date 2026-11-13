@@ -3,6 +3,7 @@ package ops
 // Digests of previously bundled skills from this repository history. Keep
 // these when updating the skill so clean can distinguish upgrades from edits.
 var previousSkillDigests = map[string]bool{
+	"8b4cd1b5ab2097d731ec278feba624acaa5e22368227469e4a147490a68379f1": true,
 	"e3c696c660ce960bbd863c934776295e9fc432b654d05042cd582c5eac06524f": true,
 	"542e1b49f9af3e4c4f0b4566fbd72088d87d61ab41a7a8645f6d5aedae5949d8": true,
 	"98a338f29216652f4947abd46476f57a316b777609615c8df298a3dfe6f09e26": true,

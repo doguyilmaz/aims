@@ -363,9 +363,12 @@ func Known(b bool) *bool { return &b }
 
 // Window is one plan usage window, e.g. "5h" or "7d".
 type Window struct {
-	Label    string    `json:"label"`
-	Percent  float64   `json:"pct"`
-	ResetsAt time.Time `json:"resetsAt,omitzero"`
+	ID             string    `json:"id,omitempty"`
+	Label          string    `json:"label"`
+	Percent        float64   `json:"pct"`
+	PercentUnknown bool      `json:"pctUnknown,omitempty"`
+	Limited        bool      `json:"limited,omitempty"`
+	ResetsAt       time.Time `json:"resetsAt,omitzero"`
 }
 
 // Short reports whether the window is the short one, the five hours of
@@ -396,6 +399,12 @@ type Probe struct {
 	Email   string
 	Plan    string
 	Windows []Window
+	Groups  []QuotaGroup
+	Resets  *ResetBalance
+	// UsageReported distinguishes a complete, empty report from an unavailable
+	// report. UsageError does not change the provider's session eligibility.
+	UsageReported bool
+	UsageError    string
 }
 
 // MCPScope is where a tool keeps user-level MCP servers.
