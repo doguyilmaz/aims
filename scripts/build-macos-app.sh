@@ -72,7 +72,7 @@ if [[ -n "${AIMS_USAGE_CLI_BINARY:-}" ]]; then
   fi
   cp "$AIMS_USAGE_CLI_BINARY" "$build/Aims Usage.app/Contents/Resources/aims"
   if [[ "${AIMS_USAGE_UNIVERSAL:-0}" == 1 ]]; then
-    lipo -verify_arch arm64 x86_64 "$build/Aims Usage.app/Contents/Resources/aims"
+    lipo "$build/Aims Usage.app/Contents/Resources/aims" -verify_arch arm64 x86_64
   fi
 else
   (
