@@ -10,6 +10,7 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         ProviderAssets.prepare()
+        model.updater.start()
         dock.start(model: model, openOverview: togglePanel)
         model.presentationDidChange = { [weak self] in
             self?.dock.update()

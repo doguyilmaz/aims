@@ -35,6 +35,9 @@ jobs:
       - name: Build revision checks
         if: runner.os == 'Linux' || runner.os == 'macOS'
         run: bash scripts/test-source-revision.sh
+      - name: macOS update configuration checks
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: python3 -B scripts/test-macos-updates.py
       - run: go vet ./...
       - name: Race tests
         if: runner.os != 'Linux'
