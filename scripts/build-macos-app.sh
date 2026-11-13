@@ -37,6 +37,7 @@ if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
 fi
 build=$(mktemp -d "${TMPDIR:-/tmp}/aims-usage-build.XXXXXX")
 trap 'rm -rf "$build"' EXIT
+export GOCACHE=${GOCACHE:-"$build/go-cache"}
 app="$repo/dist/Aims Usage.app"
 bundle_id=com.doguyilmaz.aims.usage
 display_name='Aims Usage'

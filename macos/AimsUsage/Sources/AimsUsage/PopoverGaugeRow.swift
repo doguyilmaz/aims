@@ -11,7 +11,7 @@ struct PopoverGaugeRow: View {
             let stale =
                 refreshFailed || row?.isStale(at: context.date) == true
                 || row?.error != nil || provider.error != nil
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
                         ProviderMark(id: provider.id, size: 16)
