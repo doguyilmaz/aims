@@ -3,7 +3,7 @@ title: macOS usage app
 weight: 9
 ---
 
-Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The Dock can remain on the bottom. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to the usable right edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
 Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aims Usage.app`. Requirements: macOS 14.0.0+, Swift 6.2.0+, and the Go version in `go.mod`. The app is a locally signed development build; public release signing/notarization is separate. Its menu pin toggles the side panel. More contains Settings, custom reminders and Quit. No login item is installed automatically.
 
