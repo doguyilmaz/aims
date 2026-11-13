@@ -60,6 +60,8 @@ struct UsageDashboard: View {
                             }
                         }
                     }
+                } else if surface == .popover {
+                    PopoverGaugeList(snapshot: snapshot, refreshFailed: model.error != nil)
                 } else {
                     let items = UsageTileItem.items(from: snapshot)
                     let twoColumnRows = UsageGaugeRow.rows(from: items, columns: 2)
@@ -102,7 +104,6 @@ struct UsageDashboard: View {
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            UsageStyleControl(selection: $model.displayStyle)
             Button {
                 Task { await model.refresh() }
             } label: {

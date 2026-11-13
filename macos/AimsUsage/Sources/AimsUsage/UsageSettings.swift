@@ -9,7 +9,7 @@ struct UsageSettings: View {
     var body: some View {
         Form {
             Section("Display") {
-                Picker("Widget appearance", selection: $model.displayStyle) {
+                Picker("Usage appearance", selection: $model.displayStyle) {
                     ForEach(UsageDisplayStyle.allCases) { style in
                         Label(style.title, systemImage: style.symbol).tag(style)
                     }
