@@ -7,6 +7,7 @@ struct EdgeDockView: View {
     let hoverProvider: @MainActor (String) -> Void
     let selectProvider: @MainActor (String) -> Void
     let openOverview: @MainActor () -> Void
+    let showOptions: @MainActor (String?, CGPoint?) -> Void
     @Environment(\.colorScheme) private var scheme
     private var size: EdgeDockSize { model.edgeDockSize }
 
@@ -63,13 +64,11 @@ struct EdgeDockView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .onHover { if $0 { hoverProvider(provider.id) } }
-                                .contextMenu {
-                                    DockOptionsMenu(model: model, provider: provider, openOverview: openOverview)
-                                }
                                 .overlay {
-                                    DockContextMenu(model: model, provider: provider, openOverview: openOverview)
+                                    DockContextMenu { showOptions(provider.id, $0) }
                                         .accessibilityHidden(true)
                                 }
+                                .accessibilityAction(named: Text("Dock options")) { showOptions(provider.id, nil) }
                                 .accessibilityLabel(
                                     "\(ProviderStyle.title(provider)) usage, \(summary.value), \(summary.explanation)"
                                 )
@@ -108,8 +107,8 @@ struct EdgeDockView: View {
                             width: size == .mini ? 22 : 20, height: 20)
                 }
                 .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
-                .contextMenu { DockOptionsMenu(model: model, openOverview: openOverview) }
-                .overlay { DockContextMenu(model: model, openOverview: openOverview).accessibilityHidden(true) }
+                .overlay { DockContextMenu { showOptions(nil, $0) }.accessibilityHidden(true) }
+                .accessibilityAction(named: Text("Dock options")) { showOptions(nil, nil) }
                 Button {
                     model.edgeDockPinned.toggle()
                 } label: {

@@ -13,11 +13,11 @@ import Testing
             pointer: outside, dock: dock, peek: nil, activation: activation))
     #expect(
         EdgeDockVisibility.shouldReveal(
-            autoHide: true, expanded: true, pinned: false, menuTracking: true,
+            autoHide: true, expanded: true, pinned: false, optionsPresented: true,
             pointer: outside, dock: dock, peek: nil, activation: activation))
     #expect(
         !EdgeDockVisibility.shouldReveal(
-            autoHide: true, expanded: true, pinned: false, dockPinned: false, menuTracking: false,
+            autoHide: true, expanded: true, pinned: false, dockPinned: false, optionsPresented: false,
             pointer: outside, dock: dock, peek: nil, activation: activation))
 }
 
