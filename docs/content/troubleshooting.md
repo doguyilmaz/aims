@@ -117,3 +117,21 @@ Neither touches `~/.claude` or `~/.codex`: every conversation, session, skill, s
 ## Getting help
 
 Open an [issue](https://github.com/doguyilmaz/aims/issues) with the output of `aims --version` and `aims doctor`. Remove e-mail addresses you would rather not post.
+
+### An add or purge was interrupted
+
+A new profile is registered only after its folder, settings seed and initial sharing are ready. If preparation fails, the error names the retained folder. Correct the cause and retry the same add command; aims keeps partial or existing content rather than deleting it. Old cached login/usage marks are cleared before a recreated label is registered. A state-lock or state-write failure stops the operation instead of silently reusing that cache.
+
+An explicit purge has a durable checkpoint in its existing profile configuration. If logout or cleanup fails, that label remains visible as pending and unavailable for new launches, usage probes and keepalive. A completed logout is recorded before file deletion; retrying does not require a provider that already completed that step. `aims doctor --check` reports the retry command, and `--fix` leaves the pending home alone. Close affected native tools, resolve the reported filesystem/lock error, then repeat `aims rm <tool> <profile> --purge`. Use the same or a newer aims build for recovery; do not remove checkpoint metadata or use an older binary that does not understand it. Existing running sessions are not terminated automatically.
+
+If you want to retain the remaining directory instead, remove only the label without `--purge`. A previous successful logout is not undone. Do not delete a folder merely because its cache or registration is incomplete.
+
+Supervised sessions hold an owner record for their entire lifetime. Age alone cannot remove their coordination directory: the sweep skips live owners, unverifiable legacy records and directories whose open-file state is unknown. Old records without verifiable ownership are kept for deliberate inspection rather than guessed to be abandoned.
+
+### Interrupted profile removal and late observations
+
+A pending `rm --purge` blocks normal launches, shell environment exports, order changes and integration setup for that profile. `doctor --check` identifies it; `doctor --fix` never completes deletion on your behalf. `clean` preserves pending-removal checkpoints and asks you to resolve them first. Retry the explicit removal, or remove only its label to retain the folder.
+
+A successful native logout is synced to a small private record in `~/.aims/recovery/profile-removals` before configuration cleanup. It contains only the tool, label, registration identity and completion marker. A retry can finish without the provider executable when this record or the config checkpoint durably confirms completion. If storage cannot confirm logout, files stay and the error is reported; do not discard recovery records while removal is pending.
+
+New registrations and completed logins/logouts receive a fresh observation identity. In-flight usage probes cannot update a replaced registration, and stale cache entries are ignored. Native statusline writers started before a replacement/login show `profile changed; restart via aims` until relaunched; this does not delete their conversations or credentials. Existing profiles keep their current observations until a registration/login changes.

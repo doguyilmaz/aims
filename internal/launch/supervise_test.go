@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ func TestOnFailureIgnoresPrivateDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	testutil.Write(t, filepath.Join(cfg.Dir("codex", "b"), "thread_history_1.sqlite"), "private history")
-	if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "b" || !validMove("codex", "a", "b") {
+	if next, _, _, _ := currentFailure(t.Context(), o, "a", limited); next != "b" || !validMove("codex", "a", "b") {
 		t.Fatalf("a private index kept the conversation out: %q", next)
 	}
 	// A database with data of its own still does: Codex keeps using it.
@@ -73,13 +74,13 @@ func TestOnFailureSkipsConflictingHistory(t *testing.T) {
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "c" {
+			if next, _, _, _ := currentFailure(t.Context(), o, "a", limited); next != "c" {
 				t.Fatalf("moved into conflicting %s: %q", entry, next)
 			}
 			if validMove("codex", "a", "b") {
 				t.Fatal("explicit move accepted conflicting history")
 			}
-			if next, _, _, _ := onFailure(t.Context(), o, "b", limited); next != "" {
+			if next, _, _, _ := currentFailure(t.Context(), o, "b", limited); next != "" {
 				t.Fatalf("moved out of private %s: %q", entry, next)
 			}
 		})
@@ -98,7 +99,7 @@ var limited = tool.SessionEvent{Session: "s", Failure: tool.FailLimit, Text: "Yo
 
 func TestOnFailure(t *testing.T) {
 	o := setup(t)
-	next, prompt, why, wake := onFailure(t.Context(), o, "a", limited)
+	next, prompt, why, wake := currentFailure(t.Context(), o, "a", limited)
 	if next != "b" || prompt != continuePrompt || why != "a hit its usage limit; continuing this conversation on b" || wake != nil {
 		t.Fatalf("to the next: %q %q %q %+v", next, prompt, why, wake)
 	}
@@ -109,7 +110,7 @@ func TestOnFailure(t *testing.T) {
 	// Every account limited: wait for the one that resets first, c here.
 	limit(t, "b", 3*time.Hour)
 	limit(t, "c", time.Hour)
-	next, _, _, wake = onFailure(t.Context(), o, "b", limited)
+	next, _, _, wake = currentFailure(t.Context(), o, "b", limited)
 	if next != "" || wake == nil || wake.Soonest != "c" || !wake.ReadyAt.Equal(now.Add(time.Hour)) {
 		t.Fatalf("wait: %q %+v", next, wake)
 	}
@@ -143,10 +144,10 @@ func TestOnFailureKeepsHistory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if next, _, _, _ := onFailure(t.Context(), o, "a", limited); next != "c" {
+	if next, _, _, _ := currentFailure(t.Context(), o, "a", limited); next != "c" {
 		t.Fatalf("skips b, whose history is its own: %q", next)
 	}
-	if next, _, _, _ := onFailure(t.Context(), o, "b", limited); next != "" {
+	if next, _, _, _ := currentFailure(t.Context(), o, "b", limited); next != "" {
 		t.Fatalf("b's conversation is nowhere else: %q", next)
 	}
 }
@@ -155,13 +156,13 @@ func TestOnFailureKeepsHistory(t *testing.T) {
 func TestBusyBackoff(t *testing.T) {
 	o := setup(t)
 	busy := tool.SessionEvent{Session: "s", Failure: tool.FailBusy}
-	onFailure(t.Context(), o, "a", busy)
+	currentFailure(t.Context(), o, "a", busy)
 	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(now.Add(busyFor)) {
 		t.Fatalf("first: %v", ps.Until)
 	}
 	_ = profiles.Clear("codex", "a")
 	_ = config.UpdateState("codex", "a", func(ps *config.ProfileState) { ps.Reason, ps.MarkedAt = "busy", now.Add(-5*time.Minute) })
-	onFailure(t.Context(), o, "a", busy)
+	currentFailure(t.Context(), o, "a", busy)
 	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(now.Add(busyAgain)) {
 		t.Fatalf("again: %v", ps.Until)
 	}
@@ -267,7 +268,7 @@ func TestWaitAfterClear(t *testing.T) {
 func TestOnFailureDatedReset(t *testing.T) {
 	o := setup(t)
 	ev := tool.SessionEvent{Session: "s", Failure: tool.FailLimit, Text: "You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at Jun 8th, 2026 3:14 PM."}
-	onFailure(t.Context(), o, "a", ev)
+	currentFailure(t.Context(), o, "a", ev)
 	if ps := config.LoadState().Get("codex", "a"); !ps.Until.Equal(time.Date(2026, 6, 8, 15, 14, 0, 0, time.Local)) {
 		t.Fatalf("until %v", ps.Until.Local())
 	}
@@ -290,5 +291,34 @@ func TestChooseAsksWhenAllLimited(t *testing.T) {
 	}
 	if len(said) == 0 || !strings.HasPrefix(said[0], "codex: a is at its limit (") || !strings.HasSuffix(said[0], "so this session uses b") {
 		t.Fatalf("said: %q", said)
+	}
+}
+
+// Existing scenarios emit an event for the currently registered child.
+func currentFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent) (string, string, string, *profiles.Pick) {
+	cfg, err := config.LoadIn(o.Dir)
+	if err != nil {
+		panic(err)
+	}
+	return onFailure(ctx, o, cfg, name, ev)
+}
+
+func TestOldSupervisedChildCannotMarkRecreatedProfile(t *testing.T) {
+	o := setup(t)
+	before, err := config.LoadIn(o.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Update(func(c *config.Config) error { c.Tools["codex"].Profiles["a"].Generation = "replacement"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	for _, failure := range []tool.Failure{tool.FailLogin, tool.FailLimit, tool.FailBusy} {
+		if next, _, _, wake := onFailure(t.Context(), o, before, "a", tool.SessionEvent{Failure: failure, Text: "old child"}); next != "" || wake != nil {
+			t.Fatal("old child initiated failover for new registration")
+		}
+		state := config.LoadState().Get("codex", "a")
+		if state.NeedsLogin || !state.Until.IsZero() || state.Reason != "" {
+			t.Fatalf("old child changed new state: %+v", state)
+		}
 	}
 }

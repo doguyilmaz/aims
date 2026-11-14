@@ -223,30 +223,16 @@ aims logout claude work`,
 				}
 				r.Outro(ui.Out.Dim.Render("logging " + t.String() + " out"))
 			}
-			return logout(t)
+			return logout(cmd.Context(), t)
 		},
 	}
 }
 
 // logout runs the tool's own logout for a profile.
-func logout(t target) error {
-	cfg, err := config.Load()
-	if err != nil {
+func logout(ctx context.Context, t target) error {
+	if err := ops.Logout(ctx, t.a, t.name); err != nil {
 		return err
 	}
-	bin := profiles.Bin(t.a)
-	if bin == "" {
-		return fmt.Errorf("%s is not installed", t.a.Title())
-	}
-	env, _ := profiles.Env(cfg, t.a, t.name, os.Environ())
-	code, err := proc.RunAttached(bin, t.a.Commands().Logout, env, "")
-	if err != nil || code != 0 {
-		if err == nil {
-			err = exitCode(code)
-		}
-		return err
-	}
-	_ = config.UpdateState(t.a.ID(), t.name, func(ps *config.ProfileState) { ps.Account = nil })
 	ui.Done("%s is logged out", t)
 	return nil
 }
@@ -465,7 +451,7 @@ func askFailover(ctx context.Context, r *ui.Rail, a tool.Adapter, reason string)
 	if err != nil {
 		return "", "", err
 	}
-	last := ops.LastUsed(cfg, config.LoadState(), a.ID())
+	last := ops.LastUsed(cfg, config.LoadStateFor(cfg), a.ID())
 	desc := "aims started " + last + " last."
 	if last == "" {
 		last = cfg.Tools[a.ID()].Active

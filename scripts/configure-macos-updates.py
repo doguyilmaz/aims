@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 def require_https(value, name):
     url = urlsplit(value)
     if (url.scheme != "https" or not url.hostname or url.username or url.password
-            or url.query or url.fragment or any(c.isspace() for c in value)):
+            or "?" in value or "#" in value or any(c.isspace() for c in value)):
         raise ValueError(name + " must be an HTTPS URL without credentials, query or fragment")
     _ = url.port
 

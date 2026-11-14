@@ -18,7 +18,24 @@ import (
 // shell line) and forgets its settings and marks. Logins and account folders
 // stay, so `aims init` brings everything back without logging in again.
 func Clean(ctx context.Context) ([]Step, error) {
-	steps, err := Uninstall(ctx, Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect(), KeepAlive: true})
+	var steps []Step
+	err := profileOperation(func() error { var err error; steps, err = clean(ctx); return err })
+	return steps, err
+}
+
+func clean(ctx context.Context) ([]Step, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+	for id, tool := range cfg.Tools {
+		for name, p := range tool.Profiles {
+			if p.Purge != nil {
+				return nil, fmt.Errorf("%s/%s has a pending purge; finish it or forget only its label before clean", id, name)
+			}
+		}
+	}
+	steps, err := uninstall(ctx, Integrations{Skill: true, MCP: true, StatusLine: true, Shell: shell.Detect(), KeepAlive: true})
 	if err != nil {
 		return steps, err
 	}
@@ -27,15 +44,25 @@ func Clean(ctx context.Context) ([]Step, error) {
 			return steps, fmt.Errorf("some integrations could not be removed; aims configuration and marks were kept for retry")
 		}
 	}
-	for _, f := range []string{"config.json", "state.json"} {
-		p := filepath.Join(config.Home(), f)
-		switch err := os.Remove(p); {
-		case err == nil:
-			steps = append(steps, Step{What: "forgot", Target: fsx.Tildify(p)})
-		case !errors.Is(err, os.ErrNotExist):
-			steps = append(steps, Step{What: "forget", Target: fsx.Tildify(p), Err: err})
-		}
+	err = fsx.WithLock(filepath.Join(config.Home(), "config.json"), func() error {
+		return fsx.WithLock(filepath.Join(config.Home(), "state.json"), func() error {
+			for _, f := range []string{"config.json", "state.json"} {
+				p := filepath.Join(config.Home(), f)
+				switch err := os.Remove(p); {
+				case err == nil:
+					steps = append(steps, Step{What: "forgot", Target: fsx.Tildify(p)})
+				case !errors.Is(err, os.ErrNotExist):
+					steps = append(steps, Step{What: "forget", Target: fsx.Tildify(p), Err: err})
+					return err
+				}
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return steps, err
 	}
+
 	return steps, nil
 }
 
@@ -65,6 +92,15 @@ func WipePlan() (deleted, kept []string, err error) {
 // main logins, stay. It stops before changing anything else when a folder
 // holds something that is not shared, unless force.
 func Wipe(ctx context.Context, force bool) ([]Step, error) {
+	var steps []Step
+	err := profileOperation(func() error { var err error; steps, err = wipe(ctx, force); return err })
+	if err == nil && os.Remove(config.Home()) == nil {
+		steps = append(steps, Step{What: "removed", Target: fsx.Tildify(config.Home())})
+	}
+	return steps, err
+}
+
+func wipe(ctx context.Context, force bool) ([]Step, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
@@ -77,7 +113,7 @@ func Wipe(ctx context.Context, force bool) ([]Step, error) {
 				continue
 			}
 			purge := p.Dir == ""
-			res, err := RemoveProfile(ctx, a, n, purge, force)
+			res, err := removeProfile(ctx, a, n, purge, force)
 			what := n + " logged out and deleted"
 			if !purge {
 				what = n + " forgotten, its folder kept"
@@ -91,7 +127,7 @@ func Wipe(ctx context.Context, force bool) ([]Step, error) {
 			}
 		}
 	}
-	more, err := Clean(ctx)
+	more, err := clean(ctx)
 	steps = append(steps, more...)
 	if err != nil {
 		return steps, err
@@ -99,15 +135,6 @@ func Wipe(ctx context.Context, force bool) ([]Step, error) {
 	for _, d := range []string{filepath.Join(config.ProfilesRoot(), "claude"), filepath.Join(config.ProfilesRoot(), "codex"), config.ProfilesRoot()} {
 		_ = os.Remove(d) // only when empty
 	}
-	if entries, err := os.ReadDir(config.Home()); err == nil {
-		for _, e := range entries {
-			if filepath.Ext(e.Name()) == ".lock" {
-				_ = os.Remove(filepath.Join(config.Home(), e.Name()))
-			}
-		}
-		if os.Remove(config.Home()) == nil {
-			steps = append(steps, Step{What: "removed", Target: fsx.Tildify(config.Home())})
-		}
-	}
+
 	return steps, nil
 }

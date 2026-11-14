@@ -79,6 +79,8 @@ OpenCode
 
 The optional **[Aims Usage macOS app](macos/AimsUsage/README.md)** puts the same limits in the menu bar, a hoverable Edge Dock and a side overview, independent of the macOS Dock position. Choose the left or right edge, Standard or Mini size, and automatic hiding in Settings. It keeps personal/work accounts and each Antigravity model group separate, and shows OpenCode budgets last. Build it with `scripts/build-macos-app.sh` (macOS 14.0.0+, Swift 6.2.0+, Go from `go.mod`). Custom reminders work in both interfaces: `aims usage reset add codex personal --at 2026-12-01T09:00:00+03:00 --label 'Check reset'`. Reminders never change provider quota or redeem a reset.
 
+App release preparation also produces a separate `aims-usage` Homebrew cask for review, following the existing native-app release pattern. Signing/notarization inputs, the independent Sparkle feed and later activation are described in [macOS release operations](docs/macos-release.md).
+
 ## Install
 
 ```bash

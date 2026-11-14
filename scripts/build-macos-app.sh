@@ -63,6 +63,7 @@ ditto "$bin/Sparkle.framework" "$build/Aims Usage.app/Contents/Frameworks/Sparkl
 cp "$repo/packaging/AppIcon.icns" "$build/Aims Usage.app/Contents/Resources/AppIcon.icns"
 cp "$repo/LICENSE" "$build/Aims Usage.app/Contents/Resources/LICENSE"
 cp -R "$repo/packaging/provider-marks" "$build/Aims Usage.app/Contents/Resources/provider-marks"
+cp -R "$repo/packaging/sparkle" "$build/Aims Usage.app/Contents/Resources/sparkle"
 cp "$bin/AimsUsage" "$build/Aims Usage.app/Contents/MacOS/AimsUsage"
 if [[ -n "${AIMS_USAGE_CLI_BINARY:-}" ]]; then
   if [[ ! -f "$AIMS_USAGE_CLI_BINARY" || ! -x "$AIMS_USAGE_CLI_BINARY" ]]; then
@@ -71,7 +72,7 @@ if [[ -n "${AIMS_USAGE_CLI_BINARY:-}" ]]; then
   fi
   cp "$AIMS_USAGE_CLI_BINARY" "$build/Aims Usage.app/Contents/Resources/aims"
   if [[ "${AIMS_USAGE_UNIVERSAL:-0}" == 1 ]]; then
-    lipo -verify_arch arm64 x86_64 "$build/Aims Usage.app/Contents/Resources/aims"
+    lipo "$build/Aims Usage.app/Contents/Resources/aims" -verify_arch arm64 x86_64
   fi
 else
   (

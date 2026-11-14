@@ -62,7 +62,7 @@ func Apart(cfg *config.Config, id tool.ID, name string) []string {
 				return false
 			}
 		}
-		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
+		return p != nil && p.Purge == nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
 			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, a, n))
 	}
 	// Shared transcript files alone do not prove that persistent memory and
@@ -162,6 +162,7 @@ func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []
 		m[k] = v
 	}
 	m[SessionVar] = string(a.ID()) + ":" + name
+	m[config.GenerationVar(a.ID())] = p.Generation
 	return envList(m), dropped
 }
 
@@ -188,7 +189,7 @@ func ShareSettings(cfg *config.Config, a tool.Adapter) ([]string, error) {
 	homes := []tool.Home{HubHome(cfg, a)}
 	t := cfg.Tools[a.ID()]
 	for _, n := range t.Order {
-		if p := t.Profiles[n]; p != nil && !p.Existing && p.ShareMode() != config.ShareNone {
+		if p := t.Profiles[n]; p != nil && p.Purge == nil && !p.Existing && p.ShareMode() != config.ShareNone {
 			homes = append(homes, Home(cfg, a, n))
 		}
 	}
@@ -216,6 +217,9 @@ func HubHome(cfg *config.Config, a tool.Adapter) tool.Home {
 // should no longer share (a sharing mode or exclude changed later).
 func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Report {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	if p != nil && p.Purge != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "profile purge is pending; retry aims rm --purge"}}
+	}
 	if p == nil || p.Existing {
 		return nil
 	}
@@ -256,6 +260,9 @@ func CheckSharing(cfg *config.Config, a tool.Adapter, name string) []links.Repor
 // never choose a winner between two settings, histories, or databases.
 func RepairSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	if p != nil && p.Purge != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "profile purge is pending; doctor keeps its files"}}
+	}
 	if p == nil || p.Existing {
 		return nil
 	}
@@ -382,6 +389,9 @@ func (e Evaluation) Busy() bool {
 // Evaluate checks login, cooldown and usage for one profile.
 func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.Adapter, name string) Evaluation {
 	ps := st.Get(a.ID(), name)
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return Evaluation{Name: name, State: ps, Reasons: []string{"profile purge is pending; retry aims rm --purge"}}
+	}
 	acct := a.Account(ctx, Home(cfg, a, name))
 	ev := Evaluation{Name: name, Account: acct, State: ps}
 	now := config.Now()
@@ -419,7 +429,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	}
 	id := identity(acct, ps)
 	if acct.Email != "" && (ps.Account == nil || ps.Account.Email != acct.Email || ps.Account.Tenant != acct.Tenant) {
-		_ = config.UpdateState(a.ID(), name, func(ps *config.ProfileState) {
+		_ = config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) {
 			if ps.Account == nil {
 				ps.Account = &config.Account{}
 			}
@@ -429,7 +439,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
 			other := st.Get(a.ID(), n)
-			if n == name || other.Account == nil || !sameLogin(*other.Account, id) {
+			if n == name || cfg.Tools[a.ID()].Profiles[n].Purge != nil || other.Account == nil || !sameLogin(*other.Account, id) {
 				continue
 			}
 			// What aims stored can be out of date; the login itself decides.
@@ -560,7 +570,7 @@ type Limit struct {
 // window, when known), and keeps a mark that is already set unless the new
 // one weighs more: see outweighs.
 func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+	return config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) {
 		now := config.Now()
 		until := l.ResetsAt
 		if until.IsZero() && l.For == 0 {
@@ -605,16 +615,16 @@ func outweighs(l Limit, ps *config.ProfileState) bool {
 }
 
 // MarkNeedsLogin records that a profile's login stopped working.
-func MarkNeedsLogin(id tool.ID, name, by, detail string) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+func MarkNeedsLogin(id tool.ID, name, by, detail string, snapshots ...*config.Config) error {
+	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.NeedsLogin = true
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = by, firstLine(detail), config.Now().UTC()
 	})
 }
 
 // Clear forgets cooldowns and login problems.
-func Clear(id tool.ID, name string) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+func Clear(id tool.ID, name string, snapshots ...*config.Config) error {
+	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 	})
@@ -653,8 +663,8 @@ func firstLine(s string) string {
 }
 
 // RecordUsage stores a usage report.
-func RecordUsage(id tool.ID, name string, windows []tool.Window, source string) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+func RecordUsage(id tool.ID, name string, windows []tool.Window, source string, snapshots ...*config.Config) error {
+	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Usage = &config.Usage{Windows: windows, Source: source, At: config.Now().UTC()}
 		ps.UsageError = ""
 		ps.UsageAttemptedAt = ps.Usage.At
@@ -662,19 +672,19 @@ func RecordUsage(id tool.ID, name string, windows []tool.Window, source string) 
 }
 
 // RecordAccount stores who a profile is logged in as.
-func RecordAccount(id tool.ID, name, email, plan string) error {
+func RecordAccount(id tool.ID, name, email, plan string, snapshots ...*config.Config) error {
 	if email == "" && plan == "" {
 		return nil
 	}
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Account = &config.Account{Email: email, Plan: plan}
 	})
 }
 
 // RecordLogin invalidates derived quotas and old limit marks after a successful
 // user-controlled authentication. It never changes native credentials/history.
-func RecordLogin(id tool.ID, name string, acct tool.Account) error {
-	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+func RecordLogin(id tool.ID, name string, acct tool.Account, snapshots ...*config.Config) error {
+	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
@@ -683,6 +693,9 @@ func RecordLogin(id tool.ID, name string, acct tool.Account) error {
 }
 
 func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "profile purge is pending; retry aims rm --purge"}
+	}
 	h := Home(cfg, a, name)
 	p := a.Probe(ctx, h)
 	if err := ctx.Err(); err != nil {
@@ -721,8 +734,8 @@ func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 	if ctx.Err() != nil {
 		return p
 	}
-	recordObservation(a.ID(), name, p)
-	_ = RecordAccount(a.ID(), name, p.Email, p.Plan)
+	recordObservation(cfg, a.ID(), name, p)
+	_ = RecordAccount(a.ID(), name, p.Email, p.Plan, cfg)
 	return p
 }
 
@@ -750,6 +763,9 @@ const RefreshDue = 10 * time.Minute
 // request for a login that is fresh, logged out or of unknown age, and
 // reports whether it renewed this one.
 func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, tool.Account, bool) {
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "profile purge is pending; retry aims rm --purge"}, tool.Account{}, false
+	}
 	h := Home(cfg, a, name)
 	acct := a.Account(ctx, h)
 	if acct.LoggedIn == nil || !*acct.LoggedIn || acct.Expires.IsZero() || acct.Expires.After(config.Now().Add(RefreshDue)) {
@@ -779,9 +795,9 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 	return p, updated, true
 }
 
-func recordObservation(id tool.ID, name string, p tool.Probe) {
+func recordObservation(cfg *config.Config, id tool.ID, name string, p tool.Probe) {
 	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
-	_ = config.UpdateState(id, name, func(ps *config.ProfileState) {
+	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) {
 		identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
 		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
 		ps.UsageAttemptedAt = config.Now().UTC()
@@ -800,12 +816,12 @@ func recordObservation(id tool.ID, name string, p tool.Probe) {
 // record keeps what a probe found: usage, a limit, a dead login.
 func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
 	id := a.ID()
-	recordObservation(id, name, p)
+	recordObservation(cfg, id, name, p)
 	switch p.Status {
 	case tool.ProbeOK:
-		_ = Clear(id, name)
+		_ = Clear(id, name, cfg)
 	case tool.ProbeLogin:
-		_ = MarkNeedsLogin(id, name, "a live check", p.Detail)
+		_ = MarkNeedsLogin(id, name, "a live check", p.Detail, cfg)
 	case tool.ProbeLimit:
 		resets := tool.ResetTime(p.Detail, config.Now())
 		for _, w := range p.Windows {
@@ -814,12 +830,12 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 			}
 		}
 		windows := p.Windows
-		if u := config.LoadState().Get(id, name).Usage; len(windows) == 0 && u != nil {
+		if u := config.LoadStateFor(cfg).Get(id, name).Usage; len(windows) == 0 && u != nil {
 			windows = u.Windows
 		}
 		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, Window: LimitWindow(cfg, p.Detail, windows), By: "a live check", Detail: p.Detail})
 	}
-	_ = RecordAccount(id, name, p.Email, p.Plan)
+	_ = RecordAccount(id, name, p.Email, p.Plan, cfg)
 	return p
 }
 
@@ -852,3 +868,11 @@ func Duration(d time.Duration) string {
 
 // Short shortens a path for display.
 func Short(p string) string { return fsx.Tildify(p) }
+
+// An asynchronous result must carry the config snapshot that requested it.
+func updateState(snapshots []*config.Config, id tool.ID, name string, fn func(*config.ProfileState)) error {
+	if len(snapshots) > 0 {
+		return config.UpdateStateFor(snapshots[0], id, name, fn)
+	}
+	return config.UpdateState(id, name, fn)
+}

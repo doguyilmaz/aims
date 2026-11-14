@@ -32,12 +32,23 @@ func Run(ctx context.Context, w io.Writer) error {
 		return nil
 	}
 	name := cfg.ProfileForHomeEnv(claude.ID, os.Getenv("CLAUDE_CONFIG_DIR"))
+	changedProfile := false
+	if name != "" {
+		generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
+		expected := cfg.Tools[claude.ID].Profiles[name].Generation
+		if (supplied || expected != "") && generation != expected {
+			name, changedProfile = "", true
+		}
+	}
 	windows := claude.ParseStatusLine(raw)
-	if name != "" && len(windows) > 0 && changed(config.LoadState().Get(claude.ID, name).Usage, windows) {
-		_ = profiles.RecordUsage(claude.ID, name, windows, "statusline")
+	if name != "" && len(windows) > 0 && changed(config.LoadStateFor(cfg).Get(claude.ID, name).Usage, windows) {
+		_ = profiles.RecordUsage(claude.ID, name, windows, "statusline", cfg)
 	}
 
 	var parts []string
+	if changedProfile {
+		parts = append(parts, "aims: profile changed; restart via aims")
+	}
 	if chain := cfg.Status.Chain; chain != "" && !claude.IsAimsStatusLine(chain) {
 		if out := runChain(ctx, chain, raw); out != "" {
 			parts = append(parts, out)
@@ -55,14 +66,19 @@ func changed(prev *config.Usage, next []tool.Window) bool {
 	if prev == nil || time.Since(prev.At) > time.Minute {
 		return true
 	}
+	if len(prev.Windows) != len(next) {
+		return true
+	}
+	matched := make([]bool, len(prev.Windows))
 	for _, w := range next {
 		found := false
-		for _, p := range prev.Windows {
-			if p.Label == w.Label {
+		for i, p := range prev.Windows {
+			if !matched[i] && p.ID == w.ID && p.Label == w.Label &&
+				p.PercentUnknown == w.PercentUnknown && p.Limited == w.Limited &&
+				math.Abs(p.Percent-w.Percent) < 1 && p.ResetsAt.Equal(w.ResetsAt) {
 				found = true
-				if math.Abs(p.Percent-w.Percent) >= 1 || !p.ResetsAt.Equal(w.ResetsAt) {
-					return true
-				}
+				matched[i] = true
+				break
 			}
 		}
 		if !found {
@@ -99,8 +115,8 @@ func segment(ctx context.Context, cfg *config.Config, name string, windows []too
 			break
 		}
 	}
-	return render(cfg, name, windows, config.LoadState().Get(claude.ID, name), sessionMode(), other, func() string {
-		return profiles.Choose(ctx, cfg, config.LoadState(), tools.Get(claude.ID), "", []string{name}).Name
+	return render(cfg, name, windows, config.LoadStateFor(cfg).Get(claude.ID, name), sessionMode(), other, func() string {
+		return profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), tools.Get(claude.ID), "", []string{name}).Name
 	}, config.Now(), os.Getenv("NO_COLOR") == "")
 }
 

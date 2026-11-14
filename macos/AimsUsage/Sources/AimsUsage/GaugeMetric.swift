@@ -1,7 +1,7 @@
 import SwiftUI
 import UsageCore
 
-struct PopoverGaugeMetric: View {
+struct GaugeMetric: View {
     let window: UsageWindow
     let tint: Color
     let stale: Bool
@@ -18,13 +18,14 @@ struct PopoverGaugeMetric: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            UsageGauge(window: window, tint: tint, stale: stale || expired, size: 34)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 5) {
+            UsageGauge(window: window, tint: tint, stale: stale || expired, size: 28)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(label).font(.system(size: 11, weight: .medium)).lineLimit(1)
                 Text(window.validPercent == nil && window.limited == true ? "Blocked" : reset)
-                    .font(.system(size: 11)).monospacedDigit()
+                    .font(.system(size: 10)).monospacedDigit()
                     .foregroundStyle(expired ? .orange : .secondary).lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

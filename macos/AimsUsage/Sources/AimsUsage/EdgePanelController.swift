@@ -58,7 +58,7 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
         }
         let width = EdgePanelLayout.frame(in: frame, width: model.displayStyle.preferredWidth, height: desiredHeight)
             .width
-        let maximumBody = max(160, frame.height - 24 - 84)
+        let maximumBody = max(160, frame.height - 24 - model.displayStyle.chromeHeight)
         position()
         let root = AnyView(
             UsageDashboard(

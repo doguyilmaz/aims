@@ -174,7 +174,7 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 | `--force` | Purge even if some shared entries could not be moved; does not bypass a failed logout |
 | `-y`, `--yes` | Do not ask |
 
-Purge requires the native tool to complete logout, even if the profile folder is already missing: a keychain or keyring login can outlive that folder. If the tool is unavailable or logout fails, the profile registration and remaining files stay for retry. Removing a profile without `--purge` only forgets its label and keeps its login.
+Purge records its intent before logging out or deleting files. The native tool must complete logout even if the folder is already missing, because a keychain/keyring login can outlive it. A completed logout is checkpointed; an interrupted purge can then resume without running logout again. Pending profiles cannot start new work or renew their login. Run `aims doctor --check` to see the explicit retry command, then repeat `aims rm <tool> <profile> --purge`. Doctor repair keeps these files and never completes a destructive purge automatically. Removing without `--purge` forgets the label and keeps remaining files; it cannot restore a login already revoked by an earlier purge attempt.
 
 ## Integrations
 

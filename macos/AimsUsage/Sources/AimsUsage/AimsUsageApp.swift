@@ -41,7 +41,7 @@ struct AimsUsageApp: App {
 
     private func maximumBodyHeight() -> CGFloat {
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        return max(200, (screen?.visibleFrame.height ?? 900) - 108)
+        return max(200, (screen?.visibleFrame.height ?? 900) - 24 - delegate.model.displayStyle.chromeHeight)
     }
 
 }

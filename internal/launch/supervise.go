@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,6 +62,14 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		return Result{Code: 1, Profile: name}, err
 	}
 	defer os.RemoveAll(root)
+	unlock, owned, err := fsx.Lock(filepath.Join(root, "owner"), 0)
+	if err != nil {
+		return Result{Code: 1, Profile: name}, err
+	}
+	if !owned {
+		return Result{Code: 1, Profile: name}, fmt.Errorf("could not own new session directory")
+	}
+	defer unlock()
 	self, err := selfPath()
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
@@ -166,7 +175,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 					running, wake = true, nil
 				case ev.Failure != tool.FailNone:
 					running, held, chosen = false, "", ""
-					next, prompt, why, wake = onFailure(ctx, o, name, ev)
+					next, prompt, why, wake = onFailure(ctx, o, cfg, name, ev)
 					if early {
 						probeEvery = min(2*probeEvery, time.Hour)
 					}
@@ -307,23 +316,27 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 // onFailure handles a turn that ended on an error: it marks the profile and
 // names the profile to continue on, or, when every one is limited, what to
 // wait for and why.
-func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
+func onFailure(ctx context.Context, o Options, started *config.Config, name string, ev tool.SessionEvent) (next, prompt, why string, wake *profiles.Pick) {
 	a := o.Tool
 	cfg, err := config.LoadIn(o.Dir)
 	if err != nil {
 		return "", "", "", nil
 	}
+	old, current := started.Tools[a.ID()].Profiles[name], cfg.Tools[a.ID()].Profiles[name]
+	if old == nil || current == nil || current.Purge != nil || old.Generation != current.Generation || old.CreatedAt != current.CreatedAt {
+		return "", "", "", nil // an event belongs to the child that emitted it
+	}
 	f := ev.Failure
 	const by = "a session"
 	switch f {
 	case tool.FailLogin:
-		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text)
+		_ = profiles.MarkNeedsLogin(a.ID(), name, by, ev.Text, started)
 	case tool.FailLimit:
 		var windows []tool.Window
-		if u := config.LoadState().Get(a.ID(), name).Usage; u != nil {
+		if u := config.LoadStateFor(cfg).Get(a.ID(), name).Usage; u != nil {
 			windows = u.Windows
 		}
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{
+		_ = profiles.MarkLimited(started, a.ID(), name, profiles.Limit{
 			ResetsAt: tool.ResetTime(ev.Text, config.Now()), Window: profiles.LimitWindow(cfg, ev.Text, windows),
 			By: by, Detail: ev.Text,
 		})
@@ -331,14 +344,14 @@ func onFailure(ctx context.Context, o Options, name string, ev tool.SessionEvent
 		// A rate limit that comes back soon after the last is not passing:
 		// rest longer, so the conversation does not bounce between accounts.
 		rest := busyFor
-		if ps := config.LoadState().Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
+		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.Reason == "busy" && config.Now().Sub(ps.MarkedAt) < busyAgain {
 			rest = busyAgain
 		}
-		_ = profiles.MarkLimited(cfg, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
+		_ = profiles.MarkLimited(started, a.ID(), name, profiles.Limit{Reason: "busy", For: rest, By: by, Detail: ev.Text})
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
 	apart := profiles.Apart(cfg, a.ID(), name)
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+	pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, apart)
 	if pick.Name == "" && len(apart) > 0 {
 		o.tell(Warn, "%s: %s cannot receive this conversation because history is not fully shared (aims doctor)", a.ID(), profiles.Names(apart, ", "))
 	}
@@ -371,7 +384,7 @@ func onWait(ctx context.Context, o Options, name string, live bool) profiles.Pic
 		profiles.AskFree(ctx, cfg, a, names)
 	}
 	preferred, _ := cfg.Preferred(a.ID(), "")
-	return profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, apart)
+	return profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, apart)
 }
 
 func tellWait(o Options, pick profiles.Pick) {
@@ -401,7 +414,7 @@ func onStop(ctx context.Context, o Options, name, held string) (next, why string
 	if held != "" {
 		preferred = held
 	}
-	pick := profiles.Choose(ctx, cfg, config.LoadState(), o.Tool, preferred, profiles.Apart(cfg, o.Tool.ID(), name))
+	pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), o.Tool, preferred, profiles.Apart(cfg, o.Tool.ID(), name))
 	switch {
 	case pick.Name == "" || pick.Name == name:
 		return "", ""
@@ -452,9 +465,37 @@ func validMove(id tool.ID, name, to string) bool {
 func sweep(runs string) {
 	entries, _ := os.ReadDir(runs)
 	for _, e := range entries {
-		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > 30*24*time.Hour {
-			_ = os.RemoveAll(filepath.Join(runs, e.Name()))
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "run-") {
+			continue
 		}
+		root := filepath.Join(runs, e.Name())
+		info, err := e.Info()
+		if err != nil || time.Since(info.ModTime()) <= 30*24*time.Hour {
+			continue
+		}
+		// Legacy or damaged ownership records cannot prove a session ended.
+		// A live owner keeps this lock for its entire supervised session.
+		if owner := fsx.Lstat(filepath.Join(root, "owner.lock")); owner == nil || !owner.Mode().IsRegular() {
+			continue
+		}
+		owner, err := os.ReadFile(filepath.Join(root, "owner.lock"))
+		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(owner)))
+		if err != nil || parseErr != nil || pid <= 0 || proc.Alive(pid) {
+			continue
+		}
+		// Do not consume the dead owner's record while a surviving worker is
+		// busy or inspection is inconclusive; a later sweep can retry it.
+		if busy, known := proc.HoldingTree(root); !known || busy {
+			continue
+		}
+		unlock, owned, err := fsx.Lock(filepath.Join(root, "owner"), 0)
+		if err != nil || !owned {
+			continue
+		}
+		if current := fsx.Lstat(root); current != nil && current.IsDir() && os.SameFile(info, current) {
+			_ = os.RemoveAll(root)
+		}
+		unlock()
 	}
 }
 
