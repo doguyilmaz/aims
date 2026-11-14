@@ -10,8 +10,25 @@ final class UsageModel {
     var dockVisibilityDidChange: (@MainActor (Bool) -> Void)?
     var dockConfigurationDidChange: (@MainActor () -> Void)?
     var dockPositionDidChange: (@MainActor () -> Void)?
+    var dockBehaviorDidChange: (@MainActor () -> Void)?
     var dockProvider: String?
     var dockPeekPinned = false
+    var edgeDockPinned = UserDefaults.standard.bool(forKey: "edgeDockPinned") {
+        didSet {
+            UserDefaults.standard.set(edgeDockPinned, forKey: "edgeDockPinned")
+            dockBehaviorDidChange?()
+        }
+    }
+    var edgeDockValueMode =
+        DockValueMode(rawValue: UserDefaults.standard.string(forKey: "edgeDockValueMode") ?? "") ?? .used
+    {
+        didSet { UserDefaults.standard.set(edgeDockValueMode.rawValue, forKey: "edgeDockValueMode") }
+    }
+    private var edgeDockWindowFocus =
+        UserDefaults.standard.dictionary(forKey: "edgeDockWindowFocus") as? [String: String] ?? [:]
+    {
+        didSet { UserDefaults.standard.set(edgeDockWindowFocus, forKey: "edgeDockWindowFocus") }
+    }
     var edgeDockPosition = EdgeDockLayout.normalizedPosition(
         UserDefaults.standard.object(forKey: "edgeDockPosition") as? Double ?? 0.5)
     {
@@ -37,7 +54,7 @@ final class UsageModel {
     var edgeDockAutoHide = UserDefaults.standard.object(forKey: "edgeDockAutoHide") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(edgeDockAutoHide, forKey: "edgeDockAutoHide")
-            dockConfigurationDidChange?()
+            dockBehaviorDidChange?()
         }
     }
     var edgeDockEnabled = UserDefaults.standard.object(forKey: "edgeDockEnabled") as? Bool ?? true {
@@ -70,6 +87,18 @@ final class UsageModel {
         let stored = UserDefaults.standard.string(forKey: "configHome")
         configHome = stored ?? ProcessInfo.processInfo.environment["AIMS_HOME"] ?? ""
         if stored == nil && !configHome.isEmpty { UserDefaults.standard.set(configHome, forKey: "configHome") }
+    }
+
+    func dockFocus(for providerID: String) -> DockWindowFocus {
+        DockWindowFocus(savedValue: edgeDockWindowFocus[providerID])
+    }
+
+    func setDockFocus(_ focus: DockWindowFocus, for providerID: String) {
+        if focus == .automatic {
+            edgeDockWindowFocus.removeValue(forKey: providerID)
+        } else {
+            edgeDockWindowFocus[providerID] = focus.id
+        }
     }
 
     func applyPaths(configHome: String, additionalPaths: String) async -> Bool {

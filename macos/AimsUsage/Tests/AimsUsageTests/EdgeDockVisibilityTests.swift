@@ -3,6 +3,24 @@ import Testing
 
 @testable import AimsUsage
 
+@Test @MainActor func railPinAndOpenMenusHoldTheDockWithoutPinningProviderDetails() {
+    let dock = CGRect(x: 1000, y: 200, width: 64, height: 472)
+    let activation = EdgeDockLayout.handleFrame(for: dock, side: .right)
+    let outside = CGPoint(x: 400, y: 100)
+    #expect(
+        EdgeDockVisibility.shouldReveal(
+            autoHide: true, expanded: true, pinned: false, dockPinned: true,
+            pointer: outside, dock: dock, peek: nil, activation: activation))
+    #expect(
+        EdgeDockVisibility.shouldReveal(
+            autoHide: true, expanded: true, pinned: false, menuTracking: true,
+            pointer: outside, dock: dock, peek: nil, activation: activation))
+    #expect(
+        !EdgeDockVisibility.shouldReveal(
+            autoHide: true, expanded: true, pinned: false, dockPinned: false, menuTracking: false,
+            pointer: outside, dock: dock, peek: nil, activation: activation))
+}
+
 @Test @MainActor func hiddenDockRevealsOnlyAtItsSelectedEdgeRegion() {
     let screen = CGRect(x: -1512, y: 76, width: 1512, height: 872)
     for side in EdgeDockSide.allCases {

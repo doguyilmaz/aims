@@ -18,14 +18,15 @@ struct EdgeDockView: View {
                         ForEach(providers) { provider in
                             TimelineView(.periodic(from: .now, by: 60)) { context in
                                 let summary = DockSummary(
-                                    provider: provider, now: context.date, globalError: model.error)
+                                    provider: provider, now: context.date, globalError: model.error,
+                                    focus: model.dockFocus(for: provider.id), valueMode: model.edgeDockValueMode)
                                 Button {
                                     selectProvider(provider.id)
                                 } label: {
                                     VStack(spacing: size == .mini ? 2 : 4) {
                                         ZStack {
                                             Circle().stroke(ProviderStyle.tint(provider.id).opacity(0.14), lineWidth: 3)
-                                            if let percent = summary.percent {
+                                            if let percent = summary.displayPercent {
                                                 Circle().trim(from: 0, to: min(1, percent / 100))
                                                     .stroke(
                                                         ProviderStyle.tint(provider.id),
@@ -62,11 +63,14 @@ struct EdgeDockView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .onHover { if $0 { hoverProvider(provider.id) } }
+                                .contextMenu {
+                                    DockOptionsMenu(model: model, provider: provider, openOverview: openOverview)
+                                }
                                 .accessibilityLabel(
                                     "\(ProviderStyle.title(provider)) usage, \(summary.value), \(summary.explanation)"
                                 )
                                 .help(
-                                    "\(ProviderStyle.title(provider)) · \(summary.value) · \(summary.explanation) · hover for all accounts, click to pin"
+                                    "\(ProviderStyle.title(provider)) · \(summary.value) \(model.edgeDockValueMode.title.lowercased()) · \(summary.explanation) · right-click to customize"
                                 )
                             }
                         }
@@ -99,13 +103,18 @@ struct EdgeDockView: View {
                         .foregroundStyle(model.error == nil ? Color.secondary : Color.orange).frame(
                             width: size == .mini ? 22 : 20, height: 20)
                 }
-                .help(model.error ?? "Open overview").accessibilityLabel("Open overview")
+                .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
+                .contextMenu { DockOptionsMenu(model: model, openOverview: openOverview) }
                 Button {
-                    model.edgeDockEnabled = false
+                    model.edgeDockPinned.toggle()
                 } label: {
-                    Image(systemName: "xmark").frame(width: size == .mini ? 22 : 20, height: 20)
+                    Image(systemName: model.edgeDockPinned ? "pin.fill" : "pin")
+                        .foregroundStyle(model.edgeDockPinned ? .cyan : .secondary)
+                        .frame(width: size == .mini ? 22 : 20, height: 20)
                 }
-                .help("Hide Edge Dock").accessibilityLabel("Hide Edge Dock")
+                .help(model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock")
+                .accessibilityLabel(model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock")
+                .accessibilityValue(model.edgeDockPinned ? "Pinned" : "Unpinned")
             }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).frame(height: 20)
         }
         .padding(.vertical, size.contentInset).frame(width: size.width)

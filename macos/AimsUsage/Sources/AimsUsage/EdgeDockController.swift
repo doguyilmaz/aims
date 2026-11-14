@@ -16,6 +16,7 @@ final class EdgeDockController: NSObject {
     private var hasPresented = false
     private var presentationGeneration = 0
     private var shuttingDown = false
+    private var trackingMenus: Set<ObjectIdentifier> = []
 
     func start(model: UsageModel, openOverview: @escaping @MainActor () -> Void) {
         self.model = model
@@ -28,6 +29,10 @@ final class EdgeDockController: NSObject {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(menuTrackingBegan), name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(menuTrackingEnded), name: NSMenu.didEndTrackingNotification, object: nil)
         setVisible(model.edgeDockEnabled)
     }
 
@@ -59,6 +64,7 @@ final class EdgeDockController: NSObject {
             presentationGeneration += 1
             hasPresented = false
             expanded = false
+            trackingMenus.removeAll()
             dismissPeek()
             pointerMonitor.stop()
             dock?.orderOut(nil)
@@ -100,6 +106,7 @@ final class EdgeDockController: NSObject {
 
     func shutdown() {
         shuttingDown = true
+        NotificationCenter.default.removeObserver(self)
         setVisible(false)
     }
 
@@ -185,7 +192,7 @@ final class EdgeDockController: NSObject {
             pointerMonitor.stop()
             return
         }
-        if model.edgeDockAutoHide || model.dockProvider != nil {
+        if (model.edgeDockAutoHide && !model.edgeDockPinned) || model.dockProvider != nil {
             pointerMonitor.start { [weak self] in self?.pointerChanged() }
         } else {
             pointerMonitor.stop()
@@ -199,13 +206,28 @@ final class EdgeDockController: NSObject {
         let inside =
             dock.frame.insetBy(dx: -14, dy: -14).contains(point)
             || peekFrame?.insetBy(dx: -14, dy: -14).contains(point) == true
-        if !model.dockPeekPinned && !inside { dismissPeek() }
+        if !model.dockPeekPinned && trackingMenus.isEmpty && !inside { dismissPeek() }
         let visible = EdgeDockVisibility.shouldReveal(
             autoHide: model.edgeDockAutoHide, expanded: expanded || dock.isVisible,
-            pinned: model.dockPeekPinned && peek?.isVisible == true, pointer: point,
+            pinned: model.dockPeekPinned && peek?.isVisible == true,
+            dockPinned: model.edgeDockPinned, menuTracking: !trackingMenus.isEmpty,
+            pointer: point,
             dock: dock.frame, peek: peek?.isVisible == true ? peek?.frame : nil, activation: handle.frame)
         setExpanded(visible, animated: animated)
         reconcileMonitors()
+    }
+
+    @objc private func menuTrackingBegan(_ notification: Notification) {
+        guard dock?.isVisible == true, let menu = notification.object as? NSMenu else { return }
+        trackingMenus.insert(ObjectIdentifier(menu))
+        pointerChanged(animated: false)
+    }
+
+    @objc private func menuTrackingEnded(_ notification: Notification) {
+        guard let menu = notification.object as? NSMenu,
+            trackingMenus.remove(ObjectIdentifier(menu)) != nil
+        else { return }
+        pointerChanged()
     }
 
     private func setExpanded(_ visible: Bool, animated: Bool) {

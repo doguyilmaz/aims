@@ -10,8 +10,15 @@ struct DockSummary {
     }
 
     private let reading: Reading
+    private let focus: DockWindowFocus
+    private let valueMode: DockValueMode
 
-    init(provider: UsageProvider, now: Date, globalError: String? = nil) {
+    init(
+        provider: UsageProvider, now: Date, globalError: String? = nil,
+        focus: DockWindowFocus = .automatic, valueMode: DockValueMode = .used
+    ) {
+        self.focus = focus
+        self.valueMode = valueMode
         if let error = globalError ?? provider.error {
             reading = .unavailable(error)
             return
@@ -19,7 +26,8 @@ struct DockSummary {
         let readings = provider.rows.filter { row in
             row.error == nil && (row.observedAt.map { $0 <= now.addingTimeInterval(60) } ?? true)
         }.flatMap { row in
-            (row.windows ?? []).filter { !$0.needsRefresh(at: now) }.map { (row: row, window: $0) }
+            (row.windows ?? []).filter { focus.includes($0) && !$0.needsRefresh(at: now) }
+                .map { (row: row, window: $0) }
         }
         let current = readings.filter { !$0.row.isStale(at: now) }.map(\.window)
         let currentPercent = current.compactMap(\.validPercent).max()
@@ -33,7 +41,9 @@ struct DockSummary {
         }).max(by: { $0.percent < $1.percent }) {
             reading = .cached(cached.percent, cached.observedAt)
         } else {
-            reading = .unavailable("Usage percentage not reported. Hover for reset times and reading details.")
+            reading = .unavailable(
+                "\(focus == .automatic ? "Usage percentage" : focus.title + " usage") not reported for an active window. Hover for all readings."
+            )
         }
     }
 
@@ -46,20 +56,25 @@ struct DockSummary {
     }
 
     var currentPercent: Double? { isCached ? nil : percent }
+    var displayPercent: Double? { percent.map(valueMode.percent) }
     var blocked: Bool { if case .blocked = reading { true } else { false } }
     var isCached: Bool { if case .cached = reading { true } else { false } }
 
     var explanation: String {
         switch reading {
         case .cached(_, let date):
-            "Last known usage · \(date.map { "reported \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "observation time unavailable")"
+            "\(selectionDescription) · Last known usage · \(date.map { "reported \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "observation time unavailable")"
         case .unavailable(let reason): reason
-        case .current, .blocked: "Highest current usage across accounts and windows"
+        case .current, .blocked: "\(selectionDescription) · Current reading"
         }
     }
 
     var value: String {
         if blocked { return "Blocked" }
-        return percent.map { $0 >= 1_000 ? "999+%" : String(format: "%.0f%%", $0) } ?? "—"
+        return displayPercent.map { $0 >= 1_000 ? "999+%" : String(format: "%.0f%%", $0) } ?? "—"
+    }
+
+    private var selectionDescription: String {
+        "\(valueMode.selectionDescription) across accounts · \(focus == .automatic ? "all windows" : focus.title)"
     }
 }
