@@ -17,9 +17,9 @@ struct UsageDashboard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header.frame(height: 52)
+            header.frame(height: model.displayStyle.headerHeight)
             ScrollView {
-                content.padding(16)
+                content.padding(model.displayStyle == .gauges ? 12 : 16)
                     .background {
                         GeometryReader { geometry in
                             Color.clear.preference(key: ContentHeightKey.self, value: geometry.size.height)
@@ -31,14 +31,16 @@ struct UsageDashboard: View {
             .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .automatic : .hidden)
             .scrollBounceBehavior(.basedOnSize)
             .id(model.displayStyle.rawValue)
-            footer.frame(height: 32)
+            footer.frame(height: model.displayStyle.footerHeight)
         }
         .onPreferenceChange(ContentHeightKey.self) { value in
             guard value > 0 else { return }
             if abs(contentHeight - value) > 0.5 { contentHeight = value }
-            heightDidChange(min(value, maximumBodyHeight) + 84)
+            heightDidChange(min(value, maximumBodyHeight) + model.displayStyle.chromeHeight)
         }
-        .onChange(of: maximumBodyHeight) { heightDidChange(min(contentHeight, maximumBodyHeight) + 84) }
+        .onChange(of: maximumBodyHeight) {
+            heightDidChange(min(contentHeight, maximumBodyHeight) + model.displayStyle.chromeHeight)
+        }
         .frame(width: width)
         .background(UsageBackdrop())
         .background(UsageScrollStyle())
@@ -60,28 +62,8 @@ struct UsageDashboard: View {
                             }
                         }
                     }
-                } else if surface == .popover {
-                    PopoverGaugeList(snapshot: snapshot, refreshFailed: model.error != nil)
                 } else {
-                    let items = UsageTileItem.items(from: snapshot)
-                    let twoColumnRows = UsageGaugeRow.rows(from: items, columns: 2)
-                    let columns = width >= 520 && UsageGaugeRow.contentHeight(twoColumnRows) > maximumBodyHeight ? 3 : 2
-                    let rows = columns == 2 ? twoColumnRows : UsageGaugeRow.rows(from: items, columns: 3)
-                    let tileWidth = (width - 32 - CGFloat(columns - 1) * 10) / CGFloat(columns)
-                    VStack(spacing: 10) {
-                        ForEach(rows) { row in
-                            HStack(alignment: .top, spacing: 10) {
-                                ForEach(row.items) { item in
-                                    UsageAccountTile(
-                                        provider: item.provider, row: item.row, metricRows: row.metricRows,
-                                        refreshFailed: model.error != nil
-                                    )
-                                    .frame(width: tileWidth, height: row.height)
-                                }
-                                if row.items.count < columns { Spacer(minLength: 0) }
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                    GaugeProviderList(snapshot: snapshot, refreshFailed: model.error != nil)
                 }
             } else if model.error != nil {
                 ContentUnavailableView(
