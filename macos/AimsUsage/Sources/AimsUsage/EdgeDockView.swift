@@ -20,7 +20,8 @@ struct EdgeDockView: View {
                             TimelineView(.periodic(from: .now, by: 60)) { context in
                                 let summary = DockSummary(
                                     provider: provider, now: context.date, globalError: model.error,
-                                    focus: model.dockFocus(for: provider.id), valueMode: model.edgeDockValueMode)
+                                    focus: model.dockFocus(for: provider.id), valueMode: model.edgeDockValueMode,
+                                    account: model.dockAccount(for: provider.id))
                                 Button {
                                     selectProvider(provider.id)
                                 } label: {

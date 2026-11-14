@@ -29,18 +29,26 @@ struct DockOptionsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    if let provider, model.dockAccount(for: provider.id).canChoose(in: provider) {
+                        DockAccountSelector(model: model, provider: provider).padding(.horizontal, 8)
+                        Divider().padding(.vertical, 6)
+                    }
                     Text("Usage window").font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 8)
                     if let provider {
                         focusChoices(for: provider)
                     } else {
                         ForEach(model.snapshot?.displayProviders ?? []) { provider in
                             DisclosureGroup {
+                                if model.dockAccount(for: provider.id).canChoose(in: provider) {
+                                    DockAccountSelector(model: model, provider: provider)
+                                }
                                 focusChoices(for: provider)
                             } label: {
                                 HStack {
                                     Text(ProviderStyle.title(provider))
                                     Spacer()
-                                    Text(model.dockFocus(for: provider.id).title).foregroundStyle(.secondary)
+                                    Text(selectionTitle(for: provider)).foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.trailing)
                                 }
                             }.font(.system(size: 12)).padding(.horizontal, 8).padding(.vertical, 4)
                         }
@@ -103,5 +111,11 @@ struct DockOptionsView: View {
                 close()
             }
         }
+    }
+
+    private func selectionTitle(for provider: UsageProvider) -> String {
+        let window = model.dockFocus(for: provider.id).title
+        let account = model.dockAccount(for: provider.id)
+        return account == .all ? window : account.title(in: provider) + " · " + window
     }
 }

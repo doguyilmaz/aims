@@ -42,7 +42,7 @@ struct UsageSettings: View {
                     }
                 }
                 Text(
-                    "Automatic shows the most used allowance, or the least remaining, across accounts. Right-click a provider to choose its window. Details keep all windows in % used."
+                    "Automatic uses the selected Dock accounts. Choose an account in hover details or Dock options. Details keep all accounts and windows in % used."
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 6) {

@@ -29,6 +29,11 @@ final class UsageModel {
     {
         didSet { UserDefaults.standard.set(edgeDockWindowFocus, forKey: "edgeDockWindowFocus") }
     }
+    private var edgeDockAccountFocus =
+        UserDefaults.standard.dictionary(forKey: "edgeDockAccountFocus") as? [String: String] ?? [:]
+    {
+        didSet { UserDefaults.standard.set(edgeDockAccountFocus, forKey: "edgeDockAccountFocus") }
+    }
     var edgeDockPosition = EdgeDockLayout.normalizedPosition(
         UserDefaults.standard.object(forKey: "edgeDockPosition") as? Double ?? 0.5)
     {
@@ -91,6 +96,20 @@ final class UsageModel {
 
     func dockFocus(for providerID: String) -> DockWindowFocus {
         DockWindowFocus(savedValue: edgeDockWindowFocus[providerID])
+    }
+
+    func dockAccount(for providerID: String) -> DockAccountFocus {
+        guard DockAccountFocus.supports(providerID) else { return .all }
+        return DockAccountFocus(savedValue: edgeDockAccountFocus[providerID])
+    }
+
+    func setDockAccount(_ account: DockAccountFocus, for providerID: String) {
+        guard DockAccountFocus.supports(providerID) else { return }
+        if account == .all {
+            edgeDockAccountFocus.removeValue(forKey: providerID)
+        } else if case .account(let id) = account, !id.isEmpty {
+            edgeDockAccountFocus[providerID] = account.id
+        }
     }
 
     func setDockFocus(_ focus: DockWindowFocus, for providerID: String) {

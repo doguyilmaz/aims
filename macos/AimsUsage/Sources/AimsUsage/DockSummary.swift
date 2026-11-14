@@ -12,19 +12,28 @@ struct DockSummary {
     private let reading: Reading
     private let focus: DockWindowFocus
     private let valueMode: DockValueMode
+    private let account: DockAccountFocus
+    private let accountTitle: String
 
     init(
         provider: UsageProvider, now: Date, globalError: String? = nil,
-        focus: DockWindowFocus = .automatic, valueMode: DockValueMode = .used
+        focus: DockWindowFocus = .automatic, valueMode: DockValueMode = .used, account: DockAccountFocus = .all
     ) {
         self.focus = focus
         self.valueMode = valueMode
+        self.account = account
+        accountTitle = account.title(in: provider)
         if let error = globalError ?? provider.error {
             reading = .unavailable(error)
             return
         }
+        if case .account(let id) = account, !provider.rows.contains(where: { $0.id == id }) {
+            reading = .unavailable("Selected account \(id) is not reported. Choose an account or All in Dock options.")
+            return
+        }
         let readings = provider.rows.filter { row in
-            row.error == nil && (row.observedAt.map { $0 <= now.addingTimeInterval(60) } ?? true)
+            account.includes(row) && row.error == nil
+                && (row.observedAt.map { $0 <= now.addingTimeInterval(60) } ?? true)
         }.flatMap { row in
             (row.windows ?? []).filter { focus.includes($0) && !$0.needsRefresh(at: now) }
                 .map { (row: row, window: $0) }
@@ -41,8 +50,9 @@ struct DockSummary {
         }).max(by: { $0.percent < $1.percent }) {
             reading = .cached(cached.percent, cached.observedAt)
         } else {
+            let quota = focus == .automatic ? "Usage percentage" : focus.title + " usage"
             reading = .unavailable(
-                "\(focus == .automatic ? "Usage percentage" : focus.title + " usage") not reported for an active window. Hover for all readings."
+                "\(account == .all ? quota : accountTitle + " " + quota.lowercased()) not reported for an active window. Hover for all readings."
             )
         }
     }
@@ -75,6 +85,10 @@ struct DockSummary {
     }
 
     private var selectionDescription: String {
-        "\(valueMode.selectionDescription) across accounts · \(focus == .automatic ? "all windows" : focus.title)"
+        let scope =
+            account == .all
+            ? "\(valueMode.selectionDescription) across accounts"
+            : "\(accountTitle) · \(valueMode.selectionDescription)"
+        return "\(scope) · \(focus == .automatic ? "all windows" : focus.title)"
     }
 }
