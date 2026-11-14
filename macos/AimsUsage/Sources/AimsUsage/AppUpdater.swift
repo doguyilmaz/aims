@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import Sparkle
@@ -32,6 +33,7 @@ final class AppUpdater: ObservableObject {
 
     func checkForUpdates() {
         guard canCheckForUpdates else { return }
+        NSApp.activate(ignoringOtherApps: true)
         controller?.checkForUpdates(nil)
     }
 

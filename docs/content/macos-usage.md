@@ -60,6 +60,8 @@ Custom reminders use a separate private file, `AIMS_HOME/usage-reminders.json`. 
 
 Aims Usage includes pinned Sparkle 2.10.1 support. Signed release builds with a configured HTTPS update feed and public verification key offer **Check for Updates…** in More and Settings → App updates. Automatic checks are opt-in, and automatic installation and system profiling default to off. The menu, Edge Dock and bundled aims update together. A custom aims executable or the provider CLIs still update through their own installers.
 
+The prepared Homebrew cask is named `aims-usage`, declares Sparkle updates, and installs only `Aims Usage.app`; it does not claim the standalone `aims` command or delete profile/login data. The release preparation workflow retains the signed ZIP, appcast and cask for review without publishing them.
+
 Development and fixture preview builds have no active update channel. CI development artifacts are not public updater releases. Preparing a public release requires signing/notarization credentials, the matching Sparkle private key and publication of the signed archive plus appcast. Installation/relaunch still needs a two-build smoke test before enabling a production feed. Removing or updating the app does not remove aims data, logins, reminders or history.
 
 Failed provider commands retain the previous reading and its original observation time. Non-empty stdout from a non-zero native CLI exit is not accepted as fresh quota data. Claude status-line cache updates also recognize removed windows and changed unknown/blocked/reset metadata; a removed allowance does not linger merely because another window is unchanged.

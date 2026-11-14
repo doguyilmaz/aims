@@ -20,34 +20,30 @@ if [[ ! -x "$AIMS_SPARKLE_TOOLS/generate_appcast" ]]; then
 fi
 export AIMS_USAGE_UNIVERSAL=1 AIMS_USAGE_PREVIEW=0
 python3 -B "$repo/scripts/configure-macos-updates.py" --validate
-"$repo/scripts/build-macos-app.sh"
-app="$repo/dist/Aims Usage.app"
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/aims-usage-release.XXXXXX")
-trap 'rm -rf "$scratch"' EXIT
-ditto -c -k --sequesterRsrc --keepParent "$app" "$scratch/notarization.zip"
-if [[ -n "${AIMS_NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
-  xcrun notarytool submit "$scratch/notarization.zip" --keychain-profile "$AIMS_NOTARY_KEYCHAIN_PROFILE" --wait
-else
-  : "${AIMS_NOTARY_KEY_FILE:?Set a notary API key file or AIMS_NOTARY_KEYCHAIN_PROFILE}"
-  : "${AIMS_NOTARY_KEY_ID:?Set the notary API key ID}"
-  : "${AIMS_NOTARY_ISSUER:?Set the notary API issuer}"
-  xcrun notarytool submit "$scratch/notarization.zip" --key "$AIMS_NOTARY_KEY_FILE" \
-    --key-id "$AIMS_NOTARY_KEY_ID" --issuer "$AIMS_NOTARY_ISSUER" --wait
-fi
-xcrun stapler staple "$app"
-xcrun stapler validate "$app"
-codesign --verify --deep --strict "$app"
-spctl --assess --type execute "$app"
+python3 -B "$repo/scripts/notarize-macos-usage.py" --validate
 output="$repo/dist/usage-release-${AIMS_USAGE_VERSION}-${AIMS_USAGE_BUILD_NUMBER}"
 if [[ -e "$output" || -L "$output" ]]; then
   echo "Refusing to overwrite existing release artifacts: $output" >&2
   exit 1
 fi
+"$repo/scripts/build-macos-app.sh"
+app="$repo/dist/Aims Usage.app"
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/aims-usage-release.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+ditto -c -k --sequesterRsrc --keepParent "$app" "$scratch/notarization.zip"
+python3 -B "$repo/scripts/notarize-macos-usage.py" "$scratch/notarization.zip"
+xcrun stapler staple "$app"
+xcrun stapler validate "$app"
+codesign --verify --deep --strict "$app"
+spctl --assess --type execute "$app"
 mkdir "$output"
 archive="$output/Aims-Usage-${AIMS_USAGE_VERSION}-${AIMS_USAGE_BUILD_NUMBER}-universal.zip"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
 "$AIMS_SPARKLE_TOOLS/generate_appcast" --ed-key-file "$AIMS_SPARKLE_PRIVATE_KEY_FILE" \
   --download-url-prefix "$AIMS_USAGE_DOWNLOAD_URL_PREFIX" -o "$output/usage-appcast.xml" "$output"
 python3 -B "$repo/scripts/verify-macos-appcast.py" "$output/usage-appcast.xml" "$archive"
-(cd "$output" && shasum -a 256 ./*.zip usage-appcast.xml > checksums.txt)
+python3 -B "$repo/scripts/prepare-macos-usage-cask.py" "$archive" \
+  --version "$AIMS_USAGE_VERSION" --build "$AIMS_USAGE_BUILD_NUMBER" \
+  --url-prefix "$AIMS_USAGE_DOWNLOAD_URL_PREFIX" --output "$output/aims-usage.rb"
+(cd "$output" && shasum -a 256 ./*.zip usage-appcast.xml aims-usage.rb > checksums.txt)
 echo "Prepared signed artifacts in $output; no release or update feed was published."
