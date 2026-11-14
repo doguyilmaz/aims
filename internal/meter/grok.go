@@ -23,11 +23,12 @@ func (grok) Title() string { return "Grok" }
 func (grok) Bin() string   { return "grok" }
 
 func (grok) Read(ctx context.Context, bin string) Reading {
+	login := grokLoginSnapshot(time.Now())
 	raw, err := acpCall(ctx, bin, []string{"agent", "stdio"}, "_x.ai/billing")
 	if err != nil {
 		return Reading{Error: "grok: " + err.Error()}
 	}
-	return parseGrok(raw)
+	return enrichGrokWeb(ctx, raw, parseGrok(raw), login, time.Now())
 }
 
 // acpCall starts an ACP agent, initializes it and returns the result of one

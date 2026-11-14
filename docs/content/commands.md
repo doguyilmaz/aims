@@ -62,7 +62,7 @@ What is going on, in a few lines. Alias: `aims ls`.
 
 Every usage window of every account with its bar and when it resets, and under them the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. Columns line up across all of them, and on a narrow terminal the windows wrap under each other.
 
-aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. Filter by `claude`, `codex`, `kiro`, `grok`, `agy` or `opencode`. The numbers are cached until `aims keepalive`, `--refresh` or `--live` updates them.
+aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. A partial Grok reading can be enriched by a bounded, read-only Grok web usage check with the same existing login; credentials are never refreshed or modified by this fallback. aims never logs in to these tools itself. Filter by `claude`, `codex`, `kiro`, `grok`, `agy` or `opencode`. The numbers are cached until `aims keepalive`, `--refresh` or `--live` updates them.
 
 Scheduled resets, banked reset inventory and user reminders are separate. Banked reset counts come from Codex's account API when available; detail lists can be absent or capped. aims never redeems or buys a reset. A reset time in the past means the reading needs refreshing, not that usage is now zero. Failed refreshes retain the previous numbers **and their original observation time**.
 

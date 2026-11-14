@@ -26,12 +26,16 @@ The optional menu-bar percentage also uses current successful readings. It is re
 | Claude, each configured account | Cached native status line; optional explicit CLI live probe | Reported window timestamps | Not exposed by this status-line reader; shown as unavailable |
 | Codex, each configured account | Native app-server `account/rateLimits/read` | Main and additional model/feature windows | `rateLimitResetCredits` count; available details/expiries retained when supplied |
 | Kiro | Native cached login and `GetUsageLimits` | Per-resource or root `nextDateReset`, seconds or milliseconds | No invented banked reset inventory; add-on credits are not resets |
-| Grok | Native ACP `_x.ai/billing` | `currentPeriod.end` | Inventory unavailable. Unified billing may omit the usage percentage even while reporting the period; the percentage then stays unknown |
+| Grok | Native ACP `_x.ai/billing`, then a bounded Grok web usage check when necessary | Native `currentPeriod.end` remains authoritative | Reset inventory is not read by this integration. A partial billing response can be enriched from the same account's verified web usage |
 | Antigravity | `agy -p /usage --output-format json` | Each reported group's bucket timestamps | Unreported groups or reset inventories stay unavailable |
 | OpenCode | Native `/api/experimental/usage/limits` | Each Go meter and budget timestamp | Budget amounts and per-model limits remain distinct; no inferred banked resets |
 | Custom | User-defined reminder | Explicit date with timezone | A reminder only; never changes the provider or recorded usage |
 
 Antigravity retains every reported model-group ID, including separate Gemini, Claude/GPT, Argon 4 and Carbon 4 groups when supplied. Groups keep their own usage and reset timestamps even when their bucket IDs match. An account that does not report a group is not given an invented allowance for it.
+
+Grok's unified billing can omit the percentage while still returning a weekly period. This partial JSON alone stays unknown. Aims then allows up to six seconds for the read-only web billing method used by grok.com, using one unambiguous, non-expired first-party login from Grok's existing `auth.json`. `GROK_HOME` and an absolute `GROK_AUTH_PATH` are respected. If the credential changes during the native/web read, enrichment is discarded. Aims never refreshes, copies, rewrites or deletes Grok credentials and never reads browser cookies.
+
+The web response must be complete and successful, and its weekly period must match the native period and contain the current time. A published percentage is preferred. A fully validated active-period response with an omitted proto3 scalar can also supply zero, matching [the Grok web client's behavior documented by CodexBar](https://github.com/steipete/CodexBar/blob/main/docs/grok.md). Malformed, expired, conflicting or failed responses cannot supply a percentage. A web outage preserves the original partial reading and reset time. The undocumented web protocol may change; unknown usage remains explicit when its response cannot be verified.
 
 `aims usage --refresh` and the app's automatic five-minute refresh do not send a model prompt. Claude therefore remains cached until its native status line or an explicit `--live` updates it. The refresh timestamp of one provider never makes another provider's numbers fresh. A failure retains the original observation time, and a reset timestamp passing does not prove that the provider refreshed the allowance.
 
