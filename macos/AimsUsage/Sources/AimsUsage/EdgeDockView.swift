@@ -32,13 +32,25 @@ struct EdgeDockView: View {
                                                         style: StrokeStyle(lineWidth: 3, lineCap: .round)
                                                     )
                                                     .rotationEffect(.degrees(-90))
+                                                    .opacity(summary.isCached ? 0.5 : 1)
                                             }
                                             ProviderMark(id: provider.id, size: size.iconSize)
                                         }.frame(width: size.ringSize, height: size.ringSize)
+                                            .overlay(alignment: .bottomTrailing) {
+                                                if summary.isCached {
+                                                    Image(systemName: "clock.fill")
+                                                        .font(.system(size: size == .mini ? 8 : 10))
+                                                        .foregroundStyle(.orange).padding(1)
+                                                        .background(.background, in: Circle())
+                                                }
+                                            }
                                         Text(size == .mini && summary.blocked ? "!" : summary.value)
                                             .font(.system(size: size.labelSize, weight: .semibold))
                                             .monospacedDigit()
-                                            .foregroundStyle(summary.blocked ? .orange : .primary).lineLimit(1)
+                                            .foregroundStyle(
+                                                summary.blocked
+                                                    ? Color.orange : summary.isCached ? .secondary : .primary
+                                            ).lineLimit(1)
                                     }
                                     .frame(width: size.width - 10, height: size.rowStride - 4)
                                     .background(
@@ -50,9 +62,11 @@ struct EdgeDockView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .onHover { if $0 { hoverProvider(provider.id) } }
-                                .accessibilityLabel("\(ProviderStyle.title(provider)) usage, \(summary.value)")
+                                .accessibilityLabel(
+                                    "\(ProviderStyle.title(provider)) usage, \(summary.value), \(summary.explanation)"
+                                )
                                 .help(
-                                    "\(ProviderStyle.title(provider)) · \(summary.value) · hover for all accounts, click to pin"
+                                    "\(ProviderStyle.title(provider)) · \(summary.value) · \(summary.explanation) · hover for all accounts, click to pin"
                                 )
                             }
                         }
