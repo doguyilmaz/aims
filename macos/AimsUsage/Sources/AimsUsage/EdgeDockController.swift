@@ -23,6 +23,8 @@ final class EdgeDockController: NSObject {
         self.openOverview = openOverview
         screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         dock = makePanel(title: "Aims Edge Dock")
+        // Pointer-only Dock actions must not steal keyboard focus from the active app.
+        dock?.becomesKeyOnlyIfNeeded = true
         handle = makePanel(title: "Aims Dock edge marker")
         handle?.hasShadow = false
         configureContent()
