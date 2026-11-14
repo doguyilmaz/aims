@@ -66,6 +66,10 @@ struct EdgeDockView: View {
                                 .contextMenu {
                                     DockOptionsMenu(model: model, provider: provider, openOverview: openOverview)
                                 }
+                                .overlay {
+                                    DockContextMenu(model: model, provider: provider, openOverview: openOverview)
+                                        .accessibilityHidden(true)
+                                }
                                 .accessibilityLabel(
                                     "\(ProviderStyle.title(provider)) usage, \(summary.value), \(summary.explanation)"
                                 )
@@ -105,6 +109,7 @@ struct EdgeDockView: View {
                 }
                 .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
                 .contextMenu { DockOptionsMenu(model: model, openOverview: openOverview) }
+                .overlay { DockContextMenu(model: model, openOverview: openOverview).accessibilityHidden(true) }
                 Button {
                     model.edgeDockPinned.toggle()
                 } label: {
