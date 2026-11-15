@@ -13,12 +13,23 @@ Build from a checkout containing the macOS app. Requirements are macOS 14.0.0+, 
 
 ```sh
 scripts/build-macos-app.sh
-open 'dist/Aims Usage.app'
+'dist/Aims Usage.app/Contents/Resources/aims' app install --from 'dist/Aims Usage.app'
+"$HOME/Applications/Aims Usage.app/Contents/Resources/aims" app open
 ```
 
-For daily use, quit the development app and move the bundle to your Applications folder. The app includes an aims executable; a standalone CLI installation is managed separately. The local development build is ad hoc signed and has no active updater channel. Public signing/notarization belongs to the release process.
+The installer verifies the local signature and copies the app to `~/Applications`. It refuses to replace an existing app, including symlinks; use that app’s updater or explicitly move it before selecting another build. The app includes an aims executable; a standalone CLI installation is managed separately. The local development build is ad hoc signed and has no active updater channel. Public signing/notarization belongs to the release process.
 
 Set up/manage Claude and Codex accounts with the [CLI](../installation), and authenticate the other providers with their native CLIs. The app reads those existing profiles and logins. At first launch, use Settings to select an existing custom `AIMS_HOME` if needed; changing the folder does not move account data. More contains Settings, custom reminders and Quit. No login item is installed automatically.
+
+## CLI, dashboard and setup
+
+On macOS, `aims app` opens a small install/open menu; `aims app status --json` reports the app and terminal command without changing profiles. The accounts and usage dashboard both offer **m · macOS app**. `aims init` offers optional app installation; `aims init --app` requests it explicitly, and `aims setup --app` installs it separately from tool integrations. App commands/options and the dashboard shortcut are absent on Linux and Windows.
+
+`aims app install` uses the separate public Homebrew cask when available. The prepared `aims-usage` cask depends on the `aims` CLI cask. If a CLI is already on PATH, the command skips that cask dependency and keeps the existing installer's ownership. Until the public cask exists, use the source-preview `--from` command above. Installation preserves provider homes, configuration and sessions. `aims app open` opens the detected app.
+
+Every app includes its CLI. For a direct-download install, **More → Terminal command…** and **Settings → Terminal command** can expose it at `~/.local/bin/aims`. Move the app to Applications first. Existing CLI commands, files and unrelated links are kept; no shell file is edited. Add `~/.local/bin` to your shell PATH if needed. `aims app link-cli` offers the same operation from the terminal. The local `--from` installer creates this link when no CLI is on PATH. App updates keep the bundle path stable; the standalone package-manager CLI continues to update separately.
+
+Doctor reports an absent app as **info**, with an install hint. `doctor --fix` does not install the optional app. No companion app check appears on other systems.
 
 ## One app, three surfaces
 

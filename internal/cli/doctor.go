@@ -12,6 +12,7 @@ import (
 
 	"github.com/doguyilmaz/aims"
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -67,6 +68,11 @@ func newDoctorCmd(version string) *cobra.Command {
 			section("aims")
 			exe, _ := os.Executable()
 			ok("aims %s %s", version, s.Dim.Render(fsx.Tildify(exe)))
+			if desktop.Supported() {
+				check := appDoctorCheck()
+				fmt.Println("  " + s.Dim.Render(check.Message))
+				fix1(check.Command)
+			}
 			switch onPath, err := exec.LookPath("aims"); {
 			case err != nil:
 				bad("aims is not on your PATH; Claude Code and Codex start it as %s", fsx.Tildify(ops.Command()[0]))

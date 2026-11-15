@@ -16,7 +16,7 @@ Ship **one Aims Usage.app** containing the menu bar, optional Edge Dock and pinn
 | Updates | Existing CLI/package-manager path | Dedicated Sparkle appcast, updating the app and bundled CLI together |
 | GitHub Latest | Owned by the stable CLI release | Always publish with `--latest=false` |
 
-**Current availability is source preview.** No public Usage release or `aims-usage` cask has been activated. Keep the README, installation page and app guide labeled accordingly until a verified public archive and reviewed cask exist. At first activation, update those entry points together with version-specific download/install links and retain the illustrated-preview captions.
+**Current availability is source preview.** No public Usage release or `aims-usage` cask has been activated. Keep the README, installation page and app guide labeled accordingly until a verified public archive and reviewed cask exist. Publish the CLI release containing the macOS `aims app` commands before activating the app cask, so a fresh dependency install has the documented terminal/setup commands. Existing standalone installations retain their own update path. At first activation, update those entry points together with version-specific download/install links and retain the illustrated-preview captions.
 
 ## Existing app examples and distribution ownership
 
@@ -28,7 +28,7 @@ The [Homebrew tap](https://github.com/doguyilmaz/homebrew-tap/tree/main/Casks) h
 | [Recesso](https://github.com/doguyilmaz/recesso/blob/main/.github/workflows/release.yml) | Validated version/build, notarized final archive, Sparkle signature and an `auto_updates true` cask. |
 | [HafifPix](https://github.com/doguyilmaz/hafifpix/blob/main/scripts/update-tap.sh) | Hash the actual release artifact and update exactly one cask. The app's bundled CLI is optional; Aims Usage intentionally exposes no global CLI alias. |
 
-Aims Usage follows this native-app preparation pattern. The existing CLI/keepalive wrapper continues through Tapster. `Casks/aims.rb` belongs to that CLI; the Usage app gets **`Casks/aims-usage.rb`** and bundle ID `com.doguyilmaz.aims.usage`. Installing or uninstalling it must not replace the standalone aims executable or remove `~/.aims`, provider homes or login data. The prepared cask has no `binary` or `zap` stanza.
+Aims Usage follows this native-app preparation pattern. The existing CLI/keepalive wrapper continues through Tapster. `Casks/aims.rb` belongs to that CLI; the Usage app gets **`Casks/aims-usage.rb`** and bundle ID `com.doguyilmaz.aims.usage`. Installing or uninstalling it must not replace the standalone aims executable or remove `~/.aims`, provider homes or login data. The prepared cask depends on `doguyilmaz/tap/aims` for the standalone terminal CLI and has no `binary` or `zap` stanza. CLI-initiated app installation skips cask dependencies when an aims command is already on PATH, preserving its existing installer. A direct-download app includes its own CLI and offers a per-user `~/.local/bin/aims` link, without replacing existing commands or editing shell files.
 
 Tapster also supports Sparkle, but its current [app validation](https://github.com/doguyilmaz/tapster/blob/c19b315fdf14dd7b6613e4fc33d13115f6e17d94/src/appcheck.ts#L141) expects marketing version and build to equal one SemVer tag and derives a latest-release feed. Central adoption would need separate integer-build/release-stream support. That is an optional future consolidation, not a prerequisite for this app's preparation. No hub changes or secret migration are needed now.
 

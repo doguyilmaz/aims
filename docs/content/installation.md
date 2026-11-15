@@ -82,10 +82,13 @@ The menu bar, Edge Dock and overview ship together in **Aims Usage.app**. The ap
 
 ```sh
 scripts/build-macos-app.sh
-open 'dist/Aims Usage.app'
+'dist/Aims Usage.app/Contents/Resources/aims' app install --from 'dist/Aims Usage.app'
+"$HOME/Applications/Aims Usage.app/Contents/Resources/aims" app open
 ```
 
-Quit the development app before moving its bundle to Applications for regular use. Set up Claude/Codex profiles with `aims init`; for an existing custom `AIMS_HOME`, select that same folder in the app's Settings. Provider CLIs manage their own logins. See [Aims Usage for macOS](../macos-usage) for the complete guide and preview images.
+This copies the verified bundle to `~/Applications` without replacing an existing app. It exposes the bundled CLI at `~/.local/bin/aims` only when no terminal CLI exists; add that directory to PATH if needed. Existing CLI installations and shell files remain intact. Set up Claude/Codex profiles with `aims init`; for an existing custom `AIMS_HOME`, select that same folder in the app's Settings. Provider CLIs manage their own logins. See [Aims Usage for macOS](../macos-usage) for the complete guide and preview images.
+
+On macOS, the CLI offers `aims app`, `aims app install`, `aims app open` and `aims app status --json`; the TUI offers **m**, and init/setup expose `--app`. Public installation uses the app cask after its release; source previews use `--from` above. The prepared app cask also installs the CLI dependency, while a direct download already includes a bundled CLI. **More → Terminal command…** in the app adds that command to `~/.local/bin` without overwriting an existing CLI. These app-specific commands/options and doctor checks are absent on Linux/Windows. An absent optional app is informational in doctor and never installed by `doctor --fix`.
 
 ## Check it works
 

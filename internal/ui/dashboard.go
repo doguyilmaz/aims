@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/meter"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -30,15 +31,15 @@ type Launch struct {
 }
 
 type keymap struct {
-	Up, Down, MoveUp, MoveDown, Use, Everywhere, Reset, Start, Login, Failover, Clear, Refresh, Add, Usage, Help, Quit key.Binding
+	Up, Down, MoveUp, MoveDown, Use, Everywhere, Reset, Start, Login, Failover, Clear, Refresh, Add, Usage, App, Help, Quit key.Binding
 }
 
 func (k keymap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Start, k.Use, k.Login, k.Add, k.Usage, k.Help, k.Quit}
+	return []key.Binding{k.Start, k.Use, k.Login, k.Add, k.Usage, k.App, k.Help, k.Quit}
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Everywhere, k.Reset}, {k.Failover, k.Clear, k.Refresh}, {k.Usage, k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.MoveUp, k.MoveDown}, {k.Start, k.Use, k.Login, k.Add}, {k.Everywhere, k.Reset}, {k.Failover, k.Clear, k.Refresh}, {k.Usage, k.App, k.Help, k.Quit}}
 }
 
 var keys = keymap{
@@ -56,15 +57,18 @@ var keys = keymap{
 	Refresh:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "check live")),
 	Add:        key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add account")),
 	Usage:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "usage")),
+	App:        key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "macOS app")),
 	Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "more")),
 	Quit:       key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
 }
+
+func init() { keys.App.SetEnabled(desktop.Supported()) }
 
 // usageKeys are the keys of the usage view.
 type usageKeys struct{}
 
 func (usageKeys) ShortHelp() []key.Binding {
-	return []key.Binding{key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accounts")), keys.Refresh, keys.Quit}
+	return []key.Binding{key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accounts")), keys.Refresh, keys.App, keys.Quit}
 }
 
 func (u usageKeys) FullHelp() [][]key.Binding { return [][]key.Binding{u.ShortHelp()} }
@@ -256,6 +260,9 @@ func (m *dashboard) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return flashMsg{fmt.Sprintf("%s rests (%s); new sessions use %s until then", res.From, Until(res.Until), res.To), false}
 		}
+	}
+	if desktop.Supported() && key.Matches(msg, keys.App) {
+		return m, m.exec("app")
 	}
 	if key.Matches(msg, keys.Usage) {
 		m.usage = !m.usage
