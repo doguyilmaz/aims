@@ -160,12 +160,11 @@ func CommitUsageObservation(before *Config, id tool.ID, name string, account *Ac
 	})
 }
 
-func overlayUsageObservations(cfg *Config, state State) error {
+func overlayUsageObservations(cfg *Config, state, raw State) error {
 	cache, err := readUsageObservations()
 	if err != nil {
 		return err
 	}
-	raw := LoadState()
 	for id, entries := range cache.Profiles {
 		for name, entry := range entries {
 			if entry == nil || cfg.Tools[id] == nil {

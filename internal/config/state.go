@@ -71,22 +71,28 @@ func LoadStateFor(cfg *Config) State {
 // The latter lives separately so legacy whole-file state writers cannot erase
 // it, and displaying usage never rewrites another process's routing marks.
 func LoadStateView(cfg *Config) (State, error) {
-	s := LoadState()
+	raw := LoadState()
+	s := State{}
 	if cfg == nil {
 		return State{}, nil
 	}
-	for id, profiles := range s {
+	for id, profiles := range raw {
 		for name, state := range profiles {
 			var p *Profile
 			if t := cfg.Tools[id]; t != nil {
 				p = t.Profiles[name]
 			}
 			if p == nil || p.Purge != nil || state == nil || state.Generation != p.Generation {
-				delete(profiles, name)
+				continue
 			}
+			if s[id] == nil {
+				s[id] = map[string]*ProfileState{}
+			}
+			copy := *state
+			s[id][name] = &copy
 		}
 	}
-	err := overlayUsageObservations(cfg, s)
+	err := overlayUsageObservations(cfg, s, raw)
 	return s, err
 }
 

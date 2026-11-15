@@ -221,3 +221,37 @@ func TestUsageCacheRefusesManagedLink(t *testing.T) {
 		t.Fatal("cache changed external owner file")
 	}
 }
+
+func TestOverlayDoesNotMixTwoNativeStateSnapshots(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+	_ = UpdateState("codex", "work", func(s *ProfileState) {
+		s.Account = &Account{Email: "first@example.test"}
+		s.AccountRevision = "first"
+		s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 99}}}
+	})
+	raw := LoadState()
+	copy := *raw.Get("codex", "work")
+	view := State{"codex": {"work": &copy}}
+	// Disk advances after the view's native snapshot was read.
+	_ = UpdateState("codex", "work", func(s *ProfileState) {
+		s.Account = &Account{Email: "second@example.test"}
+		s.AccountRevision = "second"
+		s.Usage = nil
+	})
+	if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) {
+		s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 2}}, Groups: []tool.QuotaGroup{{ID: "second"}}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := overlayUsageObservations(cfg, view, raw); err != nil {
+		t.Fatal(err)
+	}
+	got := view.Get("codex", "work")
+	if got.Account.Email != "first@example.test" || got.Usage.Windows[0].Percent != 99 || len(got.Usage.Groups) != 0 {
+		t.Fatalf("cache mixed two native identities into one snapshot: %+v", got)
+	}
+	if fresh := LoadStateFor(cfg).Get("codex", "work"); fresh.Account.Email != "second@example.test" || fresh.Usage.Windows[0].Percent != 2 {
+		t.Fatalf("fresh snapshot lost current identity: %+v", fresh)
+	}
+}
