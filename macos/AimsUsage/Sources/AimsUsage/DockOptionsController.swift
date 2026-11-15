@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class DockOptionsController: NSObject, NSWindowDelegate {
-    private var panel: UsagePanel?
+    private var panel: DockOptionsPanel?
     private(set) var providerID: String?
     var visibilityDidChange: (@MainActor () -> Void)?
     var isPresented: Bool { panel != nil }
@@ -13,8 +13,12 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
         pointerY: CGFloat, openOverview: @escaping @MainActor () -> Void
     ) {
         close()
+        let pointerOpening =
+            NSApp.currentEvent.map {
+                [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains($0.type)
+            } ?? false
         self.providerID = providerID
-        let panel = UsagePanel(
+        let panel = DockOptionsPanel(
             contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "Dock options"
         panel.isOpaque = false
@@ -27,6 +31,10 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
         self.panel = panel
+        panel.onCancel = { [weak self, weak panel] in
+            guard self?.panel === panel else { return }
+            self?.close()
+        }
         let maximumBodyHeight = max(0, screen.height - 24 - 43)
         panel.contentView = NSHostingView(
             rootView: DockOptionsView(
@@ -43,12 +51,17 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
             DockOptionsLayout.frame(in: screen, dock: dock, side: side, pointerY: pointerY, height: 343), display: true)
         visibilityDidChange?()
         panel.makeKeyAndOrderFront(nil)
+        if pointerOpening {
+            // Keep keyboard handling, but leave controls unfocused until Tab.
+            panel.makeFirstResponder(nil)
+        }
     }
 
     func close() {
         guard let panel else { return }
         self.panel = nil
         providerID = nil
+        panel.onCancel = nil
         panel.delegate = nil
         panel.orderOut(nil)
         visibilityDidChange?()
