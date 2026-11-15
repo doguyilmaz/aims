@@ -20,7 +20,7 @@ struct UsageMetricView: View {
             ?? (!expired && window.limited == true ? "Blocked" : "—")
     }
     private var reset: String {
-        guard let date = window.resetsAt else { return "Reset ?" }
+        guard let date = window.resetsAt else { return "Not reported" }
         if expired { return "Reset passed" }
         return ResetPresentation.countdown(to: date, now: now).replacingOccurrences(of: "in ", with: "")
     }
@@ -53,7 +53,7 @@ struct UsageMetricView: View {
                                         * min(1, max(0, (window.periodPercent(at: now) ?? 0) / 100)))
                             }
                     }.frame(height: 4).accessibilityHidden(true)
-                    Text(expired ? "Reset passed" : window.resetsAt == nil ? "Reset unknown" : "Reset \(reset)")
+                    Text(expired ? "Reset passed" : window.resetsAt == nil ? "Not reported" : "Reset \(reset)")
                         .font(.system(size: 11)).monospacedDigit()
                         .foregroundStyle(expired ? .orange : .secondary).lineLimit(1)
                 }
@@ -67,7 +67,7 @@ struct UsageMetricView: View {
                     ? "Previous period: \(window.validPercent.map { String(format: "%.0f%% used", $0) } ?? "usage unavailable"). Reset \(date). Waiting for a new provider reading."
                     : "Resets \(date)"
             }
-                ?? "Reset time not reported"
+                ?? "The provider hasn't reported a reset time for this window."
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

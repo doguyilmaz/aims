@@ -12,7 +12,7 @@ struct GaugeMetric: View {
         window.label == "month" ? "Monthly" : window.label == "budget" ? "Budget" : window.label
     }
     private var reset: String {
-        guard let date = window.resetsAt else { return "Reset ?" }
+        guard let date = window.resetsAt else { return "Not reported" }
         if expired { return "Reset passed" }
         return ResetPresentation.countdown(to: date, now: now).replacingOccurrences(of: "in ", with: "")
     }
@@ -36,7 +36,7 @@ struct GaugeMetric: View {
                     ? "Previous period: \(window.validPercent.map { String(format: "%.0f%% used", $0) } ?? "usage unavailable"). Reset \(date). Waiting for a new provider reading."
                     : "\(label) · Resets \(date)"
             }
-                ?? "\(label) · Reset time not reported"
+                ?? "The provider hasn't reported a reset time for this window."
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
