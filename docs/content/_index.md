@@ -99,7 +99,7 @@ The details are in [How it works](how-it-works).
 
 | Tool | Login kept in | Notes |
 | --- | --- | --- |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Plan usage comes from its status line |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Native status line, plus read-only OAuth quota refresh with the existing profile login |
 | [Codex CLI](https://github.com/openai/codex) | `auth.json`, or the OS keyring | Plan usage comes from its account API |
 
 `aims usage` also shows the limits of Antigravity, Grok, Kiro and OpenCode, read through each tool's own CLI; aims does not run sessions on them yet.

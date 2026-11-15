@@ -33,7 +33,7 @@ The optional menu-bar percentage also uses current successful readings. It is re
 
 | Provider | Data source | Scheduled reset | Banked / other resets |
 | --- | --- | --- | --- |
-| Claude, each configured account | Cached native status line; optional explicit CLI live probe | Reported window timestamps | Not exposed by this status-line reader; shown as unavailable |
+| Claude, each configured account | Existing profile OAuth usage API on Refresh; native status-line cache also retained | Reported window timestamps | Not exposed by this reader; shown as unavailable |
 | Codex, each configured account | Native app-server `account/rateLimits/read` | Main and additional model/feature windows | `rateLimitResetCredits` count; available details/expiries retained when supplied |
 | Kiro | Native cached login and `GetUsageLimits` | Per-resource or root `nextDateReset`, seconds or milliseconds | No invented banked reset inventory; add-on credits are not resets |
 | Grok | Native ACP `_x.ai/billing`, then a bounded Grok web usage check when necessary | Native `currentPeriod.end` remains authoritative | Reset inventory is not read by this integration. A partial billing response can be enriched from the same account's verified web usage |
@@ -47,7 +47,9 @@ Grok's unified billing can omit the percentage while still returning a weekly pe
 
 The web response must be complete and successful, and its weekly period must match the native period and contain the current time. A published percentage is preferred. A fully validated active-period response with an omitted proto3 scalar can also supply zero, matching [the Grok web client's behavior documented by CodexBar](https://github.com/steipete/CodexBar/blob/main/docs/grok.md). Malformed, expired, conflicting or failed responses cannot supply a percentage. A web outage preserves the original partial reading and reset time. The undocumented web protocol may change; unknown usage remains explicit when its response cannot be verified.
 
-`aims usage --refresh` and the app's automatic five-minute refresh do not send a model prompt. Claude therefore remains cached until its native status line or an explicit `--live` updates it. The refresh timestamp of one provider never makes another provider's numbers fresh. A failure retains the original observation time, and a reset timestamp passing does not prove that the provider refreshed the allowance.
+`aims usage --refresh` and the app's automatic five-minute refresh do not send a model prompt. Claude reads the exact profile's existing OAuth access through aims and requests Anthropic's usage API with a bounded timeout and response size. It never follows redirects, renews a token, writes credentials or falls back to a paid probe. If access has expired or is rejected, use that account in Claude Code and retry Refresh; API/token overrides do not fall back to an unrelated subscription login. The menu app receives only the credential-free usage snapshot. Native status-line reports continue to update the cache independently.
+
+The refresh timestamp of one provider never makes another provider's numbers fresh. A failure retains the original observation time and reports the reason. After a window's reset passes, Compact/Gauges details show **— · Reset passed**; the tooltip keeps the previous percentage explicitly labeled as the previous period. The Dock and menu summary exclude it. A new zero is shown only when the provider actually reports zero; a reset timestamp passing never invents a new allowance.
 
 The passive `--refresh` path updates observation caches without clearing manual routing/login marks. Successful user-controlled reauthentication invalidates old cached quotas; an explicit Claude live probe checks the native offline account identity before attributing cached windows to a changed login. Credentials and history are not copied or migrated by this bookkeeping.
 

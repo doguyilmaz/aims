@@ -692,12 +692,17 @@ func RecordLogin(id tool.ID, name string, acct tool.Account, snapshots ...*confi
 	})
 }
 
-func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string, usageOnly bool) tool.Probe {
 	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: "profile purge is pending; retry aims rm --purge"}
 	}
 	h := Home(cfg, a, name)
-	p := a.Probe(ctx, h)
+	var p tool.Probe
+	if reader, ok := a.(tool.UsageReader); usageOnly && ok {
+		p = reader.Usage(ctx, h)
+	} else {
+		p = a.Probe(ctx, h)
+	}
 	if err := ctx.Err(); err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
 	}
@@ -720,7 +725,7 @@ func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 
 // Live asks the provider and reconciles its usage, limit and login marks.
 func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	p := readProbe(ctx, cfg, a, name)
+	p := readProbe(ctx, cfg, a, name, false)
 	if ctx.Err() != nil {
 		return p
 	}
@@ -730,7 +735,7 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 // ReadUsage updates observation caches without changing manual routing/login
 // marks. A passive usage display must not clear a profile's existing busy mark.
 func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	p := readProbe(ctx, cfg, a, name)
+	p := readProbe(ctx, cfg, a, name, true)
 	if ctx.Err() != nil {
 		return p
 	}
@@ -802,7 +807,7 @@ func recordObservation(cfg *config.Config, id tool.ID, name string, p tool.Probe
 		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
 		ps.UsageAttemptedAt = config.Now().UTC()
 		ps.UsageError = p.UsageError
-		if p.Status == tool.ProbeError || p.Status == tool.ProbeLogin {
+		if ps.UsageError == "" && (p.Status == tool.ProbeError || p.Status == tool.ProbeLogin) {
 			ps.UsageError = string(p.Status)
 		}
 		if hasUsage {

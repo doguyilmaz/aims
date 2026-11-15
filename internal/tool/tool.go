@@ -184,6 +184,12 @@ type FreeProber interface {
 	FreeProbe()
 }
 
+// UsageReader reads quota without a model request or renewing native credentials.
+// Unlike FreeProber, it does not establish whether model requests can succeed.
+type UsageReader interface {
+	Usage(ctx context.Context, h Home) Probe
+}
+
 // Diagnoser reports problems in the tool's settings for aims doctor: what
 // keeps aims from doing its job, and credentials written into settings every
 // account shares.

@@ -183,8 +183,12 @@ aims usage agy --refresh`,
 					return err
 				}
 			}
-			if refresh && (filter == "" || filter == "codex") {
-				if err := checkLive(cmd.Context(), []tool.ID{"codex"}, asJSON, true); err != nil {
+			if refresh && core {
+				refreshIDs := ids
+				if filter == "" {
+					refreshIDs = []tool.ID{"claude", "codex"}
+				}
+				if err := checkLive(cmd.Context(), refreshIDs, asJSON, true); err != nil {
 					return err
 				}
 			}
@@ -248,7 +252,7 @@ aims usage agy --refresh`,
 		},
 	}
 	cmd.Flags().BoolVar(&live, "live", false, "ask the providers first (Codex: free account API; Claude: a one-word prompt; other tools: their usage commands)")
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "refresh Codex and other tools without a model prompt; Claude uses its last reported status line")
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "refresh quotas without a model prompt; Claude reads its existing OAuth session without renewing credentials")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the versioned usage snapshot without credentials or account e-mail")
 	cmd.MarkFlagsMutuallyExclusive("live", "refresh")
 	cmd.AddCommand(newUsageResetCmd())

@@ -6,8 +6,9 @@ struct UsageGauge: View {
     let tint: Color
     let stale: Bool
     let size: CGFloat
+    var expired = false
 
-    private var percent: Double? { window?.validPercent }
+    private var percent: Double? { expired ? nil : window?.validPercent }
     private var accent: Color {
         if stale { return tint.opacity(0.5) }
         if window?.limited == true || (percent ?? 0) >= 95 { return .red }
@@ -15,7 +16,7 @@ struct UsageGauge: View {
         return tint
     }
     private var value: String {
-        guard let percent else { return window?.limited == true ? "!" : "—" }
+        guard let percent else { return !expired && window?.limited == true ? "!" : "—" }
         return percent >= 1_000 ? "999+" : String(format: "%.0f", percent)
     }
     var body: some View {

@@ -23,8 +23,10 @@ struct GaugeAccountRow: View {
                             Text(plan).lineLimit(1).help(plan)
                         }
                         if stale {
-                            Image(systemName: "clock").help("Cached reading; refresh for current usage")
-                                .accessibilityLabel("Cached reading")
+                            Image(systemName: "clock").help(
+                                row.error ?? provider.error ?? "Cached reading; refresh for current usage"
+                            )
+                            .accessibilityLabel("Cached reading")
                         }
                         UsageReadingDetails(provider: provider, row: row)
                     }.font(.system(size: 10)).foregroundStyle(.secondary)
