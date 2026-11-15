@@ -20,7 +20,7 @@ struct UsageSettings: View {
                         "Use compact overlay indicators. Turn off to follow macOS scrollbar appearance and visibility.")
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
                 Text(
-                    "Claude uses its cached native status line. Automatic refresh never sends a model prompt, buys credits or redeems resets."
+                    "Automatic refresh reads provider quotas without a model prompt. Claude Code owns renewal of its login. No credits are bought or resets redeemed."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

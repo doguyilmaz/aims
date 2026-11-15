@@ -86,21 +86,18 @@ struct UsageDashboard: View {
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            Button {
+            UsageIconButton(title: "Refresh quotas", icon: .refresh, busy: model.isRefreshing) {
                 Task { await model.refresh() }
-            } label: {
-                if model.isRefreshing {
-                    ProgressView().controlSize(.small).frame(width: 18, height: 18)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                }
             }.disabled(model.isRefreshing).help("Refresh quotas without a model prompt")
-            Button(action: togglePanel) {
-                Image(systemName: surface == .panel ? "xmark" : model.panelVisible ? "pin.fill" : "pin")
-            }.help(surface == .panel ? "Close panel" : "Pin this overview")
-                .accessibilityLabel("Toggle overview panel")
+            UsageIconButton(
+                title: surface == .panel ? "Close overview" : model.panelVisible ? "Unpin overview" : "Pin overview",
+                icon: surface == .panel ? .close : model.panelVisible ? .pinned : .pin,
+                selected: surface != .panel && model.panelVisible, action: togglePanel)
             Menu {
-                Button(model.edgeDockEnabled ? "Hide Edge Dock" : "Show Edge Dock", systemImage: "sidebar.right") {
+                Button(
+                    model.edgeDockEnabled ? "Hide Edge Dock" : "Show Edge Dock",
+                    systemImage: model.edgeDockSide == .left ? "sidebar.left" : "sidebar.right"
+                ) {
                     model.edgeDockEnabled.toggle()
                 }
                 Button("Add custom reset reminder…") { editingReminder = true }
@@ -129,9 +126,10 @@ struct UsageDashboard: View {
                 )
                 Button("Quit Aims Usage", role: .destructive) { NSApp.terminate(nil) }.keyboardShortcut("q")
             } label: {
-                Image(systemName: "ellipsis")
+                UsageControlSymbol(icon: .more).frame(width: 24, height: 24).foregroundStyle(.secondary)
             }
-            .menuStyle(.borderlessButton).frame(width: 22)
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 24)
+            .help("More").accessibilityLabel("More")
         }
         .buttonStyle(.borderless).font(.system(size: 13, weight: .medium))
         .padding(.horizontal, 16)
@@ -163,12 +161,9 @@ struct UsageDashboard: View {
                 }.buttonStyle(.borderless).help("Your reset reminders")
                     .popover(isPresented: $showingReminders) { ReminderListView(model: model).frame(width: 330) }
             }
-            Button {
+            UsageIconButton(title: "Settings", icon: .settings) {
                 showSettings()
-            } label: {
-                Image(systemName: "gearshape")
             }
-            .buttonStyle(.borderless).help("Settings").accessibilityLabel("Settings")
         }
         .font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 16)
     }

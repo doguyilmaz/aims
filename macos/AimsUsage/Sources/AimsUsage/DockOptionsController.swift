@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class DockOptionsController: NSObject, NSWindowDelegate {
-    private var panel: DockOptionsPanel?
+    private var panel: UsagePanel?
     private(set) var providerID: String?
     var visibilityDidChange: (@MainActor () -> Void)?
     var isPresented: Bool { panel != nil }
@@ -13,12 +13,8 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
         pointerY: CGFloat, openOverview: @escaping @MainActor () -> Void
     ) {
         close()
-        let pointerOpening =
-            NSApp.currentEvent.map {
-                [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains($0.type)
-            } ?? false
         self.providerID = providerID
-        let panel = DockOptionsPanel(
+        let panel = UsagePanel(
             contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "Dock options"
         panel.isOpaque = false
@@ -50,11 +46,7 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
         panel.setFrame(
             DockOptionsLayout.frame(in: screen, dock: dock, side: side, pointerY: pointerY, height: 343), display: true)
         visibilityDidChange?()
-        panel.makeKeyAndOrderFront(nil)
-        if pointerOpening {
-            // Keep keyboard handling, but leave controls unfocused until Tab.
-            panel.makeFirstResponder(nil)
-        }
+        panel.presentForInteraction()
     }
 
     func close() {

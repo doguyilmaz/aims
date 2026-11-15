@@ -35,12 +35,16 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate = self
             self.panel = panel
+            panel.onCancel = { [weak self, weak panel] in
+                guard self?.panel === panel else { return }
+                panel?.close()
+            }
             NotificationCenter.default.addObserver(
                 self, selector: #selector(screenChanged), name: NSApplication.didChangeScreenParametersNotification,
                 object: nil)
         }
         configureContent()
-        panel?.makeKeyAndOrderFront(nil)
+        panel?.presentForInteraction()
         model.panelVisible = true
         UserDefaults.standard.set(true, forKey: "edgePanelVisible")
     }

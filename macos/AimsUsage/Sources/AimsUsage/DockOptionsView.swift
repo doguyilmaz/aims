@@ -23,8 +23,7 @@ struct DockOptionsView: View {
                 Text(provider.map { ProviderStyle.title($0) } ?? "Edge Dock")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Button(action: close) { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless).accessibilityLabel("Close Dock options")
+                UsageIconButton(title: "Close Dock options", icon: .close, action: close)
             }.padding(.horizontal, 14).frame(height: 42)
             Divider()
             ScrollView {

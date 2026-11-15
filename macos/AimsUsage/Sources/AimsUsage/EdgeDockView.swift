@@ -101,26 +101,24 @@ struct EdgeDockView: View {
             } else {
                 ProgressView().controlSize(.small).frame(height: 50)
             }
-            HStack(spacing: size == .mini ? 0 : 12) {
-                Button(action: openOverview) {
-                    Image(systemName: model.error == nil ? "square.grid.2x2" : "exclamationmark.triangle")
-                        .foregroundStyle(model.error == nil ? Color.secondary : Color.orange).frame(
-                            width: size == .mini ? 22 : 20, height: 20)
-                }
+            HStack(spacing: size == .mini ? 0 : 8) {
+                UsageIconButton(
+                    title: "Open overview", icon: model.error == nil ? .overview : .warning,
+                    tint: model.error == nil ? nil : .orange, width: size == .mini ? 20 : 24, height: 20,
+                    action: openOverview
+                )
                 .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
                 .overlay { DockContextMenu { showOptions(nil, $0) }.accessibilityHidden(true) }
                 .accessibilityAction(named: Text("Dock options")) { showOptions(nil, nil) }
-                Button {
+                UsageIconButton(
+                    title: model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock",
+                    icon: model.edgeDockPinned ? .pinned : .pin, selected: model.edgeDockPinned,
+                    width: size == .mini ? 20 : 24, height: 20
+                ) {
                     model.edgeDockPinned.toggle()
-                } label: {
-                    Image(systemName: model.edgeDockPinned ? "pin.fill" : "pin")
-                        .foregroundStyle(model.edgeDockPinned ? .cyan : .secondary)
-                        .frame(width: size == .mini ? 22 : 20, height: 20)
                 }
-                .help(model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock")
-                .accessibilityLabel(model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock")
                 .accessibilityValue(model.edgeDockPinned ? "Pinned" : "Unpinned")
-            }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).frame(height: 20)
+            }.frame(height: 20)
         }
         .padding(.vertical, size.contentInset).frame(width: size.width)
         .frame(maxHeight: .infinity)

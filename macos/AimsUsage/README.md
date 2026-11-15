@@ -57,6 +57,8 @@ The app version and source revision appear in More and Settings so a running old
 
 Provider marks are the pinned Lobe Icons 1.102.0 SVG assets (MIT); the source metadata and license are bundled from [packaging/provider-marks](../../packaging/provider-marks). The app still ships one application icon. No icon package is downloaded at runtime.
 
+Application controls use shared monochrome SF Symbols and matching hover/press feedback. Pinned controls use the system accent color and filled pin; overview uses stacked rows and banked resets use a reset arrow. The menu-bar symbol is a simple usage chart. Pointer actions leave controls unfocused while Tab retains visible keyboard focus; Escape closes the floating panel. Provider marks and the application icon are independent of these control symbols.
+
 ## App updates
 
 Sparkle 2.10.1 is pinned in `Package.resolved` and embedded in the app bundle. Its complete upstream license/third-party notices and pinned source metadata are bundled in `Contents/Resources/sparkle`. Development and fixture preview builds have no update feed and never start the updater. A release with a complete HTTPS feed/public-key configuration enables **Check for Updates…** in More and Settings → App updates. Automatic checking is opt-in; automatic installation and system profiling default to off. Sparkle owns update validation, installation and relaunch. The app, Edge Dock and bundled aims are updated as one bundle; a separately selected aims executable and provider CLIs remain managed by their own installers.

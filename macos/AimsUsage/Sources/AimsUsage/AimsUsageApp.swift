@@ -14,7 +14,7 @@ struct AimsUsageApp: App {
             )
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "gauge.with.dots.needle.33percent")
+                UsageControlSymbol(icon: .usage, pointSize: 15)
                 if let summary = delegate.model.menuSummary { Text(summary).monospacedDigit() }
             }
         }

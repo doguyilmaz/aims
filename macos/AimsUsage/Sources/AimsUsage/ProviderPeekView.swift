@@ -23,13 +23,11 @@ struct ProviderPeekView: View {
                     Text("\(provider.rows.count) \(unit)\(provider.rows.count == 1 ? "" : "s")")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Button(action: togglePin) { Image(systemName: model.dockPeekPinned ? "pin.fill" : "pin") }
-                    .foregroundStyle(model.dockPeekPinned ? .cyan : .secondary)
-                    .help(model.dockPeekPinned ? "Unpin provider details" : "Pin provider details")
-                    .accessibilityLabel(model.dockPeekPinned ? "Unpin provider details" : "Pin provider details")
-                Button(action: close) { Image(systemName: "xmark") }.help("Close provider details")
-                    .accessibilityLabel("Close provider details")
-            }.buttonStyle(.borderless).font(.system(size: 12)).padding(.horizontal, 18).frame(height: 50)
+                UsageIconButton(
+                    title: model.dockPeekPinned ? "Unpin provider details" : "Pin provider details",
+                    icon: model.dockPeekPinned ? .pinned : .pin, selected: model.dockPeekPinned, action: togglePin)
+                UsageIconButton(title: "Close provider details", icon: .close, action: close)
+            }.padding(.horizontal, 18).frame(height: 50)
             ScrollView {
                 if let provider = model.snapshot?.providers.first(where: { $0.id == providerID }) {
                     VStack(alignment: .leading, spacing: 12) {

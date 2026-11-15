@@ -141,18 +141,21 @@ final class EdgeDockController: NSObject {
         if model.dockProvider == id {
             if pin {
                 model.dockPeekPinned.toggle()
-                if model.dockPeekPinned { peek?.makeKeyAndOrderFront(nil) }
+                if model.dockPeekPinned { peek?.presentForInteraction() }
             }
             return
         }
         model.dockProvider = id
         model.dockPeekPinned = pin
         setExpanded(true, animated: true)
-        if peek == nil { peek = makePanel(title: "Aims provider details") }
+        if peek == nil {
+            peek = makePanel(title: "Aims provider details")
+            peek?.onCancel = { [weak self] in self?.closePeek() }
+        }
         guard let peek else { return }
         configurePeekContent()
         positionPeek()
-        if pin { peek.makeKeyAndOrderFront(nil) } else { peek.orderFrontRegardless() }
+        if pin { peek.presentForInteraction() } else { peek.orderFrontRegardless() }
         reconcileMonitors()
     }
 
