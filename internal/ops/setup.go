@@ -80,7 +80,7 @@ func IntegrationHomes(cfg *config.Config, a tool.Adapter, entry string) []tool.H
 	out := []tool.Home{profiles.HubHome(cfg, a)}
 	for _, n := range cfg.Tools[a.ID()].Order {
 		p := cfg.Tools[a.ID()].Profiles[n]
-		if !p.Existing && profiles.Private(p, a.Layout())(entry) {
+		if !p.Existing && p.Purge == nil && profiles.Private(p, a.Layout())(entry) {
 			out = append(out, profiles.Home(cfg, a, n))
 		}
 	}
@@ -98,7 +98,9 @@ func MCPHomes(cfg *config.Config, a tool.Adapter) []tool.Home {
 		out = append(out, profiles.HubHome(cfg, a))
 	}
 	for _, n := range cfg.Tools[a.ID()].Order {
-		out = append(out, profiles.Home(cfg, a, n))
+		if cfg.Tools[a.ID()].Profiles[n].Purge == nil {
+			out = append(out, profiles.Home(cfg, a, n))
+		}
 	}
 	return out
 }
@@ -107,6 +109,12 @@ func label(h tool.Home) string { return fsx.Tildify(h.Dir) }
 
 // Setup installs the chosen integrations into the given tools (all when empty).
 func Setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) {
+	var steps []Step
+	err := profileOperation(func() error { var err error; steps, err = setup(ctx, ids, in); return err })
+	return steps, err
+}
+
+func setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) {
 	cfg, err := config.Update(func(c *config.Config) error {
 		for _, id := range idsOrAll(ids) {
 			c.EnsureHub(id)
@@ -193,6 +201,12 @@ func Installed() Integrations {
 
 // Uninstall removes what Setup added. Profiles and logins stay.
 func Uninstall(ctx context.Context, in Integrations) ([]Step, error) {
+	var steps []Step
+	err := profileOperation(func() error { var err error; steps, err = uninstall(ctx, in); return err })
+	return steps, err
+}
+
+func uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err

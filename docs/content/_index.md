@@ -6,7 +6,14 @@ cascade:
 aliases: ["/docs/"]
 ---
 
-aims (short for **AI multi-session**) runs several Claude Code and Codex accounts on one machine. A personal and a work subscription, say, or two work seats. Each account keeps its own login; everything else is shared. You switch accounts without logging out, and when one account runs out of quota the next session moves to another.
+aims (short for **AI multi-session**) manages several Claude Code and Codex accounts on one machine and displays AI usage limits in the terminal or on macOS. Each account keeps its own login; history and settings can be shared or kept private. You switch without logging out, and supervised sessions can move to another account when they hit a limit.
+
+| Interface | Start here |
+| --- | --- |
+| **aims CLI** — accounts, routing, recovery and terminal usage | [Installation](installation) and [Quick start](quick-start) |
+| **Aims Usage for macOS** — menu bar, optional Edge Dock and pinned overview | [App guide and source preview](macos-usage) |
+
+The macOS app is a source preview; public signed downloads, its separate Homebrew cask and the production update channel have not been activated. It is one app with three surfaces, using the same account/usage data as the CLI.
 
 ## The problem
 
@@ -77,6 +84,14 @@ aims claude --continue   # same conversation, now on the other account
 
 Run `aims` with no arguments for a [dashboard](dashboard) that does all of this with a few keys; `tab` switches it between accounts and usage.
 
+## Menu bar and Edge Dock
+
+Aims Usage keeps Claude/Codex accounts, Kiro and Grok quotas, Antigravity model groups and OpenCode budgets visible without opening a terminal. Choose Compact or Gauges, place the optional Edge Dock on either edge, and select the account and allowance for each indicator. Display choices preserve active CLI logins and routing.
+
+![Aims Usage Gauges overview with illustrative preview data](/images/aims-usage-overview.jpg)
+
+*Preview data, not live account readings. See the [macOS app guide](macos-usage) for source setup, controls and provider reporting limits.*
+
 ## How it works
 
 ```text
@@ -91,7 +106,7 @@ Run `aims` with no arguments for a [dashboard](dashboard) that does all of this 
   ...
 ```
 
-When you start `aims claude@work`, aims sets `CLAUDE_CONFIG_DIR` to the work folder, repairs any link the tool replaced since the last run, and starts the real `claude`. Codex works the same way with `CODEX_HOME`. aims is not a proxy: it never sees your prompts or traffic, and the tools talk to their providers exactly as they do without it.
+When you start `aims claude@work`, aims sets `CLAUDE_CONFIG_DIR` to the work folder, reconciles configured sharing and starts the real `claude`. Codex works the same way with `CODEX_HOME`. The official tools handle model requests; aims supplies launch environment and session routing.
 
 The details are in [How it works](how-it-works).
 
@@ -99,7 +114,7 @@ The details are in [How it works](how-it-works).
 
 | Tool | Login kept in | Notes |
 | --- | --- | --- |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Plan usage comes from its status line |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Native status line, plus read-only OAuth quota refresh with the existing profile login |
 | [Codex CLI](https://github.com/openai/codex) | `auth.json`, or the OS keyring | Plan usage comes from its account API |
 
 `aims usage` also shows the limits of Antigravity, Grok, Kiro and OpenCode, read through each tool's own CLI; aims does not run sessions on them yet.
@@ -108,13 +123,14 @@ Other CLIs can be added: each tool is one adapter behind a small interface. See 
 
 ## Fair use
 
-aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs only your own accounts, on your own machine. It starts sessions with the official Claude Code and Codex CLIs, and reads the limits of Antigravity, Grok, Kiro and OpenCode through each tool's own CLI and login (for Kiro, the same usage request `kiro-cli` makes). It is not a service: no one else's account passes through it, and it never shares, pools or resells access. It doesn't disguise itself or send the providers anything their own CLIs wouldn't. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
+aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs your own accounts on your own machine. Sessions use the official Claude Code and Codex CLIs; quota readers use native CLIs and first-party usage APIs with each provider's existing login. It does not share, pool or resell access. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
 
 ## Where next
 
 {{< cards >}}
   {{< card link="installation" title="Installation" icon="download" >}}
   {{< card link="quick-start" title="Quick start" icon="play" >}}
+  {{< card link="macos-usage" title="macOS menu bar and Edge Dock" icon="desktop-computer" >}}
   {{< card link="failover" title="Limits and failover" icon="switch-horizontal" >}}
   {{< card link="commands" title="Commands" icon="terminal" >}}
 {{< /cards >}}

@@ -103,6 +103,7 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 		homeVar := a.Layout().HomeEnv
 		if reset {
 			lines = append(lines, unset(sh, config.PinVar(id)))
+			lines = append(lines, unset(sh, config.GenerationVar(id)))
 			for _, v := range []string{a.Layout().StateEnv, a.Layout().MemoryEnv} {
 				if v != "" {
 					lines = append(lines, unset(sh, v))
@@ -117,7 +118,11 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 		}
 		name := profile
 		if name == "" {
-			name, _ = cfg.Preferred(id, "")
+			var err error
+			name, err = cfg.Preferred(id, "")
+			if err != nil {
+				return "", err
+			}
 		}
 		if name == "" || cfg.Tools[id].Profiles[name] == nil {
 			if len(ids) == 1 {
@@ -125,7 +130,11 @@ func EnvLines(sh Shell, cfg *config.Config, ids []tool.ID, profile string, reset
 			}
 			continue
 		}
+		if cfg.Tools[id].Profiles[name].Purge != nil {
+			return "", fmt.Errorf("%s/%s has a pending purge; finish its removal before exporting its environment", id, name)
+		}
 		lines = append(lines, set(sh, config.PinVar(id), name))
+		lines = append(lines, set(sh, config.GenerationVar(id), cfg.Tools[id].Profiles[name].Generation))
 		if v := cfg.HomeEnv(id, name); v != "" {
 			lines = append(lines, set(sh, homeVar, v))
 		} else {

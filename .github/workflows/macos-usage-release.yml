@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   prepare:
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       AIMS_USAGE_VERSION: ${{ inputs.version }}
@@ -34,7 +34,7 @@ jobs:
       AIMS_CLI_VERSION: ${{ inputs.cli_version }}
       AIMS_USAGE_FEED_URL: ${{ vars.AIMS_USAGE_FEED_URL }}
       AIMS_USAGE_PUBLIC_ED_KEY: ${{ vars.AIMS_USAGE_PUBLIC_ED_KEY }}
-      AIMS_USAGE_SIGNING_IDENTITY: ${{ vars.AIMS_USAGE_SIGNING_IDENTITY }}
+      AIMS_USAGE_SIGNING_IDENTITY: ${{ vars.AIMS_USAGE_SIGNING_IDENTITY || secrets.MACOS_SIGN_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,16 +44,27 @@ jobs:
           go-version-file: go.mod
       - name: Check release configuration
         env:
-          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD }}
-          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY }}
+          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 || secrets.MACOS_CERT_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD || secrets.MACOS_CERT_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
           NOTARY_KEY: ${{ secrets.AIMS_NOTARY_KEY }}
           NOTARY_KEY_ID: ${{ secrets.AIMS_NOTARY_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.AIMS_NOTARY_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in AIMS_USAGE_FEED_URL AIMS_USAGE_PUBLIC_ED_KEY AIMS_USAGE_SIGNING_IDENTITY CERTIFICATE CERTIFICATE_PASSWORD SPARKLE_KEY NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER; do
+          for name in AIMS_USAGE_FEED_URL AIMS_USAGE_PUBLIC_ED_KEY AIMS_USAGE_SIGNING_IDENTITY CERTIFICATE CERTIFICATE_PASSWORD SPARKLE_KEY; do
             [[ -n "${!name}" ]] || { echo "Missing release configuration: $name" >&2; exit 1; }
+          done
+          if [[ -n "$NOTARY_KEY$NOTARY_KEY_ID$NOTARY_ISSUER" ]]; then
+            auth=(NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER)
+          else
+            auth=(APPLE_ID APPLE_TEAM_ID NOTARY_PASSWORD)
+          fi
+          for name in "${auth[@]}"; do
+            [[ -n "${!name}" ]] || { echo "Missing notarization configuration: $name" >&2; exit 1; }
           done
           python3 -B scripts/configure-macos-updates.py --validate
           python3 -B scripts/test-macos-updates.py
@@ -61,9 +72,9 @@ jobs:
         run: swift test --package-path macos/AimsUsage
       - name: Import ephemeral signing material
         env:
-          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD }}
-          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY }}
+          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 || secrets.MACOS_CERT_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD || secrets.MACOS_CERT_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
           NOTARY_KEY: ${{ secrets.AIMS_NOTARY_KEY }}
         run: |
           set -euo pipefail
@@ -73,7 +84,9 @@ jobs:
           echo "::add-mask::$password"
           printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.p12"
           printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle-key"
-          printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          if [[ -n "$NOTARY_KEY" ]]; then
+            printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          fi
           security list-keychains -d user > "$RUNNER_TEMP/previous-keychains.txt"
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 3600 "$keychain"
@@ -92,9 +105,14 @@ jobs:
         env:
           AIMS_NOTARY_KEY_ID: ${{ secrets.AIMS_NOTARY_KEY_ID }}
           AIMS_NOTARY_ISSUER: ${{ secrets.AIMS_NOTARY_ISSUER }}
+          AIMS_NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          AIMS_NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AIMS_NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
           set -euo pipefail
-          export AIMS_NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8"
+          if [[ -f "$RUNNER_TEMP/notary.p8" ]]; then
+            export AIMS_NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8"
+          fi
           export AIMS_SPARKLE_PRIVATE_KEY_FILE="$RUNNER_TEMP/sparkle-key"
           export AIMS_SPARKLE_TOOLS="$RUNNER_TEMP/sparkle/bin"
           export AIMS_USAGE_DOWNLOAD_URL_PREFIX="https://github.com/$GITHUB_REPOSITORY/releases/download/usage-v$AIMS_USAGE_VERSION-$AIMS_USAGE_BUILD_NUMBER"

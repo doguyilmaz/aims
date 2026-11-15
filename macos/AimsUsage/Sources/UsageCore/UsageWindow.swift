@@ -10,4 +10,5 @@ public struct UsageWindow: Decodable, Sendable {
 
     public var validPercent: Double? { pctUnknown != true && pct.isFinite && pct >= 0 ? pct : nil }
     public func needsRefresh(at now: Date) -> Bool { resetsAt.map { $0 <= now } ?? false }
+    public func periodPercent(at now: Date) -> Double? { needsRefresh(at: now) ? nil : validPercent }
 }

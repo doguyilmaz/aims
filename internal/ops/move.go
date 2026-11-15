@@ -50,9 +50,9 @@ func Move(ctx context.Context, to string) (MoveResult, error) {
 	res := MoveResult{Tool: id, From: from, To: to}
 	apart := profiles.Apart(cfg, id, from)
 	if to == "" {
-		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, "", append(apart, from))
+		pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, "", append(apart, from))
 		if pick.Name == "" && profiles.AskFree(ctx, cfg, a, others(cfg, id, append(apart, from))) {
-			pick = profiles.Choose(ctx, cfg, config.LoadState(), a, "", append(apart, from))
+			pick = profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, "", append(apart, from))
 		}
 		if pick.Name == "" {
 			var why []string
@@ -69,9 +69,9 @@ func Move(ctx context.Context, to string) (MoveResult, error) {
 	case slices.Contains(apart, res.To):
 		return res, fmt.Errorf("%s and %s do not fully share history; check sharing settings and run `aims doctor` before moving this conversation", from, res.To)
 	}
-	ev := profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To)
+	ev := profiles.Evaluate(ctx, cfg, config.LoadStateFor(cfg), a, res.To)
 	if !ev.Usable && res.To != from && profiles.AskFree(ctx, cfg, a, []string{res.To}) {
-		ev = profiles.Evaluate(ctx, cfg, config.LoadState(), a, res.To)
+		ev = profiles.Evaluate(ctx, cfg, config.LoadStateFor(cfg), a, res.To)
 	}
 	if !ev.Usable && res.To != from {
 		return res, fmt.Errorf("%s cannot be used now: %s", res.To, strings.Join(ev.Reasons, ", "))

@@ -7,6 +7,7 @@ struct EdgeDockView: View {
     let hoverProvider: @MainActor (String) -> Void
     let selectProvider: @MainActor (String) -> Void
     let openOverview: @MainActor () -> Void
+    let showOptions: @MainActor (String?, CGPoint?) -> Void
     @Environment(\.colorScheme) private var scheme
     private var size: EdgeDockSize { model.edgeDockSize }
 
@@ -18,27 +19,41 @@ struct EdgeDockView: View {
                         ForEach(providers) { provider in
                             TimelineView(.periodic(from: .now, by: 60)) { context in
                                 let summary = DockSummary(
-                                    provider: provider, now: context.date, globalError: model.error)
+                                    provider: provider, now: context.date, globalError: model.error,
+                                    focus: model.dockFocus(for: provider.id), valueMode: model.edgeDockValueMode,
+                                    account: model.dockAccount(for: provider.id))
                                 Button {
                                     selectProvider(provider.id)
                                 } label: {
                                     VStack(spacing: size == .mini ? 2 : 4) {
                                         ZStack {
                                             Circle().stroke(ProviderStyle.tint(provider.id).opacity(0.14), lineWidth: 3)
-                                            if let percent = summary.percent {
+                                            if let percent = summary.displayPercent {
                                                 Circle().trim(from: 0, to: min(1, percent / 100))
                                                     .stroke(
                                                         ProviderStyle.tint(provider.id),
                                                         style: StrokeStyle(lineWidth: 3, lineCap: .round)
                                                     )
                                                     .rotationEffect(.degrees(-90))
+                                                    .opacity(summary.isCached ? 0.5 : 1)
                                             }
                                             ProviderMark(id: provider.id, size: size.iconSize)
                                         }.frame(width: size.ringSize, height: size.ringSize)
+                                            .overlay(alignment: .bottomTrailing) {
+                                                if summary.isCached {
+                                                    Image(systemName: "clock.fill")
+                                                        .font(.system(size: size == .mini ? 8 : 10))
+                                                        .foregroundStyle(.orange).padding(1)
+                                                        .background(.background, in: Circle())
+                                                }
+                                            }
                                         Text(size == .mini && summary.blocked ? "!" : summary.value)
                                             .font(.system(size: size.labelSize, weight: .semibold))
                                             .monospacedDigit()
-                                            .foregroundStyle(summary.blocked ? .orange : .primary).lineLimit(1)
+                                            .foregroundStyle(
+                                                summary.blocked
+                                                    ? Color.orange : summary.isCached ? .secondary : .primary
+                                            ).lineLimit(1)
                                     }
                                     .frame(width: size.width - 10, height: size.rowStride - 4)
                                     .background(
@@ -50,9 +65,16 @@ struct EdgeDockView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .onHover { if $0 { hoverProvider(provider.id) } }
-                                .accessibilityLabel("\(ProviderStyle.title(provider)) usage, \(summary.value)")
+                                .overlay {
+                                    DockContextMenu { showOptions(provider.id, $0) }
+                                        .accessibilityHidden(true)
+                                }
+                                .accessibilityAction(named: Text("Dock options")) { showOptions(provider.id, nil) }
+                                .accessibilityLabel(
+                                    "\(ProviderStyle.title(provider)) usage, \(summary.value), \(summary.explanation)"
+                                )
                                 .help(
-                                    "\(ProviderStyle.title(provider)) · \(summary.value) · hover for all accounts, click to pin"
+                                    "\(ProviderStyle.title(provider)) · \(summary.value) \(model.edgeDockValueMode.title.lowercased()) · \(summary.explanation) · right-click to customize"
                                 )
                             }
                         }
@@ -79,20 +101,24 @@ struct EdgeDockView: View {
             } else {
                 ProgressView().controlSize(.small).frame(height: 50)
             }
-            HStack(spacing: size == .mini ? 0 : 12) {
-                Button(action: openOverview) {
-                    Image(systemName: model.error == nil ? "square.grid.2x2" : "exclamationmark.triangle")
-                        .foregroundStyle(model.error == nil ? Color.secondary : Color.orange).frame(
-                            width: size == .mini ? 22 : 20, height: 20)
+            HStack(spacing: size == .mini ? 0 : 8) {
+                UsageIconButton(
+                    title: "Open overview", icon: model.error == nil ? .overview : .warning,
+                    tint: model.error == nil ? nil : .orange, width: size == .mini ? 20 : 24, height: 20,
+                    action: openOverview
+                )
+                .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
+                .overlay { DockContextMenu { showOptions(nil, $0) }.accessibilityHidden(true) }
+                .accessibilityAction(named: Text("Dock options")) { showOptions(nil, nil) }
+                UsageIconButton(
+                    title: model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock",
+                    icon: model.edgeDockPinned ? .pinned : .pin, selected: model.edgeDockPinned,
+                    width: size == .mini ? 20 : 24, height: 20
+                ) {
+                    model.edgeDockPinned.toggle()
                 }
-                .help(model.error ?? "Open overview").accessibilityLabel("Open overview")
-                Button {
-                    model.edgeDockEnabled = false
-                } label: {
-                    Image(systemName: "xmark").frame(width: size == .mini ? 22 : 20, height: 20)
-                }
-                .help("Hide Edge Dock").accessibilityLabel("Hide Edge Dock")
-            }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).frame(height: 20)
+                .accessibilityValue(model.edgeDockPinned ? "Pinned" : "Unpinned")
+            }.frame(height: 20)
         }
         .padding(.vertical, size.contentInset).frame(width: size.width)
         .frame(maxHeight: .infinity)

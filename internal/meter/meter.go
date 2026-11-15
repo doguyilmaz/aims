@@ -183,10 +183,10 @@ func run(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, errors.New("no answer in time")
 	}
-	if len(out) > 0 {
-		return out, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	return out, nil
 }
 
 func firstLine(b []byte) string {

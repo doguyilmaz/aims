@@ -157,6 +157,23 @@ func readKeychain(ctx context.Context, envValue string) (found bool, o *oauth) {
 	return true, nil
 }
 
+// readOAuth uses the exact native profile selector. Never fall back from an
+// unreadable custom-profile Keychain entry to another profile's credentials.
+func readOAuth(ctx context.Context, h tool.Home) (present bool, o *oauth) {
+	if runtime.GOOS == "darwin" && !testing.Testing() {
+		present, o = readKeychain(ctx, h.EnvValue)
+	}
+	if !present {
+		var f struct {
+			ClaudeAiOauth *oauth `json:"claudeAiOauth"`
+		}
+		if fsx.ReadJSONLenient(filepath.Join(h.Dir, ".credentials.json"), &f) {
+			present, o = true, f.ClaudeAiOauth
+		}
+	}
+	return present, o
+}
+
 func (*Adapter) Account(ctx context.Context, h tool.Home) tool.Account {
 	var cj struct {
 		OAuthAccount struct {
@@ -174,20 +191,8 @@ func (*Adapter) Account(ctx context.Context, h tool.Home) tool.Account {
 			return acct
 		}
 	}
-	var o *oauth
-	present := false
 	// Test binaries never read the keychain of the person running them.
-	if runtime.GOOS == "darwin" && !testing.Testing() {
-		present, o = readKeychain(ctx, h.EnvValue)
-	}
-	if !present {
-		var f struct {
-			ClaudeAiOauth *oauth `json:"claudeAiOauth"`
-		}
-		if fsx.ReadJSONLenient(filepath.Join(h.Dir, ".credentials.json"), &f) {
-			present, o = true, f.ClaudeAiOauth
-		}
-	}
+	present, o := readOAuth(ctx, h)
 	acct.LoggedIn = tool.Known(present)
 	if present {
 		acct.Method = "claude.ai"
@@ -219,9 +224,10 @@ func planKind(s string) string {
 	return ""
 }
 
-// Probe sends a one-word prompt to the smallest model. Claude Code has no
-// account API that works without refreshing the login, so this costs a few
-// tokens; it runs only when asked for (aims status --live, aims keepalive).
+// Probe verifies model access with a one-word prompt to the smallest model.
+// Unlike the passive quota reader, this can renew credentials through native
+// Claude Code and costs a few tokens; it runs only when explicitly requested
+// (aims status --live, aims keepalive).
 // It starts no MCP server, runs no hook and offers no tool, which keeps it
 // cheap, quick and free of side effects.
 func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {

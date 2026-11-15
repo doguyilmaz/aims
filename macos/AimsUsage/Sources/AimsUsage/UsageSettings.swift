@@ -20,7 +20,7 @@ struct UsageSettings: View {
                         "Use compact overlay indicators. Turn off to follow macOS scrollbar appearance and visibility.")
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
                 Text(
-                    "Claude uses its cached native status line. Automatic refresh never sends a model prompt, buys credits or redeems resets."
+                    "Automatic refresh reads provider quotas without a model prompt. Claude Code owns renewal of its login. No credits are bought or resets redeemed."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -32,6 +32,19 @@ struct UsageSettings: View {
                 Picker("Dock size", selection: $model.edgeDockSize) {
                     ForEach(EdgeDockSize.allCases) { Text($0.title).tag($0) }
                 }
+                Picker("Percentages", selection: $model.edgeDockValueMode) {
+                    ForEach(DockValueMode.allCases) { Text($0.title).tag($0) }
+                }
+                if let providers = model.snapshot?.displayProviders {
+                    ForEach(providers) { provider in
+                        DockFocusPicker(
+                            model: model, provider: provider, title: ProviderStyle.title(provider) + " window")
+                    }
+                }
+                Text(
+                    "Automatic uses the selected Dock accounts. Choose an account in hover details or Dock options. Details keep all accounts and windows in % used."
+                )
+                .font(.caption).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Vertical position")
@@ -48,10 +61,13 @@ struct UsageSettings: View {
                     }
                 }
                 Toggle("Automatically hide", isOn: $model.edgeDockAutoHide)
+                Toggle("Pin Edge Dock", isOn: $model.edgeDockPinned)
                 Text(
-                    model.edgeDockAutoHide
-                        ? "Hover over the edge marker to reveal the Dock. Pinned details keep it open."
-                        : "The Dock stays visible. Provider details open toward the screen interior."
+                    model.edgeDockPinned
+                        ? "Pinned: the Dock stays visible. Use its pin button to resume automatic hiding."
+                        : model.edgeDockAutoHide
+                            ? "Hover over the edge marker to reveal the Dock. Pinned details keep it open."
+                            : "The Dock stays visible. Provider details open toward the screen interior."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

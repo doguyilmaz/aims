@@ -109,7 +109,7 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 
 | Tool | Source | Cost |
 | --- | --- | --- |
-| Claude Code | The status line: Claude Code passes the current account's usage to it while you work. | none |
+| Claude Code | The status line while you work; `aims usage --refresh` also reads the profile's existing OAuth usage access without renewing its login. | none |
 | Claude Code | `aims usage --live`: a one-word prompt to the smallest model, to verify the login | a few tokens |
 | Codex | `aims usage --live`: Codex's local app server reports the account and its rate limits | none |
 

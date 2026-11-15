@@ -43,6 +43,9 @@ struct CompactProviderCard: View {
                                     || provider.error != nil
                                 {
                                     Text("Cached")
+                                        .help(
+                                            row.error ?? provider.error
+                                                ?? "Last known reading; refresh for current usage")
                                 } else if let plan = ProviderStyle.planLabel(row.plan) {
                                     Text(plan)
                                 }

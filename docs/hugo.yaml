@@ -20,6 +20,9 @@ markup:
 
 menu:
   main:
+    - name: macOS app
+      weight: 1
+      pageRef: macos-usage
     - name: Search
       weight: 2
       params:
@@ -36,7 +39,7 @@ menu:
         icon: npm
 
 params:
-  description: "Several Claude Code and Codex accounts on one machine: switch instantly, share history and settings, and fail over when an account hits its limit."
+  description: "Manage Claude Code and Codex accounts and sessions, and monitor AI usage limits, resets and budgets in your terminal or the Aims Usage macOS menu bar and Edge Dock."
   images: ["images/og.png"]
   navbar:
     displayTitle: true

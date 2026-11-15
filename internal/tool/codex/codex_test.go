@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,17 @@ import (
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
-func TestMain(m *testing.M) { testutil.Main(m) }
+func TestMain(m *testing.M) {
+	if path := os.Getenv("AIMS_TEST_CODEX_CONTEXT_WORKER"); path != "" {
+		if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+			os.Exit(3)
+		}
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+	testutil.Main(m)
+}
 
 func TestSharedWriterLocks(t *testing.T) {
 	hub, profile := t.TempDir(), t.TempDir()

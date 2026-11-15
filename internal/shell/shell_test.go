@@ -103,6 +103,19 @@ func TestEnvLinesQuote(t *testing.T) {
 	}
 }
 
+func TestEnvCannotExportPendingPurge(t *testing.T) {
+	testutil.Sandbox(t)
+	c, _ := config.Load()
+	c.Tools["codex"].Profiles["work"] = &config.Profile{Purge: &config.PurgeState{}}
+	c.Tools["codex"].Order = []string{"work"}
+	c.Tools["codex"].Active = "work"
+	for _, sh := range []Shell{Bash, Zsh, Fish, PowerShell} {
+		if output, err := EnvLines(sh, c, []tool.ID{"codex"}, "work", false); err == nil || output != "" {
+			t.Errorf("%s exported a pending profile: %q %v", sh, output, err)
+		}
+	}
+}
+
 func TestInitQuotesPath(t *testing.T) {
 	out := Init(Bash, []string{"/opt/my apps/aims"})
 	if !strings.Contains(out, `claude() { '/opt/my apps/aims' claude "$@"; }`) {

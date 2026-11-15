@@ -14,13 +14,13 @@ struct UsageReadingDetails: View {
             presented.toggle()
         } label: {
             if labelStyle != .info, let balance = row.bankedResets {
-                Label(
-                    labelStyle == .banked ? "\(balance.available) banked" : "\(balance.available)",
-                    systemImage: "tray.full"
-                )
+                HStack(spacing: 3) {
+                    UsageControlSymbol(icon: .bankedReset, pointSize: 11)
+                    Text(labelStyle == .banked ? "\(balance.available) banked" : "\(balance.available)")
+                }
                 .font(.system(size: 11)).foregroundStyle(ProviderStyle.tint(provider.id)).fixedSize()
             } else {
-                Image(systemName: row.error != nil || provider.error != nil ? "exclamationmark.circle" : "info.circle")
+                UsageControlSymbol(icon: row.error != nil || provider.error != nil ? .warning : .info, pointSize: 11)
                     .foregroundStyle(row.error != nil || provider.error != nil ? .orange : .secondary)
                     .frame(width: 18, height: 18).contentShape(Rectangle())
             }

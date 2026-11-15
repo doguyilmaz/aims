@@ -4,10 +4,12 @@ package ops
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -42,6 +44,20 @@ type Added struct {
 
 // AddProfile creates a profile.
 func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
+	var out Added
+	err := profileOperation(func() error {
+		var err error
+		out, err = addProfile(a, name, o)
+		return err
+	})
+	return out, err
+}
+
+func profileOperation(fn func() error) error {
+	return fsx.WithLock(filepath.Join(config.Home(), "profile-operations"), fn)
+}
+
+func addProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 	if !config.ValidName(name) {
 		return Added{}, fmt.Errorf("%q is not a valid profile name (letters, digits, '.', '_' and '-'; up to 40)", name)
 	}
@@ -49,7 +65,7 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 		return Added{}, fmt.Errorf("an adopted login lives in the shared hub; create a separate profile for private sharing instead of combining --existing with --share or --exclude")
 	}
 	var out Added
-	cfg, err := config.Update(func(c *config.Config) error {
+	_, err := config.Update(func(c *config.Config) error {
 		id := a.ID()
 		c.EnsureHub(id)
 		t := c.Tools[id]
@@ -61,7 +77,7 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 		if o.Share != "" && !config.ValidShare(o.Share) {
 			return fmt.Errorf("share must be %s, %s or %s", config.ShareAll, config.ShareSettings, config.ShareNone)
 		}
-		p := &config.Profile{CreatedAt: config.Now().UTC().Format(time.RFC3339), Exclude: o.Exclude}
+		p := &config.Profile{Generation: rand.Text(), CreatedAt: config.Now().UTC().Format(time.RFC3339), Exclude: o.Exclude}
 		if o.Share != "" && o.Share != config.ShareAll {
 			p.Share = o.Share
 		}
@@ -69,7 +85,7 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 			if other := c.ExistingProfile(id); other != "" {
 				return fmt.Errorf("%q already uses the login in %s", other, fsx.Tildify(t.Hub))
 			}
-			p = &config.Profile{CreatedAt: p.CreatedAt, Existing: true}
+			p = &config.Profile{Generation: p.Generation, CreatedAt: p.CreatedAt, Existing: true}
 		} else if o.Dir != "" {
 			dir, err := checkCustomDir(c, a, fsx.Abs(o.Dir))
 			if err != nil {
@@ -83,24 +99,36 @@ func AddProfile(a tool.Adapter, name string, o AddOptions) (Added, error) {
 			t.Active = name
 		}
 		out.Active = t.Active == name
+		out.Dir = c.Dir(id, name)
+		// Never attribute a recreated label to the previous profile's cache.
+		if err := config.RemoveState(id, name); err != nil {
+			return err
+		}
+		if o.Existing {
+			return nil
+		}
+		if err := fsx.MkdirAllPrivate(out.Dir); err != nil {
+			return err
+		}
+		if s, ok := a.(tool.Seeder); ok && o.Share != config.ShareNone {
+			if err := s.Seed(profiles.HubHome(c, a), out.Dir); err != nil {
+				return err
+			}
+		}
+		out.Reports = profiles.Sync(c, a, name, false)
+		for _, report := range out.Reports {
+			if report.Action == links.Conflict {
+				return fmt.Errorf("profile setup incomplete at %s: %s: %s; files kept, fix the problem and retry adding the profile", fsx.Tildify(out.Dir), report.Name, report.Detail)
+			}
+		}
 		return nil
 	})
 	if err != nil {
-		return out, err
-	}
-	out.Dir = cfg.Dir(a.ID(), name)
-	if o.Existing {
-		return out, nil
-	}
-	if err := fsx.MkdirAllPrivate(out.Dir); err != nil {
-		return out, err
-	}
-	if s, ok := a.(tool.Seeder); ok && o.Share != config.ShareNone {
-		if err := s.Seed(profiles.HubHome(cfg, a), out.Dir); err != nil {
-			return out, err
+		if out.Dir != "" {
+			return out, fmt.Errorf("could not finish adding profile; folder kept at %s, fix the error and retry: %w", fsx.Tildify(out.Dir), err)
 		}
+		return out, err
 	}
-	out.Reports = profiles.Sync(cfg, a, name, false)
 	return out, nil
 }
 
@@ -172,6 +200,19 @@ type Removed struct {
 // directory, after moving anything shared that the tool wrote there into the
 // hub; it never deletes a directory aims did not create.
 func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, force bool) (Removed, error) {
+	var out Removed
+	err := profileOperation(func() error {
+		var err error
+		out, err = removeProfile(ctx, a, name, purge, force)
+		return err
+	})
+	return out, err
+}
+
+func removeProfile(ctx context.Context, a tool.Adapter, name string, purge, force bool) (Removed, error) {
+	if err := ctx.Err(); err != nil {
+		return Removed{}, err
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return Removed{}, err
@@ -181,6 +222,7 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 		return Removed{}, err
 	}
 	out := Removed{Dir: cfg.Dir(a.ID(), name)}
+	var journal *purgeJournal
 	purge = purge && !p.Existing
 	if purge {
 		if err := profiles.HomeConflict(cfg, a, name); err != nil {
@@ -194,7 +236,10 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 			return out, fmt.Errorf("%s is not a dedicated profile directory; remove only its label without --purge", fsx.Tildify(out.Dir))
 		}
 		if p.ShareMode() != config.ShareNone && fsx.Lstat(out.Dir) != nil {
+			pending := p.Purge
+			p.Purge = nil // explicit purge reconciliation, never a normal launch/doctor repair
 			out.Reports = profiles.Sync(cfg, a, name, true)
+			p.Purge = pending
 			var stuck []string
 			for _, r := range out.Reports {
 				if r.Action == links.Conflict {
@@ -205,20 +250,70 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 				return out, fmt.Errorf("not deleting %s: %s; resolve it or add --force", fsx.Tildify(out.Dir), strings.Join(stuck, "; "))
 			}
 		}
+		// Commit the removal intent before logout or deletion. A failed final
+		// config write then leaves an explicitly unavailable, resumable profile,
+		// never an active registration whose home silently disappeared.
+		if p.Purge == nil || (!p.Purge.LoggedOut && p.Purge.Journal == "") {
+			if err := ctx.Err(); err != nil {
+				return out, err
+			}
+			journal, err = openPurgeJournal(a.ID(), name, p)
+			if err != nil {
+				return out, err
+			}
+			defer journal.file.Close()
+			cfg, err = checkpointPurge(cfg, a, name, config.PurgeState{Journal: filepath.Base(journal.path)})
+			if err != nil {
+				journal.remove() // no logout occurred, so no recovery is needed
+				return out, err
+			}
+			p = cfg.Tools[a.ID()].Profiles[name]
+		}
 		// The login may outlive even a missing folder in the keychain/keyring.
 		// --force only overrides sharing conflicts, never an incomplete logout.
-		if out.LogoutErr = Logout(ctx, a, name); out.LogoutErr != nil {
-			return out, fmt.Errorf("profile kept because logout did not complete: %w", out.LogoutErr)
+		if !p.Purge.LoggedOut {
+			if journal == nil {
+				journal, err = openPurgeJournal(a.ID(), name, p)
+				if err != nil {
+					return out, fmt.Errorf("folder kept; cannot read logout recovery: %w", err)
+				}
+				defer journal.file.Close()
+			}
+			if !journal.completed {
+				if out.LogoutErr = nativeLogout(ctx, cfg, a, name); out.LogoutErr != nil {
+					return out, fmt.Errorf("profile kept because logout did not complete: %w", out.LogoutErr)
+				}
+				if err := journal.complete(); err != nil {
+					return out, fmt.Errorf("native logout completed but its recovery record could not be synced; folder kept: %w", err)
+				}
+			}
+			state := *p.Purge
+			state.LoggedOut = true
+			cfg, err = checkpointPurge(cfg, a, name, state)
+			if err != nil {
+				return out, fmt.Errorf("logout completed; folder kept because its checkpoint could not be saved: %w", err)
+			}
+			p = cfg.Tools[a.ID()].Profiles[name]
 		}
-		if err := links.RemoveLinks(out.Dir); err != nil {
-			return out, err
-		}
-		if err := os.RemoveAll(out.Dir); err != nil {
-			return out, err
-		}
-		out.Purged = true
 	}
 	if _, err := config.Update(func(c *config.Config) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := sameProfile(cfg, c, a.ID(), name); err != nil {
+			return err
+		}
+		if err := config.RemoveState(a.ID(), name); err != nil {
+			return err
+		}
+		if purge {
+			if err := links.RemoveLinks(out.Dir); err != nil {
+				return err
+			}
+			if err := os.RemoveAll(out.Dir); err != nil {
+				return err
+			}
+		}
 		t := c.Tools[a.ID()]
 		delete(t.Profiles, name)
 		t.Order = slices.DeleteFunc(t.Order, func(n string) bool { return n == name })
@@ -230,20 +325,78 @@ func RemoveProfile(ctx context.Context, a tool.Adapter, name string, purge, forc
 		}
 		return nil
 	}); err != nil {
+		if purge {
+			return out, fmt.Errorf("profile purge remains pending; retry aims rm %s %s --purge: %w", a.ID(), name, err)
+		}
 		return out, err
 	}
-	_ = config.RemoveState(a.ID(), name)
+	out.Purged = purge
+	if journal == nil && p.Purge != nil && p.Purge.Journal != "" {
+		journal, _ = openPurgeJournal(a.ID(), name, p)
+		if journal != nil {
+			defer journal.file.Close()
+		}
+	}
+	if journal != nil {
+		journal.remove()
+	}
 	return out, nil
+}
+
+func sameProfile(before, current *config.Config, id tool.ID, name string) error {
+	if !reflect.DeepEqual(before.Tools[id].Profiles[name], current.Tools[id].Profiles[name]) ||
+		before.Tools[id].Hub != current.Tools[id].Hub || before.Dir(id, name) != current.Dir(id, name) {
+		return fmt.Errorf("%s/%s changed while the operation was in progress; stopped cleanup, inspect aims doctor --check before retrying", id, name)
+	}
+	return nil
+}
+
+func checkpointPurge(before *config.Config, a tool.Adapter, name string, state config.PurgeState) (*config.Config, error) {
+	return config.Update(func(c *config.Config) error {
+		if err := sameProfile(before, c, a.ID(), name); err != nil {
+			return err
+		}
+		c.Tools[a.ID()].Profiles[name].Purge = &state
+		return nil
+	})
 }
 
 // Logout runs the tool's own logout for a profile, quietly. Purging a
 // profile does this first: on macOS and with a keyring the login lives
 // outside the folder and would otherwise outlive it.
 func Logout(ctx context.Context, a tool.Adapter, name string) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
+	return profileOperation(func() error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		if p, err := cfg.Profile(a.ID(), name); err != nil {
+			return err
+		} else if p.Purge != nil {
+			return fmt.Errorf("profile purge is pending; retry aims rm --purge")
+		}
+		if err := nativeLogout(ctx, cfg, a, name); err != nil {
+			return err
+		}
+		before := cfg
+		cfg, err = config.Update(func(c *config.Config) error {
+			if err := sameProfile(before, c, a.ID(), name); err != nil {
+				return err
+			}
+			c.Tools[a.ID()].Profiles[name].Generation = rand.Text()
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("native logout completed; observation identity could not be changed: %w", err)
+		}
+		if err := config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil }); err != nil {
+			return fmt.Errorf("native logout completed; cached account could not be cleared: %w", err)
+		}
+		return nil
+	})
+}
+
+func nativeLogout(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) error {
 	if err := profiles.HomeConflict(cfg, a, name); err != nil {
 		return err
 	}
@@ -261,7 +414,7 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 	if code != 0 {
 		return &tool.CommandError{Output: out, Code: code}
 	}
-	return config.UpdateState(a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil })
+	return nil
 }
 
 // Use makes name the profile new sessions of a use in project key, or in
@@ -280,6 +433,9 @@ func Use(a tool.Adapter, name, key string) ([]tool.Adapter, error) {
 					return fmt.Errorf("no %s profile %q (see: aims status)", t.ID(), name)
 				}
 				continue
+			}
+			if c.Tools[t.ID()].Profiles[name].Purge != nil {
+				return fmt.Errorf("%s/%s has a pending purge; finish its removal before selecting it", t.ID(), name)
 			}
 			c.Tools[t.ID()].Arrange([]string{name}, key)
 			changed = append(changed, t)
@@ -302,6 +458,9 @@ func SetOrder(a tool.Adapter, names []string, key string) ([]string, error) {
 		for _, n := range names {
 			if t.Profiles[n] == nil {
 				return fmt.Errorf("no %s profile %q", a.ID(), n)
+			}
+			if t.Profiles[n].Purge != nil {
+				return fmt.Errorf("%s/%s has a pending purge; finish its removal before arranging it", a.ID(), n)
 			}
 		}
 		t.Arrange(names, key)
@@ -373,7 +532,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 	t := cfg.Tools[id]
 	res := FailoverResult{From: from, Pinned: config.Pinned(id)}
 	if res.From == "" {
-		res.From = LastUsed(cfg, config.LoadState(), id)
+		res.From = LastUsed(cfg, config.LoadStateFor(cfg), id)
 		res.FromLastUsed = res.From != ""
 	}
 	if res.From == "" {
@@ -382,9 +541,15 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 	if res.From == "" || t.Profiles[res.From] == nil {
 		return res, fmt.Errorf("no %s profile to fail over from", id)
 	}
+	if t.Profiles[res.From].Purge != nil {
+		return res, fmt.Errorf("%s/%s has a pending purge", id, res.From)
+	}
 	if to != "" {
 		if t.Profiles[to] == nil {
 			return res, fmt.Errorf("no %s profile %q", id, to)
+		}
+		if t.Profiles[to].Purge != nil {
+			return res, fmt.Errorf("%s/%s has a pending purge; cannot fail over to it", id, to)
 		}
 		if to == res.From {
 			return res, fmt.Errorf("%s is the profile being marked; --to names the one to use instead", to)
@@ -394,7 +559,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		// The profile the next session gets: the preferred one, unless it is
 		// the one being marked or unusable itself.
 		preferred, _ := cfg.Preferred(id, "")
-		pick := profiles.Choose(ctx, cfg, config.LoadState(), a, preferred, []string{res.From})
+		pick := profiles.Choose(ctx, cfg, config.LoadStateFor(cfg), a, preferred, []string{res.From})
 		if pick.Name == "" {
 			var why []string
 			for _, s := range pick.Skipped {
@@ -416,7 +581,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 		}
 	case "login":
 		// A dead login does not recover on its own; `aims login` clears this.
-		if err := profiles.MarkNeedsLogin(id, res.From, by, ""); err != nil {
+		if err := profiles.MarkNeedsLogin(id, res.From, by, "", cfg); err != nil {
 			return res, err
 		}
 		res.Login = true
@@ -428,7 +593,7 @@ func Failover(ctx context.Context, a tool.Adapter, from, to string, d time.Durat
 			return res, err
 		}
 	}
-	res.Until = config.LoadState().Get(id, res.From).Until
+	res.Until = config.LoadStateFor(cfg).Get(id, res.From).Until
 	return res, nil
 }
 
@@ -446,7 +611,7 @@ func ClearMarks(a tool.Adapter, name string) ([]string, error) {
 		names = []string{name}
 	}
 	for _, n := range names {
-		if err := profiles.Clear(a.ID(), n); err != nil {
+		if err := profiles.Clear(a.ID(), n, cfg); err != nil {
 			return nil, err
 		}
 	}

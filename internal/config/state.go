@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
@@ -27,6 +28,7 @@ type Account struct {
 
 // ProfileState is what aims learned about one profile.
 type ProfileState struct {
+	Generation string `json:"generation,omitempty"`
 	// Until is when a limited profile becomes usable again.
 	Until  time.Time `json:"until,omitzero"`
 	Reason string    `json:"reason,omitempty"`
@@ -56,6 +58,49 @@ func LoadState() State {
 	return s
 }
 
+// LoadStateFor ignores observations from a previous registration of the label.
+// Older writers that do not retain generation metadata cannot relabel a new
+// profile with their old account, usage or routing marks.
+func LoadStateFor(cfg *Config) State {
+	s := LoadState()
+	if cfg == nil {
+		return State{}
+	}
+	for id, profiles := range s {
+		for name, state := range profiles {
+			var p *Profile
+			if t := cfg.Tools[id]; t != nil {
+				p = t.Profiles[name]
+			}
+			if p == nil || p.Purge != nil || state == nil || state.Generation != p.Generation {
+				delete(profiles, name)
+			}
+		}
+	}
+	return s
+}
+
+var ErrProfileChanged = errors.New("profile registration changed or removal is pending; ignored stale result")
+
+// UpdateStateFor commits a result only to the registration that requested it.
+// Lock ordering is config then state, as for profile creation/removal.
+func UpdateStateFor(before *Config, id tool.ID, name string, fn func(*ProfileState)) error {
+	return fsx.WithLock(configPath(), func() error {
+		current, err := load()
+		if err != nil {
+			return err
+		}
+		if before == nil || before.Tools[id] == nil || current.Tools[id] == nil {
+			return ErrProfileChanged
+		}
+		want, now := before.Tools[id].Profiles[name], current.Tools[id].Profiles[name]
+		if want == nil || now == nil || want.Purge != nil || now.Purge != nil || want.Generation != now.Generation || want.CreatedAt != now.CreatedAt {
+			return ErrProfileChanged
+		}
+		return updateState(id, name, now.Generation, fn)
+	})
+}
+
 // Get returns a profile's state, never nil.
 func (s State) Get(id tool.ID, name string) *ProfileState {
 	if ps := s[id][name]; ps != nil {
@@ -66,6 +111,20 @@ func (s State) Get(id tool.ID, name string) *ProfileState {
 
 // UpdateState applies fn to one profile's state under the state lock.
 func UpdateState(id tool.ID, name string, fn func(*ProfileState)) error {
+	cfg, err := load()
+	if err != nil {
+		return err
+	}
+	generation := ""
+	if t := cfg.Tools[id]; t != nil {
+		if p := t.Profiles[name]; p != nil {
+			generation = p.Generation
+		}
+	}
+	return updateState(id, name, generation, fn)
+}
+
+func updateState(id tool.ID, name, generation string, fn func(*ProfileState)) error {
 	if err := ensureHome(); err != nil {
 		return err
 	}
@@ -75,8 +134,8 @@ func UpdateState(id tool.ID, name string, fn func(*ProfileState)) error {
 			s[id] = map[string]*ProfileState{}
 		}
 		ps := s[id][name]
-		if ps == nil {
-			ps = &ProfileState{}
+		if ps == nil || ps.Generation != generation {
+			ps = &ProfileState{Generation: generation}
 			s[id][name] = ps
 		}
 		fn(ps)

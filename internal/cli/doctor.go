@@ -115,7 +115,7 @@ func newDoctorCmd(version string) *cobra.Command {
 					fix1("aims init")
 					continue
 				}
-				evaluations := profiles.EvaluateAll(cmd.Context(), cfg, config.LoadState(), a)
+				evaluations := profiles.EvaluateAll(cmd.Context(), cfg, config.LoadStateFor(cfg), a)
 				for _, ev := range evaluations {
 					name := ev.Name
 					label := string(id) + "/" + name

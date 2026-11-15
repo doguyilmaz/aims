@@ -37,6 +37,9 @@ func HomeConflict(cfg *config.Config, a tool.Adapter, name string) error {
 // A skipped or failed repair must never silently start new private work through
 // an old shared link. This check is read-only, including for bridge exports.
 func RequireIsolation(cfg *config.Config, a tool.Adapter, name string) error {
+	if p := cfg.Tools[a.ID()].Profiles[name]; p != nil && p.Purge != nil {
+		return fmt.Errorf("%s/%s has a pending purge; retry aims rm %s %s --purge, or remove its label without --purge to keep its files", a.ID(), name, a.ID(), name)
+	}
 	if err := HomeConflict(cfg, a, name); err != nil {
 		return err
 	}

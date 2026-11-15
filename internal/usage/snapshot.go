@@ -49,7 +49,7 @@ func Load(filter string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	state := config.LoadState()
+	state := config.LoadStateFor(cfg)
 	s := Snapshot{SchemaVersion: 1, GeneratedAt: config.Now().UTC(), Providers: []Provider{}}
 	custom, err := readCustom()
 	if err != nil {

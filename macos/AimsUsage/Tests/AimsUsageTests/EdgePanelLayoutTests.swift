@@ -8,7 +8,7 @@ import Testing
         CGRect(x: -1920, y: -200, width: 1840, height: 1056),
         CGRect(x: 1512, y: 76, width: 1440, height: 800),
     ] {
-        for width in [400.0, 560.0] {
+        for width in UsageDisplayStyle.allCases.map(\.preferredWidth) {
             let frame = EdgePanelLayout.frame(in: screen, width: width, height: 600)
             #expect(frame.maxX == screen.maxX - 76)
             #expect(frame.maxY == screen.maxY - 12)

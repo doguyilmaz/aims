@@ -17,13 +17,12 @@ struct ReminderListView: View {
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
-                        Button {
+                        UsageIconButton(
+                            title: "Remove reminder \(reminder.label)", icon: .trash, tint: .red, role: .destructive
+                        ) {
                             Task { await model.removeReminder(id: reminder.id) }
-                        } label: {
-                            Image(systemName: "trash")
                         }
-                        .buttonStyle(.borderless).disabled(model.isRefreshing || model.fixtureURL != nil)
-                        .accessibilityLabel("Remove reminder \(reminder.label)")
+                        .disabled(model.isRefreshing || model.fixtureURL != nil)
                     }
                 }
                 Text("Personal reminders do not change provider quota.").font(.system(size: 11)).foregroundStyle(
