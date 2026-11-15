@@ -410,7 +410,8 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 				s.Account, s.AccountRevision = &corrected, rand.Text()
 				s.Usage, s.UsageError, s.UsageAttemptedAt = nil, "", time.Time{}
 			})
-			_ = config.RemoveUsageObservation(a.ID(), name)
+			// The revision invalidates old observations. Do not delete by label:
+			// this evaluation may outlive removal/recreation of that label.
 		}
 	}
 	ev := Evaluation{Name: name, Account: acct, State: ps}
@@ -435,8 +436,8 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
-			if w.Percent >= cfg.Failover.Threshold && (w.ResetsAt.IsZero() || w.ResetsAt.After(now)) {
-				r := fmt.Sprintf("%s at %.0f%%", w.Label, w.Percent)
+			if windowLimited(cfg, w) && (w.ResetsAt.IsZero() || w.ResetsAt.After(now)) {
+				r := windowLimitText(w)
 				if w.ResetsAt.IsZero() {
 					open = true
 				} else {
@@ -488,14 +489,26 @@ func identity(acct tool.Account, ps *config.ProfileState) config.Account {
 // sameAccount says what limits a profile, as far as it counts for another
 // login of the same account: the plan's limits, which the account shares,
 // and not a short rate limit or a dead login, which are the login's own.
+// An explicit provider limit remains authoritative when its percentage is absent.
+func windowLimited(cfg *config.Config, w tool.Window) bool {
+	return w.Limited || !w.PercentUnknown && w.Percent >= cfg.Failover.Threshold
+}
+
+func windowLimitText(w tool.Window) string {
+	if w.PercentUnknown {
+		return w.Label + " limit"
+	}
+	return fmt.Sprintf("%s at %.0f%%", w.Label, w.Percent)
+}
+
 func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (reason string, until time.Time) {
 	if ps.Until.After(now) && ps.Reason != "busy" {
 		reason, until = "limited for "+Duration(ps.Until.Sub(now)), ps.Until
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
-			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
-				reason, until = fmt.Sprintf("%s at %.0f%% for %s", w.Label, w.Percent, Duration(w.ResetsAt.Sub(now))), w.ResetsAt
+			if windowLimited(cfg, w) && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
+				reason, until = windowLimitText(w)+" for "+Duration(w.ResetsAt.Sub(now)), w.ResetsAt
 			}
 		}
 	}
@@ -591,7 +604,7 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 			}
 			if ps.Usage != nil {
 				for _, w := range ps.Usage.Windows {
-					if (l.Window == "" || w.Label == l.Window) && w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
+					if (l.Window == "" || w.Label == l.Window) && windowLimited(cfg, w) && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
 						until = w.ResetsAt
 					}
 				}
@@ -652,7 +665,7 @@ func LimitWindow(cfg *config.Config, detail string, windows []tool.Window) strin
 	now := config.Now()
 	found := ""
 	for _, w := range windows {
-		if w.Percent < cfg.Failover.Threshold || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
+		if !windowLimited(cfg, w) || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
 			continue
 		}
 		if !w.Short() {
@@ -895,7 +908,7 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 	case tool.ProbeLimit:
 		resets := tool.ResetTime(p.Detail, config.Now())
 		for _, w := range p.Windows {
-			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(resets) {
+			if windowLimited(cfg, w) && w.ResetsAt.After(resets) {
 				resets = w.ResetsAt
 			}
 		}

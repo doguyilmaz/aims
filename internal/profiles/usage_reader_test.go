@@ -159,3 +159,35 @@ func TestNativeProbeCanCorrectCachedIdentityBackToRawIdentity(t *testing.T) {
 		t.Fatalf("cached identity undid native reversion: %+v", ps)
 	}
 }
+
+type evaluatingRecreation struct {
+	tool.Adapter
+	replace func()
+}
+
+func (a evaluatingRecreation) Account(context.Context, tool.Home) tool.Account {
+	a.replace()
+	return tool.Account{Email: "different@example.test", Plan: "plus"}
+}
+func TestStaleEvaluationCannotDeleteNewRegistrationCache(t *testing.T) {
+	cfg, adapter := setup(t)
+	oldView := config.LoadStateFor(cfg)
+	a := evaluatingRecreation{adapter, func() {
+		current, err := config.Update(func(c *config.Config) error { c.Tools[adapter.ID()].Profiles["a"].Generation = "recreated"; return nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := config.UpdateUsageObservationFor(current, adapter.ID(), "a", func(s *config.ProfileState) {
+			s.Account = &config.Account{Email: "new@example.test"}
+			s.Usage = &config.Usage{At: now, Windows: []tool.Window{{Label: "7d", Percent: 2}}}
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	Evaluate(t.Context(), cfg, oldView, a, "a")
+	current, _ := config.Load()
+	ps := config.LoadStateFor(current).Get(adapter.ID(), "a")
+	if ps.Usage == nil || ps.Usage.Windows[0].Percent != 2 || ps.Account.Email != "new@example.test" {
+		t.Fatalf("stale evaluation removed current usage: %+v", ps)
+	}
+}

@@ -86,6 +86,9 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 	for _, note := range config.UsageObservationNotes(cfg) {
 		add("usage-cache", "info", note, "")
 	}
+	if cfg.Status.Chain != "" {
+		add("statusline/chain", "info", "legacy or explicit global statusline.chain is still set; review its intended homes before sharing personal/work commands", "aims config")
+	}
 	if desktop.Supported() {
 		r.Checks = append(r.Checks, appDoctorCheck())
 	}

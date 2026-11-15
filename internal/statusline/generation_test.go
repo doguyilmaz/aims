@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
 )
 
@@ -51,5 +52,57 @@ func TestStatuslineRejectsOldSessionAfterProfileRecreation(t *testing.T) {
 				t.Fatalf("stale session was accepted: %+v %q", cached, output.String())
 			}
 		})
+	}
+}
+
+func TestRunSelectsOnlyOriginatingHomeChain(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		c.EnsureHub("claude")
+		for _, n := range []string{"personal", "work"} {
+			c.Tools["claude"].Profiles[n] = &config.Profile{Share: config.ShareNone}
+			c.Tools["claude"].Order = append(c.Tools["claude"].Order, n)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"personal", "work"} {
+		testutil.Write(t, filepath.Join(cfg.Dir("claude", n), "placeholder"), "")
+	}
+	_, err = config.Update(func(c *config.Config) error {
+		c.Status.Chain = "echo GLOBAL"
+		c.Status.HomeChains = map[string]string{fsx.Real(c.Dir("claude", "personal")): "echo PERSONAL", fsx.Real(c.Dir("claude", "work")): "echo WORK"}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"personal", "work"} {
+		t.Setenv("CLAUDE_CONFIG_DIR", cfg.Dir("claude", n))
+		path := filepath.Join(t.TempDir(), "stdin.json")
+		testutil.Write(t, path, "{}")
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stdin
+		os.Stdin = f
+		var out bytes.Buffer
+		err = Run(t.Context(), &out)
+		os.Stdin = old
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := strings.ToUpper(n)
+		other := "PERSONAL"
+		if n == "personal" {
+			other = "WORK"
+		}
+		if !strings.Contains(out.String(), want) || strings.Contains(out.String(), other) || strings.Contains(out.String(), "GLOBAL") {
+			t.Fatalf("cross-home chain selection: %q", out.String())
+		}
 	}
 }

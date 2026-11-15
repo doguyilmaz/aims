@@ -261,7 +261,7 @@ func UsageObservationNotes(cfg *Config) []string {
 		return []string{"usage-observations.json could not be read and was kept: " + err.Error()}
 	}
 	raw := LoadState()
-	stale, unbound := 0, 0
+	stale, unbound, identityMismatch := 0, 0, 0
 	for id, entries := range cache.Profiles {
 		for name, entry := range entries {
 			var p *Profile
@@ -272,6 +272,8 @@ func UsageObservationNotes(cfg *Config) []string {
 				stale++
 			} else if !entry.BindingSet {
 				unbound++
+			} else if account := raw.Get(id, name).Account; !matchesUsageAccount(entry.Binding, account) && !matchesUsageAccount(entry.Account, account) {
+				identityMismatch++
 			}
 		}
 	}
@@ -281,6 +283,9 @@ func UsageObservationNotes(cfg *Config) []string {
 	}
 	if unbound > 0 {
 		notes = append(notes, fmt.Sprintf("%d earlier usage observations need a fresh identity binding; run aims usage --refresh", unbound))
+	}
+	if identityMismatch > 0 {
+		notes = append(notes, fmt.Sprintf("%d usage observations no longer match the native account; run aims usage --refresh", identityMismatch))
 	}
 	return notes
 }

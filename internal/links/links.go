@@ -876,8 +876,9 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 			if !filepath.IsAbs(target) {
 				target = filepath.Join(dir, target)
 			}
-			target = strings.TrimPrefix(target, `\\?\`)
-			if parent := filepath.Dir(filepath.Clean(target)); parent != hubAbs && parent != hubReal {
+			target = filepath.Clean(strings.TrimPrefix(target, `\\?\`))
+			if target != filepath.Join(hubAbs, name) && target != filepath.Join(hubReal, name) {
+				out = append(out, Report{Name: name, Action: Conflict, Detail: "link targets another resource; kept it for inspection"})
 				continue
 			}
 			raw = target

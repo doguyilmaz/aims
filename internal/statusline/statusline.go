@@ -49,7 +49,11 @@ func Run(ctx context.Context, w io.Writer) error {
 	if changedProfile {
 		parts = append(parts, "aims: profile changed; restart via aims")
 	}
-	if chain := cfg.Status.Chain; chain != "" && !claude.IsAimsStatusLine(chain) {
+	home := os.Getenv("CLAUDE_CONFIG_DIR")
+	if home == "" {
+		home = profiles.HubHome(cfg, tools.Get(claude.ID)).Dir
+	}
+	if chain := cfg.Status.CommandForHome(home); !changedProfile && chain != "" && !claude.IsAimsStatusLine(chain) {
 		if out := runChain(ctx, chain, raw); out != "" {
 			parts = append(parts, out)
 		}

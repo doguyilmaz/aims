@@ -39,3 +39,22 @@ func TestNewAccountDoesNotInheritPreviousLoginUsage(t *testing.T) {
 		t.Fatalf("previous account's quota was assigned to the new login: %+v", ps)
 	}
 }
+
+func TestExplicitLimitWithUnknownPercentIsNotTreatedAsZero(t *testing.T) {
+	cfg, a := setup(t)
+	w := tool.Window{Label: "5h", PercentUnknown: true, Limited: true, ResetsAt: now.Add(RefreshDue)}
+	if err := RecordUsage(a.ID(), "a", []tool.Window{w}, "fixture", cfg); err != nil {
+		t.Fatal(err)
+	}
+	ev := Evaluate(t.Context(), cfg, config.LoadStateFor(cfg), a, "a")
+	if ev.Usable || len(ev.Reasons) != 1 || ev.Reasons[0] != "5h limit for 10m" {
+		t.Fatalf("explicit limit was ignored or shown as zero: %+v", ev)
+	}
+	w.Limited = false
+	if err := RecordUsage(a.ID(), "a", []tool.Window{w}, "fixture", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if ev := Evaluate(t.Context(), cfg, config.LoadStateFor(cfg), a, "a"); !ev.Usable {
+		t.Fatalf("unknown alone became a false limit: %+v", ev)
+	}
+}

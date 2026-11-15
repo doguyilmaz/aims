@@ -115,7 +115,17 @@ type Config struct {
 
 // StatusLine holds the user's previous Claude status line, shown before aims'.
 type StatusLine struct {
-	Chain string `json:"chain,omitempty"`
+	Chain      string            `json:"chain,omitempty"`
+	HomeChains map[string]string `json:"homeChains,omitempty"`
+}
+
+// CommandForHome keeps captured commands attached to their original settings
+// home. Chain remains an explicit/legacy global fallback; never guess its origin.
+func (s StatusLine) CommandForHome(home string) string {
+	if command, ok := s.HomeChains[fsx.Real(home)]; ok {
+		return command
+	}
+	return s.Chain
 }
 
 // HomeVar points aims at another directory than ~/.aims.

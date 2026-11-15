@@ -154,3 +154,20 @@ func TestEarlierUnboundCacheIsKeptForFreshObservation(t *testing.T) {
 		t.Fatal("earlier cache not preserved/diagnosed")
 	}
 }
+
+func TestDoctorExplainsLegacyAccountBindingMismatch(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+	_ = UpdateState("codex", "work", func(s *ProfileState) { s.Account = &Account{Email: "old@example.test"} })
+	if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) { s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 99}}} }); err != nil {
+		t.Fatal(err)
+	}
+	// Old writers do not retain accountRevision, but their identity still fences UI.
+	_ = UpdateState("codex", "work", func(s *ProfileState) { s.Account = &Account{Email: "new@example.test"}; s.AccountRevision = "" })
+	if LoadStateFor(cfg).Get("codex", "work").Usage != nil {
+		t.Fatal("mismatched cache was visible")
+	}
+	if notes := strings.Join(UsageObservationNotes(cfg), " "); !strings.Contains(notes, "no longer match") {
+		t.Fatalf("missing identity diagnostic: %q", notes)
+	}
+}

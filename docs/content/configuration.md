@@ -70,7 +70,7 @@ Both JSON files are written atomically with owner-only permissions, under a lock
 | `order` | Which profiles stand in, in turn, while the active one is limited or logged out |
 | `projects` | A project's own order, by its folder: the profiles listed come first there, then the rest of `order`. `aims use` and `aims order` inside a project write it; `--global` writes `active` and `order` instead. A project is a git repository (all its folders), or one folder outside a repository. |
 
-`failover` is described in [Limits and failover](../failover#settings). `statusline.chain` is the status line command you had before `aims setup`, which aims runs first.
+`failover` is described in [Limits and failover](../failover#settings). `statusline.homeChains` stores previous status line commands by their original absolute settings home. Setup and uninstall preserve each home's own command, including an empty override, rather than copying the last profile's command to every profile. `statusline.chain` remains a legacy or explicit global fallback for homes without an entry; `aims doctor --check` reports it for review. Its original home cannot be recovered reliably, so doctor does not guess a migration. A session from a changed profile registration does not execute a saved chain.
 
 A config file that does not parse is an error: aims stops and tells you, and never replaces it with an empty one.
 
