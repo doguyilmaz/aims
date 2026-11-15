@@ -684,12 +684,15 @@ func RecordAccount(id tool.ID, name, email, plan string, snapshots ...*config.Co
 // RecordLogin invalidates derived quotas and old limit marks after a successful
 // user-controlled authentication. It never changes native credentials/history.
 func RecordLogin(id tool.ID, name string, acct tool.Account, snapshots ...*config.Config) error {
-	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
+	if err := updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
 		ps.Account = &config.Account{Email: acct.Email, Plan: acct.Plan, Tenant: acct.Tenant}
-	})
+	}); err != nil {
+		return err
+	}
+	return config.RemoveUsageObservation(id, name)
 }
 
 func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string, usageOnly bool) tool.Probe {
@@ -734,14 +737,20 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 
 // ReadUsage updates observation caches without changing manual routing/login
 // marks. A passive usage display must not clear a profile's existing busy mark.
-func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, error) {
 	p := readProbe(ctx, cfg, a, name, true)
 	if ctx.Err() != nil {
-		return p
+		return p, ctx.Err()
 	}
-	recordObservation(cfg, a.ID(), name, p)
-	_ = RecordAccount(a.ID(), name, p.Email, p.Plan, cfg)
-	return p
+	if err := config.UpdateUsageObservationFor(cfg, a.ID(), name, func(ps *config.ProfileState) {
+		applyObservation(ps, p)
+		if p.Email != "" || p.Plan != "" {
+			ps.Account = &config.Account{Email: p.Email, Plan: p.Plan}
+		}
+	}); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "usage cache could not be stored; run aims doctor --check", UsageError: "usage cache could not be stored"}, fmt.Errorf("usage cache could not be stored; existing files kept: %w", err)
+	}
+	return p, nil
 }
 
 // AskFree asks the provider about the named accounts at once and records
@@ -801,21 +810,23 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 }
 
 func recordObservation(cfg *config.Config, id tool.ID, name string, p tool.Probe) {
+	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) { applyObservation(ps, p) })
+}
+
+func applyObservation(ps *config.ProfileState, p tool.Probe) {
 	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
-	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) {
-		identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
-		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
-		ps.UsageAttemptedAt = config.Now().UTC()
-		ps.UsageError = p.UsageError
-		if ps.UsageError == "" && (p.Status == tool.ProbeError || p.Status == tool.ProbeLogin) {
-			ps.UsageError = string(p.Status)
-		}
-		if hasUsage {
-			ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
-		} else if identityChanged || becameAPIKey {
-			ps.Usage = nil // a previous login's quotas must not label the new account
-		}
-	})
+	identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
+	becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
+	ps.UsageAttemptedAt = config.Now().UTC()
+	ps.UsageError = p.UsageError
+	if ps.UsageError == "" && (p.Status == tool.ProbeError || p.Status == tool.ProbeLogin) {
+		ps.UsageError = string(p.Status)
+	}
+	if hasUsage {
+		ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
+	} else if identityChanged || becameAPIKey {
+		ps.Usage = nil // a previous login's quotas must not label the new account
+	}
 }
 
 // record keeps what a probe found: usage, a limit, a dead login.

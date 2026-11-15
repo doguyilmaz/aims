@@ -62,9 +62,17 @@ func LoadState() State {
 // Older writers that do not retain generation metadata cannot relabel a new
 // profile with their old account, usage or routing marks.
 func LoadStateFor(cfg *Config) State {
+	s, _ := LoadStateView(cfg)
+	return s
+}
+
+// LoadStateView combines registration-bound routing state and passive usage.
+// The latter lives separately so legacy whole-file state writers cannot erase
+// it, and displaying usage never rewrites another process's routing marks.
+func LoadStateView(cfg *Config) (State, error) {
 	s := LoadState()
 	if cfg == nil {
-		return State{}
+		return State{}, nil
 	}
 	for id, profiles := range s {
 		for name, state := range profiles {
@@ -77,7 +85,8 @@ func LoadStateFor(cfg *Config) State {
 			}
 		}
 	}
-	return s
+	err := overlayUsageObservations(cfg, s)
+	return s, err
 }
 
 var ErrProfileChanged = errors.New("profile registration changed or removal is pending; ignored stale result")
@@ -145,12 +154,15 @@ func updateState(id tool.ID, name, generation string, fn func(*ProfileState)) er
 
 // RemoveState forgets a profile.
 func RemoveState(id tool.ID, name string) error {
-	return fsx.WithLock(statePath(), func() error {
+	if err := fsx.WithLock(statePath(), func() error {
 		s := LoadState()
 		if s[id] == nil || s[id][name] == nil {
 			return nil
 		}
 		delete(s[id], name)
 		return fsx.WriteJSON(statePath(), s, 0o600)
-	})
+	}); err != nil {
+		return err
+	}
+	return RemoveUsageObservation(id, name)
 }

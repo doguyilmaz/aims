@@ -81,7 +81,7 @@ final class UsageModel {
     private var shuttingDown = false
     private var nextProviderRefresh = ContinuousClock.now
     private var providerRefreshError: String?
-    private let snapshotReader: (@MainActor (Bool) async throws -> Data)?
+    private let commandRunner: (@MainActor ([String]) async throws -> Data)?
     var displayStyle =
         UsageDisplayStyle(rawValue: UserDefaults.standard.string(forKey: "displayStyle") ?? "") ?? .compact
     {
@@ -91,8 +91,8 @@ final class UsageModel {
         }
     }
 
-    init(configHomeOverride: String? = nil, snapshotReader: (@MainActor (Bool) async throws -> Data)? = nil) {
-        self.snapshotReader = snapshotReader
+    init(configHomeOverride: String? = nil, commandRunner: (@MainActor ([String]) async throws -> Data)? = nil) {
+        self.commandRunner = commandRunner
         if let configHomeOverride {
             configHome = configHomeOverride
             return
@@ -205,16 +205,10 @@ final class UsageModel {
         }
         do {
             let data: Data
-            if let snapshotReader {
-                data = try await snapshotReader(live)
-            } else if let fixtureURL {
+            if commandRunner == nil, let fixtureURL {
                 data = try Data(contentsOf: fixtureURL)
             } else {
-                let command = UsageCommand()
-                self.command = command
-                data = try await command.run(
-                    executable: executable(), arguments: ["usage", "--json"] + (live ? ["--refresh"] : []),
-                    configHome: configHome, additionalPaths: additionalPaths)
+                data = try await runCommand(["usage", "--json"] + (live ? ["--refresh"] : []))
             }
             try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
@@ -246,18 +240,25 @@ final class UsageModel {
             command = nil
         }
         do {
-            let command = UsageCommand()
-            self.command = command
-            let data = try await command.run(
-                executable: executable(), arguments: arguments, configHome: configHome, additionalPaths: additionalPaths
-            )
+            let data = try await runCommand(arguments)
+            try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
-            error = nil
+            error = providerRefreshError
             return true
+        } catch is CancellationError {
+            return false
         } catch {
             self.error = error.localizedDescription
             return false
         }
+    }
+
+    private func runCommand(_ arguments: [String]) async throws -> Data {
+        if let commandRunner { return try await commandRunner(arguments) }
+        let command = UsageCommand()
+        self.command = command
+        return try await command.run(
+            executable: executable(), arguments: arguments, configHome: configHome, additionalPaths: additionalPaths)
     }
 
     private func executable() throws -> URL {

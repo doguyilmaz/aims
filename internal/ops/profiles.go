@@ -392,6 +392,9 @@ func Logout(ctx context.Context, a tool.Adapter, name string) error {
 		if err := config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) { ps.Account = nil }); err != nil {
 			return fmt.Errorf("native logout completed; cached account could not be cleared: %w", err)
 		}
+		if err := config.RemoveUsageObservation(a.ID(), name); err != nil {
+			return fmt.Errorf("native logout completed; usage cache could not be cleared: %w", err)
+		}
 		return nil
 	})
 }

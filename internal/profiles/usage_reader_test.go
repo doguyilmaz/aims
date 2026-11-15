@@ -33,13 +33,13 @@ func TestPassiveUsageReaderPreservesMarksAndFailedObservationAge(t *testing.T) {
 		ps.Usage = &config.Usage{At: now, Windows: []tool.Window{{Label: "7d", Percent: 97}}}
 	})
 	ReadUsage(t.Context(), cfg, a, "a")
-	ps := config.LoadState().Get(a.ID(), "a")
+	ps := config.LoadStateFor(cfg).Get(a.ID(), "a")
 	if a.probeCalls != 0 || a.usageCalls != 1 || ps.UsageError != a.result.UsageError || ps.Usage == nil || !ps.Usage.At.Equal(now) || ps.Usage.Windows[0].Percent != 97 || !ps.Until.Equal(until) || ps.MarkedBy != "owner" || ps.NeedsLogin {
 		t.Fatalf("passive refresh changed routing, credential state or old measurement: %+v", ps)
 	}
 	a.result = tool.Probe{Status: tool.ProbeOK, UsageReported: true, Windows: []tool.Window{{Label: "7d", Percent: 2}}}
 	ReadUsage(t.Context(), cfg, a, "a")
-	ps = config.LoadState().Get(a.ID(), "a")
+	ps = config.LoadStateFor(cfg).Get(a.ID(), "a")
 	if a.probeCalls != 0 || a.usageCalls != 2 || ps.Usage.Windows[0].Percent != 2 || ps.UsageError != "" || !ps.Until.Equal(until) {
 		t.Fatalf("successful passive observation was not isolated: %+v", ps)
 	}

@@ -261,7 +261,17 @@ func RenderStatus(s *Styles, report []ops.ToolStatus, cfg *config.Config, others
 // keeps it out, or else the fullest.
 func Key(s *Styles, p ops.ProfileStatus, threshold float64) string {
 	var key *tool.Window
+	var unknown *tool.Window
 	for _, w := range p.Usage {
+		if w.PercentUnknown {
+			if w.Limited {
+				return s.Dim.Render(w.Label+" ") + s.Bad.Render("limited")
+			}
+			if unknown == nil {
+				unknown = &w
+			}
+			continue
+		}
 		if !p.Usable && slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.HasPrefix(r, w.Label+" ") }) {
 			key = &w
 			break
@@ -271,6 +281,9 @@ func Key(s *Styles, p ops.ProfileStatus, threshold float64) string {
 		}
 	}
 	if key == nil {
+		if unknown != nil {
+			return s.Dim.Render(unknown.Label + " —")
+		}
 		return ""
 	}
 	return s.Dim.Render(key.Label+" ") + Level(s, key.Percent, threshold).Render(fmt.Sprintf("%.0f%%", key.Percent))

@@ -155,6 +155,15 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	}
 	var tail []string
 	for _, w := range windows {
+		if w.PercentUnknown {
+			text := paint(dim, w.Label+" —")
+			if w.Limited {
+				limited = true
+				text = paint(dim, w.Label+" ") + paint(red, "limited")
+			}
+			tail = append(tail, text)
+			continue
+		}
 		c := level(w.Percent)
 		var p string
 		if w.Label == "5h" {

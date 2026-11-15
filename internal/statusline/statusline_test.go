@@ -23,6 +23,9 @@ func TestRender(t *testing.T) {
 		want    string
 	}{
 		{nil, nil, profiles.Watched, "work · auto → personal"},
+		{[]tool.Window{{Label: "5h", PercentUnknown: true}}, nil, profiles.Watched, "work · 5h — · auto → personal"},
+		{[]tool.Window{{Label: "5h", PercentUnknown: true, Limited: true}}, nil, profiles.Watched, "work · 5h limited → personal"},
+		{[]tool.Window{w("5h", 0, time.Hour)}, nil, profiles.Watched, "work ▱▱▱▱▱  0% · auto → personal"},
 		{[]tool.Window{w("5h", 11, time.Hour), w("7d", 47, 48*time.Hour)}, nil, profiles.Watched, "work ▰▱▱▱▱  11% · 7d 47% · auto → personal"},
 		{[]tool.Window{w("5h", 82, 80*time.Minute), w("7d", 61, 48*time.Hour)}, nil, profiles.Watched, "work ▰▰▰▰▱  82% ↻1h20m · 7d 61% · auto → personal"},
 		{[]tool.Window{w("5h", 97, 54*time.Minute), w("7d", 61, 48*time.Hour)}, nil, profiles.Watched, "work ▰▰▰▰▰  97% ↻54m · 7d 61% → personal"},

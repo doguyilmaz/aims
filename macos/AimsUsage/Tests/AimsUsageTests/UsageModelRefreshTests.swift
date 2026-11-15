@@ -7,7 +7,8 @@ import Testing
     let fixture = UsageRefreshFixture()
     let model = UsageModel(
         configHomeOverride: "",
-        snapshotReader: { live in
+        commandRunner: { arguments in
+            let live = arguments.contains("--refresh")
             fixture.calls.append(live)
             if live && fixture.failProvider { throw CocoaError(.fileReadUnknown) }
             return fixture.reading()
@@ -31,7 +32,8 @@ import Testing
     let fixture = UsageRefreshFixture()
     let model = UsageModel(
         configHomeOverride: "",
-        snapshotReader: { live in
+        commandRunner: { arguments in
+            let live = arguments.contains("--refresh")
             fixture.calls.append(live)
             fixture.ready?.resume()
             return try await withCheckedThrowingContinuation { fixture.response = $0 }
@@ -58,7 +60,8 @@ import Testing
     fixture.failCache = true
     let model = UsageModel(
         configHomeOverride: "",
-        snapshotReader: { live in
+        commandRunner: { arguments in
+            let live = arguments.contains("--refresh")
             fixture.calls.append(live)
             if fixture.failCache { throw CocoaError(.fileReadUnknown) }
             return fixture.reading()
@@ -70,4 +73,26 @@ import Testing
     #expect(model.error == nil)
     #expect(model.snapshot != nil)
     #expect(fixture.calls == [false, false])
+}
+
+@MainActor @Test func reminderEditsPreserveAFailedProviderRefreshUntilSuccessfulRetry() async {
+    let fixture = UsageRefreshFixture()
+    let model = UsageModel(
+        configHomeOverride: "",
+        commandRunner: { arguments in
+            if arguments.contains("--refresh") && fixture.failProvider { throw CocoaError(.fileReadUnknown) }
+            return fixture.reading()
+        })
+    await model.refresh()
+    let failure = model.error
+    #expect(failure != nil)
+    let added = await model.addReminder(provider: "codex", row: "work", label: "Check reset", at: Date())
+    #expect(added)
+    #expect(model.error == failure)
+    await model.removeReminder(id: "fixture-reminder")
+    #expect(model.error == failure)
+    #expect(model.snapshot != nil)
+    fixture.failProvider = false
+    await model.refresh()
+    #expect(model.error == nil)
 }
