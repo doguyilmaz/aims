@@ -3,13 +3,13 @@ title: macOS usage app
 weight: 9
 ---
 
-Aims Usage 0.2.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage 0.3.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
 Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aims Usage.app`. Requirements: macOS 14.0.0+, Swift 6.2.0+, and the Go version in `go.mod`. The app is a locally signed development build; public release signing/notarization is separate. Its menu pin toggles the side panel. More contains Settings, custom reminders and Quit. No login item is installed automatically.
 
 ### Provider data and resets
 
-Choose **Compact** (the default) for a narrower 400-point surface with provider rows and usage bars, or **Gauges** for a 560-point account/model grid. Switching modes resizes the menu/panel. Both show every reported window and reset countdown. The overview measures its content and grows to fit; scrolling is enabled only when the screen has insufficient room. Gauges uses two columns when possible and three on shorter screens. The saved style applies to both menu and panel. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
+Choose **Compact** (the default) or **Gauges** in Settings → Display → Usage appearance. Compact uses 400-point provider rows with usage bars. The Gauges menu uses a 440-point list of horizontal account/model rows with small rings and adjacent reset countdowns. Extra windows wrap within their own account; no reported window is dropped. The pinned Gauges overview retains its separate 560-point card grid. The saved choice applies to menu and overview, and is independent of Edge Dock appearance. Both measure their content, growing to fit and scrolling only when the screen has insufficient room. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
 
 The **Edge Dock** can attach to the usable **left or right** edge. Settings → Edge Dock offers **Standard** (64 points) or **Mini** (44 points), plus **Automatically hide**. Use **Vertical position** to move it between the usable top and bottom; **Center** restores the middle. The saved position adapts to the available screen height and Dock size, keeping the rail and hidden marker within the usable edge. The shape and detail-card direction follow the selected side. Mini keeps the same providers and values with shorter rows; a blocked quota uses `!` and exposes the full state in its tooltip/details. These preferences are saved independently of Compact/Gauges.
 
@@ -55,3 +55,9 @@ aims usage reset remove REMINDER_ID
 ```
 
 Custom reminders use a separate private file, `AIMS_HOME/usage-reminders.json`. Damaged or newer reminder formats are retained and reported; they do not suppress other usage data. To repair a malformed file, preserve a copy and correct its JSON. Removing the macOS app does not remove reminders, aims configuration, logins, sessions or history.
+
+### Application updates
+
+Aims Usage includes pinned Sparkle 2.10.1 support. Signed release builds with a configured HTTPS update feed and public verification key offer **Check for Updates…** in More and Settings → App updates. Automatic checks are opt-in, and automatic installation and system profiling default to off. The menu, Edge Dock and bundled aims update together. A custom aims executable or the provider CLIs still update through their own installers.
+
+Development and fixture preview builds have no active update channel. CI development artifacts are not public updater releases. Preparing a public release requires signing/notarization credentials, the matching Sparkle private key and publication of the signed archive plus appcast. Installation/relaunch still needs a two-build smoke test before enabling a production feed. Removing or updating the app does not remove aims data, logins, reminders or history.

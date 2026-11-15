@@ -9,7 +9,7 @@ struct AimsUsageApp: App {
         MenuBarExtra {
             UsageDashboard(
                 model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                width: delegate.model.displayStyle.preferredWidth,
+                width: delegate.model.displayStyle.menuWidth,
                 maximumBodyHeight: maximumBodyHeight()
             )
         } label: {
@@ -24,7 +24,7 @@ struct AimsUsageApp: App {
             Window("Menu preview", id: "usage-menu-preview") {
                 UsageDashboard(
                     model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                    width: delegate.model.displayStyle.preferredWidth,
+                    width: delegate.model.displayStyle.menuWidth,
                     maximumBodyHeight: maximumBodyHeight()
                 )
             }
@@ -32,7 +32,7 @@ struct AimsUsageApp: App {
             Window("Small-screen preview", id: "usage-small-preview") {
                 UsageDashboard(
                     model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                    width: delegate.model.displayStyle.preferredWidth,
+                    width: delegate.model.displayStyle.menuWidth,
                     maximumBodyHeight: 300)
             }
             .windowResizability(.contentSize)

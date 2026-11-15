@@ -1,0 +1,120 @@
+name: Prepare macOS usage release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: App version (MAJOR.MINOR.PATCH)
+        required: true
+        type: string
+      build_number:
+        description: Integer build number, greater than every previously published build
+        required: true
+        type: string
+      cli_version:
+        description: Bundled aims SemVer
+        default: 0.4.7-dev
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-usage-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      AIMS_USAGE_VERSION: ${{ inputs.version }}
+      AIMS_USAGE_BUILD_NUMBER: ${{ inputs.build_number }}
+      AIMS_CLI_VERSION: ${{ inputs.cli_version }}
+      AIMS_USAGE_FEED_URL: ${{ vars.AIMS_USAGE_FEED_URL }}
+      AIMS_USAGE_PUBLIC_ED_KEY: ${{ vars.AIMS_USAGE_PUBLIC_ED_KEY }}
+      AIMS_USAGE_SIGNING_IDENTITY: ${{ vars.AIMS_USAGE_SIGNING_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check release configuration
+        env:
+          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY }}
+          NOTARY_KEY: ${{ secrets.AIMS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.AIMS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.AIMS_NOTARY_ISSUER }}
+        run: |
+          set -euo pipefail
+          for name in AIMS_USAGE_FEED_URL AIMS_USAGE_PUBLIC_ED_KEY AIMS_USAGE_SIGNING_IDENTITY CERTIFICATE CERTIFICATE_PASSWORD SPARKLE_KEY NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER; do
+            [[ -n "${!name}" ]] || { echo "Missing release configuration: $name" >&2; exit 1; }
+          done
+          python3 -B scripts/configure-macos-updates.py --validate
+          python3 -B scripts/test-macos-updates.py
+      - name: Test the app
+        run: swift test --package-path macos/AimsUsage
+      - name: Import ephemeral signing material
+        env:
+          CERTIFICATE: ${{ secrets.AIMS_MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.AIMS_MACOS_CERTIFICATE_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.AIMS_SPARKLE_PRIVATE_KEY }}
+          NOTARY_KEY: ${{ secrets.AIMS_NOTARY_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keychain="$RUNNER_TEMP/aims-release.keychain-db"
+          password=$(openssl rand -hex 32)
+          echo "::add-mask::$password"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle-key"
+          printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          security list-keychains -d user > "$RUNNER_TEMP/previous-keychains.txt"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -P "$CERTIFICATE_PASSWORD" -k "$keychain" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+      - name: Fetch pinned Sparkle release tools
+        run: |
+          set -euo pipefail
+          curl -fLsS https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz -o "$RUNNER_TEMP/sparkle.tar.xz"
+          printf '%s  %s\n' 1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27 "$RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
+          mkdir "$RUNNER_TEMP/sparkle"
+          tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+      - name: Sign, notarize and prepare update feed
+        env:
+          AIMS_NOTARY_KEY_ID: ${{ secrets.AIMS_NOTARY_KEY_ID }}
+          AIMS_NOTARY_ISSUER: ${{ secrets.AIMS_NOTARY_ISSUER }}
+        run: |
+          set -euo pipefail
+          export AIMS_NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8"
+          export AIMS_SPARKLE_PRIVATE_KEY_FILE="$RUNNER_TEMP/sparkle-key"
+          export AIMS_SPARKLE_TOOLS="$RUNNER_TEMP/sparkle/bin"
+          export AIMS_USAGE_DOWNLOAD_URL_PREFIX="https://github.com/$GITHUB_REPOSITORY/releases/download/usage-v$AIMS_USAGE_VERSION-$AIMS_USAGE_BUILD_NUMBER"
+          scripts/release-macos-usage.sh
+      - name: Retain reviewable release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aims-Usage-${{ inputs.version }}-${{ inputs.build_number }}-signed
+          path: dist/usage-release-*/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/previous-keychains.txt" ]]; then
+            python3 - "$RUNNER_TEMP/previous-keychains.txt" <<'PY'
+          import pathlib, shlex, subprocess, sys
+          paths = shlex.split(pathlib.Path(sys.argv[1]).read_text())
+          subprocess.run(["security", "list-keychains", "-d", "user", "-s", *paths], check=True)
+          PY
+          fi
+          security delete-keychain "$RUNNER_TEMP/aims-release.keychain-db" || true
+          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/sparkle-key" "$RUNNER_TEMP/notary.p8"

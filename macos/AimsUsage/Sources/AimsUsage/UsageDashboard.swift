@@ -60,6 +60,8 @@ struct UsageDashboard: View {
                             }
                         }
                     }
+                } else if surface == .popover {
+                    PopoverGaugeList(snapshot: snapshot, refreshFailed: model.error != nil)
                 } else {
                     let items = UsageTileItem.items(from: snapshot)
                     let twoColumnRows = UsageGaugeRow.rows(from: items, columns: 2)
@@ -102,7 +104,6 @@ struct UsageDashboard: View {
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            UsageStyleControl(selection: $model.displayStyle)
             Button {
                 Task { await model.refresh() }
             } label: {
@@ -124,6 +125,9 @@ struct UsageDashboard: View {
                     .disabled(
                         model.fixtureURL != nil || model.snapshot?.providers.allSatisfy { $0.rows.isEmpty } != false)
                 Button("Settings…") { showSettings() }
+                if model.updater.isConfigured {
+                    CheckForUpdatesButton(updater: model.updater)
+                }
                 if Bundle.main.object(forInfoDictionaryKey: "AimsUsagePreview") as? Bool == true {
                     Button("Preview menu layout…") { openWindow(id: "usage-menu-preview") }
                 }
@@ -136,7 +140,7 @@ struct UsageDashboard: View {
                 #endif
                 Divider()
                 Text(
-                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0")"
+                    "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0")"
                 )
                 Text(
                     "Build \(Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development")"
