@@ -1,8 +1,12 @@
-# Aims Usage 0.3.0
+# Aims Usage for macOS
 
 A native macOS menu bar app with an Edge Dock and an overview you can pin beside it. It uses the screen's visible frame, so it stays clear of a Dock on the bottom or either side. It runs as an accessory app with one icon and no Dock tile.
 
-The app reads `aims usage --json` and refreshes with `aims usage --refresh`. Its bundled aims executable uses the existing aims configuration and provider logins. The app does not read or copy credential files, change accounts, reconcile sharing, start a model turn, redeem resets or buy credits. The Kiro adapter in aims reads Kiro's own cached login for its native usage API; the other adapters use their provider CLI. Native CLIs retain responsibility for their own authentication and renewal.
+**Source preview.** Public signed app downloads, the `aims-usage` Homebrew cask and the production Sparkle channel have not been activated. The development defaults are version `0.3.0`, build `2`. The existing `aims` cask installs the CLI and its keepalive wrapper; this companion app is packaged separately.
+
+![Aims Usage Gauges overview with illustrative preview data](../../docs/static/images/aims-usage-overview.jpg)
+
+The app reads `aims usage --json` and refreshes with `aims usage --refresh`. The interface receives a credential-free snapshot. Its bundled aims executable uses the existing aims configuration and native logins to read quotas through provider CLIs and first-party usage APIs. Native tools own authentication and renewal; the Claude usage reader uses only existing access without renewing it. Display choices do not switch active CLI accounts, reconcile sharing, start a model turn, redeem resets or buy credits. Credentials are not copied between profiles.
 
 ## Build and open
 
@@ -14,6 +18,8 @@ open 'dist/Aims Usage.app'
 ```
 
 The script builds for the Mac it runs on, bundles the matching aims CLI, uses the existing aims logo as one app icon, and applies an ad hoc signature. It does not install a login item or replace an installed app. Copy the resulting app to `~/Applications` if desired. Distribution signing/notarization is a separate release step; the local build is a development artifact.
+
+Use the CLI to set up/manage Claude and Codex profiles and the provider CLIs to authenticate other providers. Then open the app and select an existing custom `AIMS_HOME` in Settings when needed. For daily use, quit before moving the bundle to Applications. The menu, optional Edge Dock and pinned overview are all part of this single app.
 
 Set `AIMS_USAGE_CLI_BINARY` to a prebuilt, executable aims CLI if the matching Go toolchain is unavailable locally. It must target this Mac and support the usage JSON schema. `AIMS_USAGE_VERSION` defaults to `0.3.0`; `AIMS_USAGE_BUILD_NUMBER` is a separate positive integer (default `2`); `AIMS_CLI_VERSION` defaults to `0.4.7-dev`. The builder does not download a Go toolchain automatically. Temporary compilation products are removed on exit.
 

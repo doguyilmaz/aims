@@ -1,13 +1,46 @@
 ---
-title: macOS usage app
+title: Aims Usage for macOS
 weight: 9
 ---
 
-Aims Usage 0.3.0 is an optional native menu bar app with an Edge Dock and an overview you can pin beside it. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage is one native macOS app with three surfaces: a menu-bar popover, an optional Edge Dock and an overview you can pin open. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
-Build from the repository with `scripts/build-macos-app.sh`, then open `dist/Aims Usage.app`. Requirements: macOS 14.0.0+, Swift 6.2.0+, and the Go version in `go.mod`. The app is a locally signed development build; public release signing/notarization is separate. Its menu pin toggles the side panel. More contains Settings, custom reminders and Quit. No login item is installed automatically.
+## Availability and installation
 
-### Provider data and resets
+**Source preview.** Public signed app downloads, the separate `aims-usage` Homebrew cask and the production Sparkle channel have not been activated. The existing `doguyilmaz/tap/aims` cask installs the CLI and its keepalive wrapper, `aims.app`.
+
+Build from a checkout containing the macOS app. Requirements are macOS 14.0.0+, Swift 6.2.0+ and the Go version declared in `go.mod` on `PATH`; the builder does not download a Go toolchain.
+
+```sh
+scripts/build-macos-app.sh
+open 'dist/Aims Usage.app'
+```
+
+For daily use, quit the development app and move the bundle to your Applications folder. The app includes an aims executable; a standalone CLI installation is managed separately. The local development build is ad hoc signed and has no active updater channel. Public signing/notarization belongs to the release process.
+
+Set up/manage Claude and Codex accounts with the [CLI](../installation), and authenticate the other providers with their native CLIs. The app reads those existing profiles and logins. At first launch, use Settings to select an existing custom `AIMS_HOME` if needed; changing the folder does not move account data. More contains Settings, custom reminders and Quit. No login item is installed automatically.
+
+## One app, three surfaces
+
+| Surface | Use it for |
+| --- | --- |
+| Menu bar | Open a quick usage summary; choose Compact or Gauges in Settings |
+| Edge Dock | Keep provider indicators at either edge, hover for detail, or pin the rail |
+| Pinned overview | Leave the complete usage summary open while you work |
+
+<table>
+  <tr><th>Gauges overview</th><th>Edge Dock</th></tr>
+  <tr>
+    <td align="center"><img src="/images/aims-usage-overview.jpg" width="340" alt="Aims Usage Gauges overview with illustrative quotas and reset countdowns"></td>
+    <td align="center"><img src="/images/aims-usage-edge-dock.jpg" width="64" alt="Aims Usage Edge Dock with six provider indicators"></td>
+  </tr>
+</table>
+
+*Illustrative preview data. Model groups and reset inventories appear only when a provider reports them.*
+
+![Aims Usage provider details with account choices and separate reset countdowns, using preview data](/images/aims-usage-hover.jpg)
+
+## Everyday controls
 
 Choose **Compact** (the default) or **Gauges** in Settings → Display → Usage appearance. Compact uses 400-point provider rows with usage bars. Gauges uses the same 340-point layout in the menu and pinned overview: one heading per provider, short account/model rows, small rings and adjacent reset countdowns. Extra windows wrap within their own account; no reported window is dropped. The saved choice applies to menu and overview, and is independent of Edge Dock appearance. Both measure their content, growing to fit and scrolling only when the screen has insufficient room. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
 
@@ -32,6 +65,8 @@ Automatic hiding is enabled by default. Hover the thin marker in the selected ed
 The rail stays clear of the macOS Dock on any side. Hover a provider for all accounts/models, click to pin 400-point details, or open the complete overview. It shows the highest current known usage within each provider's selected Dock accounts and window. If only older readings remain in that selection, the last known percentage stays visible with a small clock badge, a muted ring and its observation time in the tooltip. Readings older than two hours are marked cached; they are not discarded merely because of age. Windows whose reset has passed are excluded from the summary. An unreported percentage (such as Grok billing without a usage ratio) remains an em dash with an explanation in its tooltip. Enable or hide the rail in Settings or More. The app version and Git build revision are visible in More and Settings.
 
 The optional menu-bar percentage also uses current successful readings. It is reevaluated every minute, including with automatic refresh disabled, and hidden after a failed snapshot read. A reset passing removes that window from the summary; it does not invent a new allowance or contact the provider.
+
+## Provider data and resets
 
 | Provider | Data source | Scheduled reset | Banked / other resets |
 | --- | --- | --- | --- |
@@ -61,7 +96,7 @@ The installed Codex CLI 0.167.1 protocol was inspected with `app-server generate
 
 OpenAI distinguishes [banked, automatic promotional and purchased resets](https://help.openai.com/en/articles/20001498-how-resets-work-in-codex) from scheduled usage refreshes. Promotional resets have no guaranteed schedule; aims does not predict a future grant or redeem an available one. Google's [native quota command](https://antigravity.google/docs/cli/commands/usage) reports model groups that share limits. Kiro's [billing documentation](https://kiro.dev/docs/billing/) describes renewal at the next billing cycle; that URL uses the canonical trailing slash because the slashless URL redirects. OpenCode's [budget documentation](https://opencode.ai/docs/console/budgets) distinguishes overlapping budget policies, and its [API schema](https://opencode.ai/docs/api) reports their individual reset timestamps. The app uses the returned timestamp rather than constructing a billing date.
 
-### JSON and custom reminders
+## JSON and custom reminders
 
 The snapshot has `schemaVersion: 1`, `generatedAt`, ordered `providers`, and `customResets`. Rows retain their own `observedAt`, windows, optional banked-reset balance, and errors. `bankedResets: null` means unavailable; `{ "available": 0, "credits": null }` means a reported empty inventory without details. A detail list shorter than the reported inventory is labeled incomplete. `noExpiry: true` means the provider explicitly reported a non-expiring reset; an absent expiry alone stays unknown. `pctUnknown: true` means a numeric usage ratio is unavailable, including a zero-dollar budget. This is different from zero percent usage.
 
@@ -74,7 +109,7 @@ aims usage reset remove REMINDER_ID
 
 Custom reminders use a separate private file, `AIMS_HOME/usage-reminders.json`. Damaged or newer reminder formats are retained and reported; they do not suppress other usage data. To repair a malformed file, preserve a copy and correct its JSON. Removing the macOS app does not remove reminders, aims configuration, logins, sessions or history.
 
-### Application updates
+## Application updates
 
 Aims Usage includes pinned Sparkle 2.10.1 support. Signed release builds with a configured HTTPS update feed and public verification key offer **Check for Updates…** in More and Settings → App updates. Automatic checks are opt-in, and automatic installation and system profiling default to off. The menu, Edge Dock and bundled aims update together. A custom aims executable or the provider CLIs still update through their own installers.
 

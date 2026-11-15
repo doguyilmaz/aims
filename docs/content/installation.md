@@ -4,9 +4,18 @@ weight: 2
 aliases: ["/docs/installation/"]
 ---
 
-aims is one static binary with no runtime to install. It needs Claude Code, Codex, or both; it does not install them.
+Choose the interface you need:
+
+| Interface | Availability |
+| --- | --- |
+| **aims CLI** | Released for macOS, Linux and Windows; installation methods below |
+| **Aims Usage for macOS** | [Source preview](#aims-usage-for-macos) with menu bar, optional Edge Dock and pinned overview |
+
+The CLI is one static binary with no runtime to install. It needs Claude Code, Codex, or both; provider CLIs are installed separately.
 
 ## Install
+
+These commands install the **CLI**. The Homebrew `aims` cask includes the CLI's keepalive wrapper on macOS; it does not install Aims Usage.
 
 {{< tabs >}}
   {{< tab name="Homebrew" >}}
@@ -64,6 +73,19 @@ This puts `aims` in `$(go env GOPATH)/bin`. Make sure that folder is on your `PA
 {{< /tabs >}}
 
 Release archives for every platform, with `checksums.txt`, are on the [releases page](https://github.com/doguyilmaz/aims/releases).
+
+## Aims Usage for macOS
+
+The menu bar, Edge Dock and overview ship together in **Aims Usage.app**. The app includes an aims executable and reads your existing aims configuration and native provider logins. Standalone CLI/package-manager updates remain separate.
+
+**Source preview:** the signed public app archive, `aims-usage` cask and production Sparkle feed have not been activated. Build from a checkout containing the app on macOS 14.0.0+ with Swift 6.2.0+ and the Go version declared in `go.mod` available on `PATH`:
+
+```sh
+scripts/build-macos-app.sh
+open 'dist/Aims Usage.app'
+```
+
+Quit the development app before moving its bundle to Applications for regular use. Set up Claude/Codex profiles with `aims init`; for an existing custom `AIMS_HOME`, select that same folder in the app's Settings. Provider CLIs manage their own logins. See [Aims Usage for macOS](../macos-usage) for the complete guide and preview images.
 
 ## Check it works
 
@@ -123,8 +145,6 @@ aims checks for a new release at most once a day, in the background, and mention
 
 ## Uninstall
 
-```bash
-aims wipe       # log out and delete the accounts aims created; ~/.claude and ~/.codex stay
-```
+To remove the CLI, use its package manager (`brew uninstall --cask doguyilmaz/tap/aims`, `npm uninstall -g @doguyilmaz/aims`) or remove the installed binary. To remove Aims Usage, quit it and move its app bundle to Trash. These steps preserve aims profiles, provider logins, sessions, history and reminders.
 
-Then remove the binary the way you installed it (`brew uninstall --cask doguyilmaz/tap/aims`, `npm uninstall -g @doguyilmaz/aims`, or delete the file). Your `~/.claude` and `~/.codex` stay as they are, including everything the accounts shared.
+`aims wipe` is an explicit, separate data-removal operation: it logs out and deletes the profiles aims created. Use it only when you also want that account data removed; ordinary uninstallation does not require it. The hub's `~/.claude` and `~/.codex` remain, including shared data. Private profile data can be removed by wipe, so preserve anything you need before choosing it.

@@ -74,7 +74,7 @@ Scheduled resets, banked reset inventory and user reminders are separate. Banked
 
 `aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>` adds a custom reminder. Take the row ID from `aims usage --json`; `--at` must include a timezone. `aims usage reset remove <id>` removes it. Both accept `--json` to return the updated snapshot. The reminders live in `AIMS_HOME/usage-reminders.json`, separately from provider data, credentials and session history. Malformed or newer reminder formats are left unchanged.
 
-For the optional menu bar and pinned panel, see [macOS usage app](../macos-usage).
+For the optional native menu bar, Edge Dock and pinned overview, see [Aims Usage for macOS](../macos-usage).
 
 ### `aims use [tool] <profile>`
 

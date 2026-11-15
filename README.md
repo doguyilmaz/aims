@@ -5,13 +5,14 @@
 <h1 align="center">aims</h1>
 
 <p align="center">
-  Several Claude Code and Codex accounts on one machine.<br>
-  Switch instantly, share history, fail over when one hits its limit.
+  Separate logins for Claude Code and Codex.<br>
+  Session routing in your terminal, usage limits in your macOS menu bar and Edge Dock.
 </p>
 
 <p align="center">
   <a href="https://aims.apps.doguyilmaz.com">Documentation</a> ·
   <a href="https://aims.apps.doguyilmaz.com/installation">Install</a> ·
+  <a href="#aims-usage-for-macos">macOS app</a> ·
   <a href="https://aims.apps.doguyilmaz.com/quick-start">Quick start</a>
 </p>
 
@@ -19,10 +20,52 @@
 
 **aims** stands for **AI multi-session**. It lets you use a personal and a work account (or more) for Claude Code and Codex on one computer, without logging out and in to switch.
 
+| Interface | What it does | Get started |
+| --- | --- | --- |
+| **aims CLI** — macOS, Linux, Windows | Manage accounts, share or isolate history, route sessions and inspect usage | [Install the CLI](#install) |
+| **Aims Usage** — macOS | Watch provider quotas, resets and budgets in the menu bar, Edge Dock and overview | [App preview and setup](#aims-usage-for-macos) |
+
 - **Log in once per account.** Each account keeps its own login in its own folder. Nothing is copied.
 - **Sessions move on their own.** A session starts on your first account. At a usage limit it moves to the next one and continues the conversation, and it moves back once the first works again.
 - **One history.** Conversations, settings, skills and MCP servers are shared, so a conversation started on one account continues on the other. Or keep an account's history separate.
 - **Your AI can use it.** An MCP server and a skill let Claude Code and Codex check accounts, fail over, and hand a task to another account.
+
+## Aims Usage for macOS
+
+**Source preview.** The app can be built from this repository. Public signed app downloads, the `aims-usage` Homebrew cask and the Sparkle update channel have not been activated yet. The existing `doguyilmaz/tap/aims` package installs the CLI and its keepalive wrapper.
+
+**One app, three surfaces:** a menu-bar popover for a quick check, an optional Edge Dock for an always-nearby reading, and an overview you can pin open. The Edge Dock can use either edge, Standard or Mini size, vertical positioning, hover-to-show and a direct pin button. Choose Compact or Gauges in Settings.
+
+<table>
+  <tr>
+    <th>Gauges overview</th>
+    <th>Edge Dock</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/static/images/aims-usage-overview.jpg" width="340" alt="Aims Usage Gauges overview with illustrative provider quotas and reset countdowns"></td>
+    <td align="center"><img src="docs/static/images/aims-usage-edge-dock.jpg" width="64" alt="Aims Usage Edge Dock with six provider indicators"></td>
+  </tr>
+</table>
+
+*Screenshots use illustrative preview data. Model groups and reset inventory appear only when reported by the provider.*
+
+- Claude and Codex accounts stay separate. Choose All or one account for each Dock indicator without changing the active CLI login.
+- Choose the Dock's allowance per provider — 5 hours, weekly, monthly or budget — and show Used or Remaining. Hover retains all account readings.
+- Kiro, Grok, Antigravity model groups and OpenCode budgets use the same usage data as the CLI. Scheduled resets, reported banked resets and personal reminders remain distinct.
+- Refresh reads quotas without a model prompt. Missing reset times say **Not reported**; a passed reset waits for a new measurement instead of assuming zero.
+
+Build on macOS 14.0.0+ with Swift 6.2.0+ and the Go version declared in [go.mod](go.mod) available on `PATH`:
+
+```sh
+scripts/build-macos-app.sh
+open 'dist/Aims Usage.app'
+```
+
+For daily use, quit the development app and move the bundle to your Applications folder. It includes its own aims executable and reads your existing aims profiles and native provider logins. Use the CLI to set up/manage Claude and Codex accounts; select an existing custom `AIMS_HOME` in the app's Settings when needed. Provider CLIs retain their own installation and authentication.
+
+See the [macOS app guide](docs/content/macos-usage.md) for setup, account/window controls and data-source limits, or [release operations](docs/macos-release.md) for the prepared signed ZIP, separate cask and Sparkle channel. Updating or removing the app preserves account data, sessions and history.
+
+## Accounts and usage in the terminal
 
 ```text
 $ aims status
@@ -77,11 +120,9 @@ OpenCode
 
 `aims usage --refresh` refreshes quotas without sending a model prompt. Claude reads its existing profile's OAuth usage API without renewing or rewriting the login; if access has expired, use that account in Claude Code and retry. Native status-line reports also update its cache. `--live` additionally checks Claude model access with a one-word prompt. `aims usage --json` exports a versioned usage snapshot, including provider-reported reset times and Codex banked reset counts. Unknown reset details stay unknown; a past reset time asks for a new measurement rather than assuming a full allowance.
 
-The optional **[Aims Usage macOS app](macos/AimsUsage/README.md)** puts the same limits in the menu bar, a hoverable Edge Dock and a side overview, independent of the macOS Dock position. Choose the left or right edge, Standard or Mini size, and automatic hiding in Settings. It keeps personal/work accounts and each Antigravity model group separate, and shows OpenCode budgets last. Build it with `scripts/build-macos-app.sh` (macOS 14.0.0+, Swift 6.2.0+, Go from `go.mod`). Custom reminders work in both interfaces: `aims usage reset add codex personal --at 2026-12-01T09:00:00+03:00 --label 'Check reset'`. Reminders never change provider quota or redeem a reset.
-
-App release preparation also produces a separate `aims-usage` Homebrew cask for review, following the existing native-app release pattern. Signing/notarization inputs, the independent Sparkle feed and later activation are described in [macOS release operations](docs/macos-release.md).
-
 ## Install
+
+These methods install the **CLI**. The macOS app has its own [preview setup](#aims-usage-for-macos).
 
 ```bash
 brew install --cask doguyilmaz/tap/aims                                          # macOS, Linux
@@ -136,7 +177,7 @@ CLI, SDK, app-server and ACP clients can use the same aims accounts without copy
 
 ## How it works
 
-Claude Code and Codex read their state from one folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). aims gives each account its own folder holding only its login, and links everything else to your normal `~/.claude` and `~/.codex`. `aims claude` sets the variable and starts the real `claude`; aims is not a proxy and never sees your prompts. Details in [How it works](https://aims.apps.doguyilmaz.com/how-it-works).
+Claude Code and Codex read their state from one folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). aims gives each account its own login folder and links the configured shared parts to your normal `~/.claude` and `~/.codex`. `aims claude` sets the variable and starts the real `claude`. The official CLI handles model requests; aims supplies launch environment and session routing. Details in [How it works](https://aims.apps.doguyilmaz.com/how-it-works).
 
 ## Development
 
@@ -150,7 +191,7 @@ Each supported CLI is an adapter in `internal/tool/<name>`; adding one is descri
 
 ## Fair use
 
-aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs only your own accounts, on your own machine. It starts sessions with the official Claude Code and Codex CLIs, and reads the limits of Antigravity, Grok, Kiro and OpenCode through each tool's own CLI and login (for Kiro, the same usage request `kiro-cli` makes). It is not a service: no one else's account passes through it, and it never shares, pools or resells access. It doesn't disguise itself or send the providers anything their own CLIs wouldn't. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
+aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs your own accounts on your own machine. Sessions use the official Claude Code and Codex CLIs; quota readers use native CLIs and first-party usage APIs with each provider's existing login. It does not share, pool or resell access. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
 
 ## License
 
