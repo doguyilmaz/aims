@@ -83,8 +83,8 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		}
 	}
 	add("aims", "ok", "aims "+version, "")
-	if _, err := config.LoadStateView(cfg); err != nil {
-		add("usage-cache", "info", "usage-observations.json could not be read and was kept: "+err.Error(), "")
+	for _, note := range config.UsageObservationNotes(cfg) {
+		add("usage-cache", "info", note, "")
 	}
 	if desktop.Supported() {
 		r.Checks = append(r.Checks, appDoctorCheck())

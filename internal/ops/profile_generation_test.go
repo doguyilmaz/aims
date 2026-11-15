@@ -3,6 +3,8 @@ package ops
 import (
 	"context"
 	"encoding/json"
+	"github.com/doguyilmaz/aims/internal/fsx"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,6 +33,7 @@ func TestSuccessfulLoginInvalidatesOlderObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := config.Load()
+	holdObservationCache(t, before, a.ID(), "work")
 	if _, err := RecordLogin(t.Context(), a, "work"); err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +126,7 @@ func TestLogoutRejectsObservationsStartedBeforeNativeLogout(t *testing.T) {
 	testutil.Sandbox(t)
 	before, _ := purgeFixture(t)
 	a := logoutAdapter{tools.Get("codex")}
+	holdObservationCache(t, before, a.ID(), "work")
 	if err := Logout(t.Context(), a, "work"); err != nil {
 		t.Fatal(err)
 	}
@@ -135,5 +139,39 @@ func TestLogoutRejectsObservationsStartedBeforeNativeLogout(t *testing.T) {
 	}
 	if state := config.LoadStateFor(after).Get("codex", "work"); state.Account != nil || state.Usage != nil {
 		t.Fatalf("old account survived logout: %+v", state)
+	}
+}
+
+func holdObservationCache(t *testing.T, cfg *config.Config, id tool.ID, name string) {
+	t.Helper()
+	if err := config.UpdateUsageObservationFor(cfg, id, name, func(s *config.ProfileState) {
+		s.Usage = &config.Usage{At: time.Now(), Windows: []tool.Window{{Label: "7d", Percent: 99}}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), "usage-observations.json"), 0)
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	t.Cleanup(unlock)
+}
+
+func TestRemoveProfileIgnoresBusyOptionalUsageCleanup(t *testing.T) {
+	testutil.Sandbox(t)
+	a := tools.Get("codex")
+	if _, err := AddProfile(a, "work", AddOptions{Share: config.ShareNone}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := config.Load()
+	holdObservationCache(t, before, a.ID(), "work")
+	if _, err := RemoveProfile(t.Context(), a, "work", false, false); err != nil {
+		t.Fatal(err)
+	}
+	current, _ := config.Load()
+	if state := config.LoadStateFor(current).Get(a.ID(), "work"); state.Usage != nil {
+		t.Fatal("removed registration resurrected optional usage")
+	}
+	if len(config.UsageObservationNotes(current)) == 0 {
+		t.Fatal("ignored cleanup needs doctor info")
 	}
 }

@@ -94,3 +94,63 @@ func TestOversizedUsageObservationKeepsPreviousCache(t *testing.T) {
 		t.Fatal("oversized update destroyed readable cache")
 	}
 }
+
+func TestErrorProvenanceAndNativeNoUsageOverlay(t *testing.T) {
+	for _, c := range []struct {
+		name, source, nativeError string
+		nativeQuota               bool
+		wantError                 string
+	}{
+		{"local window cannot settle API failure", "statusline", "", true, "API failed"},
+		{"successful native quota settles older API failure", "live", "", true, ""},
+		{"new native failure keeps its timestamp", "live", "new failure", false, "new failure"},
+		{"native no quota retains older API failure", "live", "", false, "API failed"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			testutil.Sandbox(t)
+			cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+			old := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
+			newer := old.Add(time.Minute)
+			if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) {
+				s.Usage = &Usage{At: old, Source: "live", Windows: []tool.Window{{Label: "7d", Percent: 80}}}
+				s.UsageError = "API failed"
+				s.UsageAttemptedAt = old
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := UpdateState("codex", "work", func(s *ProfileState) {
+				s.UsageAttemptedAt = newer
+				s.UsageError = c.nativeError
+				if c.nativeQuota {
+					s.Usage = &Usage{At: newer, Source: c.source, Windows: []tool.Window{{Label: "7d", Percent: 1}}}
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			ps := LoadStateFor(cfg).Get("codex", "work")
+			if ps.Usage == nil || ps.UsageError != c.wantError {
+				t.Fatalf("wrong merge: %+v", ps)
+			}
+			if c.nativeError != "" && !ps.UsageAttemptedAt.Equal(newer) {
+				t.Fatal("new failure timestamp rewound")
+			}
+			if !c.nativeQuota && !ps.Usage.At.Equal(old) {
+				t.Fatal("no-quota attempt freshened old measurement")
+			}
+		})
+	}
+}
+
+func TestEarlierUnboundCacheIsKeptForFreshObservation(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+	path := filepath.Join(Home(), "usage-observations.json")
+	old := `{"schemaVersion":"1.0.0","profiles":{"codex":{"work":{"attemptedAt":"2026-11-16T00:00:00Z","usage":{"windows":[{"label":"7d","pct":99}],"at":"2026-11-16T00:00:00Z"}}}}}`
+	testutil.Write(t, path, old)
+	if got := LoadStateFor(cfg).Get("codex", "work"); got.Usage != nil {
+		t.Fatal("unbound cache relabeled a native identity")
+	}
+	if len(UsageObservationNotes(cfg)) == 0 || testutil.Read(t, path) != old {
+		t.Fatal("earlier cache not preserved/diagnosed")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
@@ -23,12 +24,39 @@ type usageObservations struct {
 }
 
 type usageObservation struct {
-	Generation  string    `json:"generation,omitempty"`
-	CreatedAt   string    `json:"createdAt,omitempty"`
-	Account     *Account  `json:"account,omitempty"`
-	Usage       *Usage    `json:"usage,omitempty"`
-	Error       string    `json:"error,omitempty"`
-	AttemptedAt time.Time `json:"attemptedAt"`
+	Generation      string    `json:"generation,omitempty"`
+	CreatedAt       string    `json:"createdAt,omitempty"`
+	Account         *Account  `json:"account,omitempty"`
+	BindingSet      bool      `json:"bindingSet,omitempty"`
+	Binding         *Account  `json:"binding,omitempty"`
+	BindingRevision string    `json:"bindingRevision,omitempty"`
+	Usage           *Usage    `json:"usage,omitempty"`
+	Error           string    `json:"error,omitempty"`
+	AttemptedAt     time.Time `json:"attemptedAt"`
+}
+
+// CaptureUsageAccount captures both negative identity fences from one raw state
+// read. Legacy state can lack registration metadata; its account is used only to
+// reject changed identities, never as authentication or a display label.
+func CaptureUsageAccount(id tool.ID, name string) (*Account, string) {
+	ps := LoadState().Get(id, name)
+	if a := ps.Account; a != nil {
+		copy := *a
+		return &copy, ps.AccountRevision
+	}
+	return nil, ps.AccountRevision
+}
+
+// Known fields in current must agree with a prior observation. Losing optional
+// metadata in an old writer is not evidence of a new account; learning a new
+// identity requires a new observation rather than borrowing unknown metadata.
+func matchesUsageAccount(prior, current *Account) bool {
+	if current == nil || prior == nil {
+		return current == nil && prior == nil
+	}
+	return (current.Email == "" || strings.EqualFold(prior.Email, current.Email)) &&
+		(current.Tenant == "" || prior.Tenant == current.Tenant) &&
+		(current.Plan == "" || strings.EqualFold(current.Plan, "apiKey") == strings.EqualFold(prior.Plan, "apiKey"))
 }
 
 func usageObservationsPath() string { return filepath.Join(Home(), "usage-observations.json") }
@@ -74,6 +102,14 @@ func writeUsageObservations(cache usageObservations) error {
 // UpdateUsageObservationFor commits only observations, under the same profile
 // identity fence as UpdateStateFor. It never writes state.json or config.json.
 func UpdateUsageObservationFor(before *Config, id tool.ID, name string, fn func(*ProfileState)) error {
+	account, revision := CaptureUsageAccount(id, name)
+	return CommitUsageObservation(before, id, name, account, revision, fn)
+}
+
+// CommitUsageObservation also fences native identity corrections that happened
+// while the provider request was in flight, including a switch back to a prior
+// e-mail/workspace value. Both fences are captured before asking the provider.
+func CommitUsageObservation(before *Config, id tool.ID, name string, account *Account, revision string, fn func(*ProfileState)) error {
 	return fsx.WithLock(configPath(), func() error {
 		current, err := load()
 		if err != nil {
@@ -94,12 +130,27 @@ func UpdateUsageObservationFor(before *Config, id tool.ID, name string, fn func(
 			if err != nil {
 				return err // never overwrite damaged or newer-format data
 			}
+			binding, bindingRevision := CaptureUsageAccount(id, name)
+			if revision != bindingRevision || !matchesUsageAccount(account, binding) {
+				return fmt.Errorf("account identity changed; ignored stale usage observation")
+			}
 			state := *LoadStateFor(current).Get(id, name)
 			fn(&state)
 			if cache.Profiles[id] == nil {
 				cache.Profiles[id] = map[string]*usageObservation{}
 			}
-			cache.Profiles[id][name] = &usageObservation{Generation: now.Generation, CreatedAt: now.CreatedAt, Account: state.Account, Usage: state.Usage, Error: state.UsageError, AttemptedAt: state.UsageAttemptedAt}
+			cache.Profiles[id][name] = &usageObservation{Generation: now.Generation, CreatedAt: now.CreatedAt, Account: state.Account, BindingSet: true, Binding: binding, BindingRevision: bindingRevision, Usage: state.Usage, Error: state.UsageError, AttemptedAt: state.UsageAttemptedAt}
+			for toolID, entries := range cache.Profiles {
+				for label, entry := range entries {
+					var p *Profile
+					if current.Tools[toolID] != nil {
+						p = current.Tools[toolID].Profiles[label]
+					}
+					if p == nil || entry == nil || entry.Generation != p.Generation || entry.CreatedAt != p.CreatedAt {
+						delete(entries, label)
+					}
+				}
+			}
 			return writeUsageObservations(cache)
 		})
 	})
@@ -110,6 +161,7 @@ func overlayUsageObservations(cfg *Config, state State) error {
 	if err != nil {
 		return err
 	}
+	raw := LoadState()
 	for id, entries := range cache.Profiles {
 		for name, entry := range entries {
 			if entry == nil || cfg.Tools[id] == nil {
@@ -117,6 +169,10 @@ func overlayUsageObservations(cfg *Config, state State) error {
 			}
 			p := cfg.Tools[id].Profiles[name]
 			if p == nil || p.Purge != nil || entry.Generation != p.Generation || entry.CreatedAt != p.CreatedAt {
+				continue
+			}
+			currentAccount := raw.Get(id, name).Account
+			if !entry.BindingSet || entry.BindingRevision != raw.Get(id, name).AccountRevision || !matchesUsageAccount(entry.Binding, currentAccount) && !matchesUsageAccount(entry.Account, currentAccount) {
 				continue
 			}
 			if state[id] == nil {
@@ -129,11 +185,9 @@ func overlayUsageObservations(cfg *Config, state State) error {
 			if ps.Usage != nil && ps.Usage.At.After(mainAt) {
 				mainAt = ps.Usage.At
 			}
-			if !entry.AttemptedAt.Before(mainAt) {
+			mainIsQuotaSuccess := ps.UsageError == "" && ps.Usage != nil && ps.Usage.Source == "live" && !ps.Usage.At.Before(ps.UsageAttemptedAt)
+			if entry.Usage != nil && (ps.Usage == nil || !entry.Usage.At.Before(ps.Usage.At)) {
 				ps.Usage = entry.Usage
-				if entry.Account != nil {
-					ps.Account = entry.Account
-				}
 			} else if ps.Usage != nil && entry.Usage != nil {
 				// Native status lines can update a window without knowing model
 				// groups/reset inventories. Retain those API-only details and use
@@ -154,9 +208,18 @@ func overlayUsageObservations(cfg *Config, state State) error {
 					ps.Usage = &u
 				}
 			}
-			// A local/native cache update is not a successful retry of the
-			// passive API request whose failure is reported here.
-			ps.UsageError, ps.UsageAttemptedAt = entry.Error, entry.AttemptedAt
+			if entry.Account != nil && !entry.AttemptedAt.Before(mainAt) {
+				ps.Account = entry.Account
+			}
+			if entry.Usage == nil && entry.Account != nil && !matchesUsageAccount(currentAccount, entry.Account) && !entry.AttemptedAt.Before(mainAt) {
+				ps.Usage = nil // a newer API observed a different login, without quotas
+			}
+			// Preserve a newer native failure. A newer status-line update may
+			// retain an older API error, but a real successful quota read can
+			// settle it. Never rewind an error to an older successful attempt.
+			if entry.AttemptedAt.After(mainAt) || ps.UsageError == "" && (!entry.AttemptedAt.Before(mainAt) || entry.Error != "" && !mainIsQuotaSuccess) {
+				ps.UsageError, ps.UsageAttemptedAt = entry.Error, entry.AttemptedAt
+			}
 		}
 	}
 	return nil
@@ -169,7 +232,15 @@ func RemoveUsageObservation(id tool.ID, name string) error {
 	if _, err := os.Stat(usageObservationsPath()); os.IsNotExist(err) {
 		return nil
 	}
-	return fsx.WithLock(usageObservationsPath(), func() error {
+	unlock, ok, err := fsx.Lock(usageObservationsPath(), 0)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("usage cache is busy; deferred optional cleanup")
+	}
+	defer unlock()
+	return func() error {
 		cache, err := readUsageObservations()
 		if err != nil {
 			return nil
@@ -179,5 +250,37 @@ func RemoveUsageObservation(id tool.ID, name string) error {
 		}
 		delete(cache.Profiles[id], name)
 		return writeUsageObservations(cache)
-	})
+	}()
+}
+
+// UsageObservationNotes reports ignored old data without turning optional
+// cleanup failures into login/logout/purge failures or rewriting unknown data.
+func UsageObservationNotes(cfg *Config) []string {
+	cache, err := readUsageObservations()
+	if err != nil {
+		return []string{"usage-observations.json could not be read and was kept: " + err.Error()}
+	}
+	raw := LoadState()
+	stale, unbound := 0, 0
+	for id, entries := range cache.Profiles {
+		for name, entry := range entries {
+			var p *Profile
+			if cfg.Tools[id] != nil {
+				p = cfg.Tools[id].Profiles[name]
+			}
+			if entry == nil || p == nil || p.Purge != nil || entry.Generation != p.Generation || entry.CreatedAt != p.CreatedAt || entry.BindingRevision != raw.Get(id, name).AccountRevision {
+				stale++
+			} else if !entry.BindingSet {
+				unbound++
+			}
+		}
+	}
+	var notes []string
+	if stale > 0 {
+		notes = append(notes, fmt.Sprintf("%d stale usage observations are ignored; a later successful refresh prunes removed registrations", stale))
+	}
+	if unbound > 0 {
+		notes = append(notes, fmt.Sprintf("%d earlier usage observations need a fresh identity binding; run aims usage --refresh", unbound))
+	}
+	return notes
 }

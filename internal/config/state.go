@@ -45,6 +45,7 @@ type ProfileState struct {
 	UsageError       string    `json:"usageError,omitempty"`
 	UsageAttemptedAt time.Time `json:"usageAttemptedAt,omitzero"`
 	Account          *Account  `json:"account,omitempty"`
+	AccountRevision  string    `json:"accountRevision,omitempty"`
 	LastUsedAt       time.Time `json:"lastUsedAt,omitzero"`
 }
 
@@ -164,5 +165,6 @@ func RemoveState(id tool.ID, name string) error {
 	}); err != nil {
 		return err
 	}
-	return RemoveUsageObservation(id, name)
+	_ = RemoveUsageObservation(id, name) // optional cache cleanup cannot block lifecycle changes
+	return nil
 }

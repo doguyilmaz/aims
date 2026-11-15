@@ -4,6 +4,7 @@ package profiles
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"os"
 	"os/exec"
@@ -393,6 +394,25 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		return Evaluation{Name: name, State: ps, Reasons: []string{"profile purge is pending; retry aims rm --purge"}}
 	}
 	acct := a.Account(ctx, Home(cfg, a, name))
+	if acct.Email != "" {
+		corrected := config.Account{Email: acct.Email, Tenant: acct.Tenant, Plan: acct.Plan}
+		if ps.Account != nil && strings.EqualFold(ps.Account.Email, acct.Email) {
+			if corrected.Plan == "" {
+				corrected.Plan = ps.Account.Plan
+			}
+		}
+		if accountChanged(ps.Account, &corrected) {
+			// Do not mutate the shared snapshot: EvaluateAll reads it in parallel.
+			local := *ps
+			local.Account, local.Usage, local.UsageError, local.UsageAttemptedAt = &corrected, nil, "", time.Time{}
+			ps = &local
+			_ = config.UpdateStateFor(cfg, a.ID(), name, func(s *config.ProfileState) {
+				s.Account, s.AccountRevision = &corrected, rand.Text()
+				s.Usage, s.UsageError, s.UsageAttemptedAt = nil, "", time.Time{}
+			})
+			_ = config.RemoveUsageObservation(a.ID(), name)
+		}
+	}
 	ev := Evaluation{Name: name, Account: acct, State: ps}
 	now := config.Now()
 	open := false // something keeps the profile out with no known end
@@ -428,14 +448,6 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		}
 	}
 	id := identity(acct, ps)
-	if acct.Email != "" && (ps.Account == nil || ps.Account.Email != acct.Email || ps.Account.Tenant != acct.Tenant) {
-		_ = config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) {
-			if ps.Account == nil {
-				ps.Account = &config.Account{}
-			}
-			ps.Account.Email, ps.Account.Tenant = acct.Email, acct.Tenant
-		})
-	}
 	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
 			other := st.Get(a.ID(), n)
@@ -677,8 +689,34 @@ func RecordAccount(id tool.ID, name, email, plan string, snapshots ...*config.Co
 		return nil
 	}
 	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
-		ps.Account = &config.Account{Email: email, Plan: plan}
+		old := ps.Account
+		observeAccount(ps, email, plan)
+		if accountChanged(old, ps.Account) {
+			ps.AccountRevision = rand.Text()
+			ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
+		}
 	})
+}
+
+func accountChanged(old, current *config.Account) bool {
+	if old == nil || current == nil {
+		return old != current
+	}
+	return !sameLogin(*old, *current) || strings.EqualFold(old.Plan, "apiKey") != strings.EqualFold(current.Plan, "apiKey")
+}
+
+func observeAccount(ps *config.ProfileState, email, plan string) {
+	account := config.Account{Email: email, Plan: plan}
+	if old := ps.Account; old != nil && (email == "" || strings.EqualFold(email, old.Email)) && !strings.EqualFold(plan, "apiKey") {
+		account = *old
+		if email != "" {
+			account.Email = email
+		}
+		if plan != "" {
+			account.Plan = plan
+		}
+	}
+	ps.Account = &account
 }
 
 // RecordLogin invalidates derived quotas and old limit marks after a successful
@@ -689,10 +727,12 @@ func RecordLogin(id tool.ID, name string, acct tool.Account, snapshots ...*confi
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
 		ps.Account = &config.Account{Email: acct.Email, Plan: acct.Plan, Tenant: acct.Tenant}
+		ps.AccountRevision = rand.Text()
 	}); err != nil {
 		return err
 	}
-	return config.RemoveUsageObservation(id, name)
+	_ = config.RemoveUsageObservation(id, name) // registration identity already invalidates old observations
+	return nil
 }
 
 func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string, usageOnly bool) tool.Probe {
@@ -738,14 +778,15 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 // ReadUsage updates observation caches without changing manual routing/login
 // marks. A passive usage display must not clear a profile's existing busy mark.
 func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, error) {
+	binding, revision := config.CaptureUsageAccount(a.ID(), name)
 	p := readProbe(ctx, cfg, a, name, true)
 	if ctx.Err() != nil {
 		return p, ctx.Err()
 	}
-	if err := config.UpdateUsageObservationFor(cfg, a.ID(), name, func(ps *config.ProfileState) {
+	if err := config.CommitUsageObservation(cfg, a.ID(), name, binding, revision, func(ps *config.ProfileState) {
 		applyObservation(ps, p)
 		if p.Email != "" || p.Plan != "" {
-			ps.Account = &config.Account{Email: p.Email, Plan: p.Plan}
+			observeAccount(ps, p.Email, p.Plan)
 		}
 	}); err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: "usage cache could not be stored; run aims doctor --check", UsageError: "usage cache could not be stored"}, fmt.Errorf("usage cache could not be stored; existing files kept: %w", err)
@@ -810,7 +851,20 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 }
 
 func recordObservation(cfg *config.Config, id tool.ID, name string, p tool.Probe) {
-	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) { applyObservation(ps, p) })
+	visibleAccount := config.LoadStateFor(cfg).Get(id, name).Account
+	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) {
+		applyObservation(ps, p)
+		if p.Email != "" || p.Plan != "" {
+			old := ps.Account
+			observeAccount(ps, p.Email, p.Plan)
+			if accountChanged(old, ps.Account) || visibleAccount != nil && accountChanged(visibleAccount, ps.Account) {
+				ps.AccountRevision = rand.Text()
+				if !p.UsageReported && len(p.Windows) == 0 && len(p.Groups) == 0 && p.Resets == nil {
+					ps.Usage = nil
+				}
+			}
+		}
+	})
 }
 
 func applyObservation(ps *config.ProfileState, p tool.Probe) {
@@ -851,7 +905,6 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 		}
 		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, Window: LimitWindow(cfg, p.Detail, windows), By: "a live check", Detail: p.Detail})
 	}
-	_ = RecordAccount(id, name, p.Email, p.Plan, cfg)
 	return p
 }
 
