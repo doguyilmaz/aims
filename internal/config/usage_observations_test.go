@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -169,5 +170,54 @@ func TestDoctorExplainsLegacyAccountBindingMismatch(t *testing.T) {
 	}
 	if notes := strings.Join(UsageObservationNotes(cfg), " "); !strings.Contains(notes, "no longer match") {
 		t.Fatalf("missing identity diagnostic: %q", notes)
+	}
+}
+
+func TestLostIdentityFieldsRequireFreshObservation(t *testing.T) {
+	for _, field := range []string{"tenant", "email"} {
+		t.Run(field, func(t *testing.T) {
+			testutil.Sandbox(t)
+			cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+			_ = UpdateState("codex", "work", func(s *ProfileState) { s.Account = &Account{Email: "same@example.test", Tenant: "workspace"} })
+			if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) { s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 99}}} }); err != nil {
+				t.Fatal(err)
+			}
+			_ = UpdateState("codex", "work", func(s *ProfileState) {
+				if field == "tenant" {
+					s.Account.Tenant = ""
+				} else {
+					s.Account.Email = ""
+				}
+			})
+			if LoadStateFor(cfg).Get("codex", "work").Usage != nil {
+				t.Fatal("old quota borrowed unknown identity")
+			}
+			if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) { s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 2}}} }); err != nil {
+				t.Fatal(err)
+			}
+			if ps := LoadStateFor(cfg).Get("codex", "work"); ps.Usage == nil || ps.Usage.Windows[0].Percent != 2 {
+				t.Fatal("fresh observation could not bind corrected identity")
+			}
+		})
+	}
+}
+
+func TestUsageCacheRefusesManagedLink(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+	target := filepath.Join(t.TempDir(), "owner-file")
+	testutil.Write(t, target, "keep")
+	path := filepath.Join(Home(), "usage-observations.json")
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := LoadStateView(cfg); err == nil {
+		t.Fatal("cache followed an external link")
+	}
+	if err := UpdateUsageObservationFor(cfg, "codex", "work", func(*ProfileState) { t.Fatal("external cache reached mutation") }); err == nil {
+		t.Fatal("cache link was writable")
+	}
+	if testutil.Read(t, target) != "keep" {
+		t.Fatal("cache changed external owner file")
 	}
 }

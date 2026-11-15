@@ -147,3 +147,34 @@ func TestRemovedRegistrationDoesNotRunSavedHomeCommand(t *testing.T) {
 		t.Fatalf("removed profile still ran saved command: %q", out.String())
 	}
 }
+
+func TestSharedSettingsUseOriginatingHubChain(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		c.EnsureHub("claude")
+		c.Tools["claude"].Profiles["work"] = &config.Profile{}
+		c.Status.HomeChains = map[string]string{fsx.Real(c.EnsureHub("claude")): "echo SHARED-HUB-CHAIN"}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg.Dir("claude", "work"))
+	path := filepath.Join(t.TempDir(), "input.json")
+	testutil.Write(t, path, "{}")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	previous := os.Stdin
+	os.Stdin = f
+	defer func() { os.Stdin = previous }()
+	var out bytes.Buffer
+	if err := Run(t.Context(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "SHARED-HUB-CHAIN") {
+		t.Fatalf("shared profile lost hub's prior statusline: %q", out.String())
+	}
+}

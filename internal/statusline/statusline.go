@@ -50,7 +50,9 @@ func Run(ctx context.Context, w io.Writer) error {
 		parts = append(parts, "aims: profile changed; restart via aims")
 	}
 	home := os.Getenv("CLAUDE_CONFIG_DIR")
-	if home == "" {
+	if home == "" || name != "" && !profiles.Private(cfg.Tools[claude.ID].Profiles[name], tools.Get(claude.ID).Layout())("settings.json") {
+		// Shared settings were installed once in the hub; their saved command
+		// belongs to that integration home, including Windows hard-link shims.
 		home = profiles.HubHome(cfg, tools.Get(claude.ID)).Dir
 	}
 	if chain := cfg.Status.CommandForHome(home); !changedProfile && chain != "" && !claude.IsAimsStatusLine(chain) {

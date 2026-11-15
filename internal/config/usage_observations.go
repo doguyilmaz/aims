@@ -47,15 +47,14 @@ func CaptureUsageAccount(id tool.ID, name string) (*Account, string) {
 	return nil, ps.AccountRevision
 }
 
-// Known fields in current must agree with a prior observation. Losing optional
-// metadata in an old writer is not evidence of a new account; learning a new
-// identity requires a new observation rather than borrowing unknown metadata.
+// Identity fields must agree, including a loss of tenant/e-mail metadata in an
+// old writer. A fresh observation can bind the now-unknown identity; an old
+// measurement cannot borrow an uncertain workspace merely from the same email.
 func matchesUsageAccount(prior, current *Account) bool {
 	if current == nil || prior == nil {
 		return current == nil && prior == nil
 	}
-	return (current.Email == "" || strings.EqualFold(prior.Email, current.Email)) &&
-		(current.Tenant == "" || prior.Tenant == current.Tenant) &&
+	return strings.EqualFold(prior.Email, current.Email) && prior.Tenant == current.Tenant &&
 		(current.Plan == "" || strings.EqualFold(current.Plan, "apiKey") == strings.EqualFold(prior.Plan, "apiKey"))
 }
 
@@ -63,6 +62,11 @@ func usageObservationsPath() string { return filepath.Join(Home(), "usage-observ
 
 func readUsageObservations() (usageObservations, error) {
 	c := usageObservations{SchemaVersion: usageObservationSchema, Profiles: map[tool.ID]map[string]*usageObservation{}}
+	if fi, err := os.Lstat(usageObservationsPath()); err == nil && !fi.Mode().IsRegular() {
+		return c, fmt.Errorf("usage observation cache is not a regular file; file kept")
+	} else if err != nil && !os.IsNotExist(err) {
+		return c, err
+	}
 	f, err := os.Open(usageObservationsPath())
 	if os.IsNotExist(err) {
 		return c, nil
@@ -96,7 +100,7 @@ func writeUsageObservations(cache usageObservations) error {
 	if len(b)+1 > maxUsageObservationBytes {
 		return fmt.Errorf("usage observation cache would exceed its size limit; previous cache kept")
 	}
-	return fsx.WriteFile(usageObservationsPath(), append(b, '\n'), 0o600)
+	return fsx.WritePrivateFile(usageObservationsPath(), append(b, '\n'))
 }
 
 // UpdateUsageObservationFor commits only observations, under the same profile
