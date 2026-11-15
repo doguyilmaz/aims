@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -877,7 +878,7 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 				target = filepath.Join(dir, target)
 			}
 			target = filepath.Clean(strings.TrimPrefix(target, `\\?\`))
-			if target != filepath.Join(hubAbs, name) && target != filepath.Join(hubReal, name) {
+			if !sameEntryTarget(target, filepath.Join(hubAbs, name)) && !sameEntryTarget(target, filepath.Join(hubReal, name)) {
 				out = append(out, Report{Name: name, Action: Conflict, Detail: "link targets another resource; kept it for inspection"})
 				continue
 			}
@@ -924,6 +925,20 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 		out = append(out, Report{Name: name, Action: Detached, Detail: detail})
 	}
 	return out
+}
+
+func sameEntryTarget(path, expected string) bool {
+	if path == expected {
+		return true
+	}
+	// Windows paths commonly differ only in drive/directory casing. Prove
+	// filesystem identity too, because Windows also permits case-sensitive dirs.
+	if runtime.GOOS == "windows" && strings.EqualFold(path, expected) {
+		a, errA := os.Stat(path)
+		b, errB := os.Stat(expected)
+		return errA == nil && errB == nil && os.SameFile(a, b)
+	}
+	return false
 }
 
 // RemoveLinks deletes the links in dir without following them into the hub.

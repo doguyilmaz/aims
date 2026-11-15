@@ -29,6 +29,19 @@ func Refresh(ctx context.Context, a tool.Adapter) {
 	if !OnPath() {
 		return
 	}
+	refreshInstalled(ctx, a)
+}
+
+func refreshInstalled(ctx context.Context, a tool.Adapter) {
+	// Automatic maintenance shares the lifecycle lock with setup, logout,
+	// purge and clean. A saved Home must not outlive removal and recreate it.
+	_ = profileOperation(func() error {
+		refresh(ctx, a)
+		return nil
+	})
+}
+
+func refresh(ctx context.Context, a tool.Adapter) {
 	cfg, err := config.Load()
 	if err != nil || cfg.Tools[a.ID()].Hub == "" {
 		return

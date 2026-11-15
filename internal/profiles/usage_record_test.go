@@ -58,3 +58,17 @@ func TestExplicitLimitWithUnknownPercentIsNotTreatedAsZero(t *testing.T) {
 		t.Fatalf("unknown alone became a false limit: %+v", ev)
 	}
 }
+
+func TestUnknownResetLimitIsSharedBySameAccount(t *testing.T) {
+	cfg, a := setup(t)
+	for _, name := range []string{"a", "b"} {
+		_ = config.UpdateStateFor(cfg, a.ID(), name, func(s *config.ProfileState) {
+			s.Account = &config.Account{Email: "same@example.test", Tenant: "workspace"}
+		})
+	}
+	_ = RecordUsage(a.ID(), "a", []tool.Window{{Label: "7d", PercentUnknown: true, Limited: true}}, "fixture", cfg)
+	ev := Evaluate(t.Context(), cfg, config.LoadStateFor(cfg), a, "b")
+	if ev.Usable || !ev.ReadyAt.IsZero() || len(ev.Reasons) != 1 || ev.Reasons[0] != "same account as a, 7d limit" {
+		t.Fatalf("same account escaped unknown-reset limit: %+v", ev)
+	}
+}

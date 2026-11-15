@@ -474,3 +474,23 @@ func TestDetachRefusesDifferentHubEntry(t *testing.T) {
 		t.Fatal("unrelated hub resource changed")
 	}
 }
+
+func TestDetachWindowsCaseVariantTarget(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows case-insensitive link target")
+	}
+	hub, dir := t.TempDir(), t.TempDir()
+	target := filepath.Join(hub, "skills")
+	testutil.Write(t, filepath.Join(target, "marker"), "keep")
+	link := filepath.Join(dir, "skills")
+	if err := makeLink(strings.ToUpper(target), link, true); err != nil {
+		t.Fatal(err)
+	}
+	reps := Detach(hub, dir, func(string) bool { return true }, layout)
+	if len(reps) != 1 || reps[0].Action != Detached || isJunction(link) {
+		t.Fatalf("valid Windows target stayed shared: %+v", reps)
+	}
+	if got := testutil.Read(t, filepath.Join(link, "marker")); got != "keep" {
+		t.Fatal("private copy lost data")
+	}
+}

@@ -462,6 +462,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 			if r, until := sameAccount(cfg, other, now); r != "" {
 				ev.Reasons = append(ev.Reasons, "same account as "+n+", "+r)
 				ev.ReadyAt = later(ev.ReadyAt, until)
+				open = open || until.IsZero()
 			}
 		}
 	}
@@ -507,6 +508,9 @@ func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (re
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
+			if windowLimited(cfg, w) && w.ResetsAt.IsZero() {
+				return windowLimitText(w), time.Time{}
+			}
 			if windowLimited(cfg, w) && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
 				reason, until = windowLimitText(w)+" for "+Duration(w.ResetsAt.Sub(now)), w.ResetsAt
 			}

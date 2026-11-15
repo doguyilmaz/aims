@@ -32,9 +32,9 @@ func Run(ctx context.Context, w io.Writer) error {
 		return nil
 	}
 	name := cfg.ProfileForHomeEnv(claude.ID, os.Getenv("CLAUDE_CONFIG_DIR"))
-	changedProfile := false
+	generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
+	changedProfile := supplied && name == ""
 	if name != "" {
-		generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
 		expected := cfg.Tools[claude.ID].Profiles[name].Generation
 		if (supplied || expected != "") && generation != expected {
 			name, changedProfile = "", true

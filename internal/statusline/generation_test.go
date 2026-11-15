@@ -106,3 +106,44 @@ func TestRunSelectsOnlyOriginatingHomeChain(t *testing.T) {
 		}
 	}
 }
+
+func TestRemovedRegistrationDoesNotRunSavedHomeCommand(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, err := config.Update(func(c *config.Config) error {
+		c.EnsureHub("claude")
+		c.Tools["claude"].Profiles["work"] = &config.Profile{Generation: "old", Share: config.ShareNone}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := cfg.Dir("claude", "work")
+	testutil.Write(t, filepath.Join(home, "placeholder"), "")
+	_, err = config.Update(func(c *config.Config) error {
+		c.Status.HomeChains = map[string]string{fsx.Real(home): "echo STALE-SAVED-COMMAND"}
+		delete(c.Tools["claude"].Profiles, "work")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	t.Setenv(config.GenerationVar("claude"), "old")
+	path := filepath.Join(t.TempDir(), "input.json")
+	testutil.Write(t, path, "{}")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	previous := os.Stdin
+	os.Stdin = f
+	defer func() { os.Stdin = previous }()
+	var out bytes.Buffer
+	if err := Run(t.Context(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "STALE-SAVED-COMMAND") || !strings.Contains(out.String(), "profile changed") {
+		t.Fatalf("removed profile still ran saved command: %q", out.String())
+	}
+}
