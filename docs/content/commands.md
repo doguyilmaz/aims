@@ -58,15 +58,23 @@ What is going on, in a few lines. Alias: `aims ls`.
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
 | `--json` | Everything, as JSON: emails, every usage window, marks and who set them |
 
-### `aims usage [tool]`
+### `aims usage [provider]`
 
 Every usage window of every account with its bar and when it resets, and under them the limits of installed tools aims does not run sessions on: Antigravity (`agy`), Grok, Kiro and OpenCode. Columns line up across all of them, and on a narrow terminal the windows wrap under each other.
 
-aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. The numbers are from the last `aims keepalive` or `--live`.
+aims asks each other tool's own CLI (`agy -p /usage`, Grok's ACP agent, OpenCode's server), and for Kiro the API behind `kiro-cli`'s `/usage`, using the login kiro-cli keeps. aims never logs in to these tools itself. Filter by `claude`, `codex`, `kiro`, `grok`, `agy` or `opencode`. The numbers are cached until `aims keepalive`, `--refresh` or `--live` updates them.
+
+Scheduled resets, banked reset inventory and user reminders are separate. Banked reset counts come from Codex's account API when available; detail lists can be absent or capped. aims never redeems or buys a reset. A reset time in the past means the reading needs refreshing, not that usage is now zero. Failed refreshes retain the previous numbers **and their original observation time**.
 
 | Flag | |
 | --- | --- |
 | `--live` | Ask the providers first. Free for Codex and the other tools; costs a few tokens for Claude Code. |
+| `--refresh` | Refresh Codex and the other providers without a model prompt or clearing manual routing/login marks. Claude uses its cached native status line. Mutually exclusive with `--live`. |
+| `--json` | Versioned usage snapshot: accounts/groups, windows, reset timestamps, banked resets, freshness, errors and custom reminders. Omits credential fields, account email, tenant and profile paths. Reads caches without provider/keychain calls unless refreshing. |
+
+`aims usage reset add <provider> <row-id> --at <RFC3339> --label <text>` adds a custom reminder. Take the row ID from `aims usage --json`; `--at` must include a timezone. `aims usage reset remove <id>` removes it. Both accept `--json` to return the updated snapshot. The reminders live in `AIMS_HOME/usage-reminders.json`, separately from provider data, credentials and session history. Malformed or newer reminder formats are left unchanged.
+
+For the optional menu bar and pinned panel, see [macOS usage app](../macos-usage).
 
 ### `aims use [tool] <profile>`
 
@@ -94,6 +102,12 @@ Prints the exports that pin the current terminal to a profile. Use with `eval "$
 | --- | --- |
 | `--reset` | Unpin |
 | `--shell` | `bash`, `zsh`, `fish` or `powershell` (default: detected) |
+
+### `aims exec [--claude profile] [--codex profile] -- <program> [args...]`
+
+Starts another application with the preferred CLI accounts in this project. Explicit flags pin them. The child receives aims' home, database and memory routing, without the enclosing session's move hooks or CLI session identifiers. Its arguments and exit code pass through. `--dry-run` prints the selected tools and profile names without running it. No config, links, logins or account order are changed by aims. The application owns its session lifecycle and may override the inherited environment. See [Other coding apps](../other-apps).
+
+`--launchers` puts installed aims launchers first on this child's PATH only. Run `aims bridge install` first. Bundled SDK runtimes and explicit executable overrides are preserved.
 
 ## Accounts
 
@@ -157,10 +171,44 @@ Forgets a profile. Alias: `aims remove`. Without a profile, aims asks which acco
 | Flag | |
 | --- | --- |
 | `--purge` | Also log it out and delete its folder. Anything shared that was written there moves to the hub first; shared history and settings are never deleted. aims only deletes folders it created. |
-| `--force` | Purge even if some shared entries could not be moved |
+| `--force` | Purge even if some shared entries could not be moved; does not bypass a failed logout |
 | `-y`, `--yes` | Do not ask |
 
+Purge requires the native tool to complete logout, even if the profile folder is already missing: a keychain or keyring login can outlive that folder. If the tool is unavailable or logout fails, the profile registration and remaining files stay for retry. Removing a profile without `--purge` only forgets its label and keeps its login.
+
 ## Integrations
+
+### `aims bridge`
+
+Read-only comparison of the current process' CLI homes, aims profiles and actual transcript link targets. It never invokes a provider, reads credentials, repairs links or changes setup. `--json` prints routing metadata without secrets.
+
+### `aims bridge install`, `aims bridge uninstall`
+
+Create or remove dedicated executable links under `~/.aims/bridge/bin` (or `$AIMS_HOME/bridge/bin`). Clients that accept one executable path can use these for their CLI/SDK connection. Original CLIs, global PATH, app settings, logins and conversations stay. Changed launchers and unrelated files are never overwritten or deleted. Installation requires a persistent aims binary, not `go run`.
+
+### `aims bridge commands`
+
+Print generic CLI, app-server and ACP integration commands. `--json` returns a versioned catalog of executable paths, argument arrays and environment maps, and an SDK executable path after launcher installation. No arbitrary profile environment or credentials are exported. Use it to configure custom agents in editors without depending on an app-specific exporter.
+
+### `aims bridge run <tool>[@profile] [--] [args...]`
+
+Start a native CLI with the preferred or explicit account. stdin, stdout, stderr and arguments pass through without analysis, buffering, retries or authentication probes. Only the named tool is routed; files and sharing modes are not migrated. The native process replaces aims on Unix, and Windows uses attached streams. The client owns active sessions and account switching.
+
+### `aims bridge acp <tool>[@profile] [--] [args...]`
+
+Start an installed upstream `claude-agent-acp` or `codex-acp` with the selected aims account environment. The adapter keeps its bundled native runtime and explicit executable overrides. On Windows, standard npm command shims run through their recorded Node entrypoint or native executable, with arguments passed directly. Custom batch scripts require an explicit native/runtime command (for example `aims exec -- node <adapter-entrypoint>`). No protocol translation, adapter downloads or preview upgrades happen in aims. See [ACP clients](../other-apps#acp-clients).
+
+### `aims bridge t3`
+
+Previews additive T3 Code existing-CLI connections for aims profiles. Existing providers, defaults and unknown settings are retained; managed T3 logins remain separate. Use T3's import flow to add available CLI conversations to its own thread list.
+
+| Flag | |
+| --- | --- |
+| `--settings` | Read another T3 server settings file instead of `$T3CODE_HOME/userdata/settings.json` or `~/.t3/userdata/settings.json` |
+| `--json` | Print new connections and diagnostics; omit existing settings and credentials |
+| `--output` | Write merged settings to a **new**, private export file. Refuses existing paths, symlinks and live settings. |
+
+Close T3 before installing a reviewed export, generate it from the latest settings and retain a backup. The exporter does not modify running apps, copy credentials or change sharing modes. See [T3 Code setup](../other-apps#t3-code) for activation, keychain identity and import limits.
 
 ### `aims setup`
 
@@ -180,7 +228,7 @@ When a new version of aims can add something you were never asked about, the nex
 
 ### `aims sync [tool]`
 
-Repairs shared links for every profile (each launch does this for the profile it starts) and shares Claude Code MCP servers and project trust between your accounts.
+Reconciles shared links for every profile (each launch does this for the profile it starts) and shares Claude Code MCP servers and project trust between your accounts. It keeps conflicting versions and returns a failure when an entry still needs attention. Close affected tools before reconciling independent content. Open databases, recovery sidecars, unrelated symlinks and independent data databases are kept. For conservative migration repairs, start with `aims doctor --check`, then `aims doctor --fix`.
 
 ### `aims shell-init [shell]`
 
@@ -194,7 +242,18 @@ The MCP server. Claude Code and Codex start it; you do not run it yourself.
 
 ### `aims doctor`
 
-Checks the tools, each profile's login and shared folders, and the integrations (including whether the keepalive is on), and prints the command that fixes each problem. It repairs shared links as it goes, including a profile's own writer lock folder once no process uses it, and names database copies a profile no longer uses; `--fix` deletes those copies when no instance of the tool has a file of the profile open, and adopts databases that looked open (close the tools first). It also says when a work account (team, enterprise, business or edu plan) shares with a personal one, and names any MCP server whose token or password is written into the settings every account shares. Exits with 1 when something needs attention.
+Read-only checks of shared folders, account routing, existing bridge launchers, installed skills and MCP settings. It never starts a provider, reads login files or writes repairs by default. Exits with `1` when a problem remains; informational setup suggestions alone do not fail the check.
+
+| Flag | Behavior |
+| --- | --- |
+| `--check` | Explicit spelling of the default read-only check |
+| `--json` | Versioned report (`schemaVersion: "1.0.0"`) with `checks` and `repairs`; no credential values |
+| `--fix` | Create missing links, apply explicit sharing-policy changes and repair an existing owned launcher installation; keep independent settings, histories and data databases |
+| `--logins` | Inspect local login status and provider versions, account sharing and MCP secret warnings; may invoke installed CLIs, read login files/keychain and update aims' cached account details |
+
+`--fix --json` reports attempted repairs and then checks the resulting state. Repeating a successful fix makes no further changes. Use `--logins` separately from the other flags.
+
+Fix never forces an open database to move. Verified-unused index/log copies and their SQLite sidecars are archived together in a private `.aims-recovery-*` folder in the profile. The report gives the recovery path. A missing open-file inspection capability leaves them in place. Independent content requires an explicit `aims sync` after closing affected tools; two independent data databases require deliberate SQLite reconciliation. Existing symlinks managed by other tools remain untouched. See [Troubleshooting](../troubleshooting).
 
 ### `aims keepalive [on|off]`
 
@@ -204,11 +263,13 @@ Renews every login whose access token has run out or is within 10 minutes of it,
 
 ### `aims clean`
 
-Takes aims out of your tools (skill, MCP server, status line, shell line, keepalive) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. Alias: `aims uninstall`. `-y` skips the question.
+Takes aims out of your tools (skill, MCP server, status line, shell line, keepalive) and forgets its settings and marks. Every login and account folder stays, so `aims init` brings them back without logging in again. If an integration cannot be removed, configuration and marks are retained for retry. Recovery copies and user additions stay. Alias: `aims uninstall`. `-y` skips the question.
 
 ### `aims wipe`
 
-Logs out every account aims created and deletes its folder, then cleans. Anything shared that was written in a folder moves to `~/.claude` or `~/.codex` first. Your conversations, sessions, skills, settings and main logins are never touched, and custom `--dir` folders are forgotten, not deleted.
+Logs out every account aims created and deletes its folder, then cleans. Anything shared that was written in a folder moves to `~/.claude` or `~/.codex` first. Your conversations, sessions, skills, settings and main logins are never touched, and custom `--dir` folders are forgotten, not deleted. Recovery copies are retained, so the aims home can remain after wipe even though its account configuration and profile folders have been removed.
+
+If a native logout fails or its executable is unavailable, wipe stops with that profile and its registration retained. `--force` does not bypass logout; earlier completed removals remain completed.
 
 | Flag | |
 | --- | --- |

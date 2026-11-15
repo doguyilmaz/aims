@@ -44,10 +44,13 @@ func (*Adapter) Title() string { return "Claude Code" }
 
 func (*Adapter) Layout() tool.Layout {
 	return tool.Layout{
-		Bin:         "claude",
-		BinEnv:      "AIMS_CLAUDE_BIN",
-		HomeEnv:     "CLAUDE_CONFIG_DIR",
-		DefaultHome: ".claude",
+		Bin:           "claude",
+		BinEnv:        "AIMS_CLAUDE_BIN",
+		HomeEnv:       "CLAUDE_CONFIG_DIR",
+		DefaultHome:   ".claude",
+		ExactHomeEnv:  true,
+		TranscriptDir: "projects",
+		ACPBin:        "claude-agent-acp",
 		Shared: tool.Names(
 			"projects", // transcripts and auto memory: `claude --continue` works across accounts
 			"file-history", "todos", "plans", "tasks", "history.jsonl",
@@ -60,6 +63,7 @@ func (*Adapter) Layout() tool.Layout {
 		History:        tool.Names("projects", "file-history", "todos", "plans", "tasks", "history.jsonl"),
 		ConflictingEnv: []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"},
 		SkillsDir:      "skills",
+		SettingsFile:   "settings.json",
 		Markers:        []string{".credentials.json", ".claude.json", "projects", "settings.json"},
 	}
 }
@@ -132,8 +136,8 @@ func keychainAccount() string {
 	return "claude-code-user"
 }
 
-func readKeychain(envValue string) (found bool, o *oauth) {
-	out, code, err := proc.Output("security", []string{"find-generic-password", "-a", keychainAccount(), "-w", "-s", KeychainService(envValue)}, nil, 5*time.Second)
+func readKeychain(ctx context.Context, envValue string) (found bool, o *oauth) {
+	out, code, err := proc.OutputContext(ctx, "security", []string{"find-generic-password", "-a", keychainAccount(), "-w", "-s", KeychainService(envValue)}, nil, 5*time.Second)
 	if err != nil || code != 0 {
 		return false, nil
 	}
@@ -153,7 +157,7 @@ func readKeychain(envValue string) (found bool, o *oauth) {
 	return true, nil
 }
 
-func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
+func (*Adapter) Account(ctx context.Context, h tool.Home) tool.Account {
 	var cj struct {
 		OAuthAccount struct {
 			Email   string `json:"emailAddress"`
@@ -174,7 +178,7 @@ func (*Adapter) Account(_ context.Context, h tool.Home) tool.Account {
 	present := false
 	// Test binaries never read the keychain of the person running them.
 	if runtime.GOOS == "darwin" && !testing.Testing() {
-		present, o = readKeychain(h.EnvValue)
+		present, o = readKeychain(ctx, h.EnvValue)
 	}
 	if !present {
 		var f struct {
@@ -227,7 +231,7 @@ func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
 	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku",
 		"--strict-mcp-config", "--settings", `{"disableAllHooks":true}`, "--tools", "", "--system-prompt", "Answer in one word.",
 		"--", "Reply with just: OK"}
-	out, code, err := proc.Output(h.Bin, args, h.Env, 2*time.Minute)
+	out, code, err := proc.OutputContext(ctx, h.Bin, args, h.Env, 2*time.Minute)
 	if err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
 	}
@@ -262,28 +266,30 @@ func firstLine(s string) string {
 
 func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPPerLogin }
 
+func (*Adapter) MCPConfigPath(h tool.Home) string { return claudeJSON(h) }
+
 var alreadyRe = regexp.MustCompile(`(?i)already exists`)
 var missingRe = regexp.MustCompile(`(?i)no (mcp )?server named|not found`)
 
 // RegisterMCP ignores s.Env and s.Timeout: Claude Code passes its whole
 // environment on and has no short limit on tool calls.
-func (*Adapter) RegisterMCP(_ context.Context, h tool.Home, s tool.MCPServer) error {
+func (*Adapter) RegisterMCP(ctx context.Context, h tool.Home, s tool.MCPServer) error {
 	args := append([]string{"mcp", "add", "--scope", "user", s.Name, "--"}, s.Command...)
-	_, err := runMCP(h, args, alreadyRe)
+	_, err := runMCP(ctx, h, args, alreadyRe)
 	return err
 }
 
-func (*Adapter) UnregisterMCP(_ context.Context, h tool.Home, name string) (bool, error) {
-	return runMCP(h, []string{"mcp", "remove", "--scope", "user", name}, missingRe)
+func (*Adapter) UnregisterMCP(ctx context.Context, h tool.Home, name string) (bool, error) {
+	return runMCP(ctx, h, []string{"mcp", "remove", "--scope", "user", name}, missingRe)
 }
 
 // runMCP runs an mcp subcommand. changed is false when it failed with an
 // expected message (already there, nothing to remove).
-func runMCP(h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
+func runMCP(ctx context.Context, h tool.Home, args []string, benign *regexp.Regexp) (changed bool, err error) {
 	if h.Bin == "" {
 		return false, errNotInstalled
 	}
-	out, code, err := proc.CombinedOutput(h.Bin, args, h.Env, time.Minute)
+	out, code, err := proc.CombinedOutputContext(ctx, h.Bin, args, h.Env, time.Minute)
 	switch {
 	case err != nil:
 		return false, err

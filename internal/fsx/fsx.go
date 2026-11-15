@@ -146,6 +146,7 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 	if real, err := filepath.EvalSymlinks(path); err == nil {
 		path = real
 	}
+	var restore func() error
 	if fi := Stat(path); fi != nil && fi.Mode().IsRegular() {
 		perm = fi.Mode().Perm()
 	}
@@ -153,11 +154,19 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	tmp, err := CreatePrivateTemp(dir, "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
 	name := tmp.Name()
+	if fi := Stat(path); fi != nil && fi.Mode().IsRegular() {
+		restore, err = AccessRestorer(path, name)
+		if err != nil {
+			tmp.Close()
+			os.Remove(name)
+			return err
+		}
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(name)
@@ -167,7 +176,12 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 		os.Remove(name)
 		return err
 	}
-	if err := os.Chmod(name, perm); err != nil {
+	if restore != nil {
+		err = restore()
+	} else {
+		err = os.Chmod(name, perm)
+	}
+	if err != nil {
 		os.Remove(name)
 		return err
 	}

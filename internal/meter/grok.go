@@ -109,9 +109,17 @@ func parseGrok(raw []byte) Reading {
 		} `json:"config"`
 		Tier string `json:"subscription_tier"`
 	}
-	if err := json.Unmarshal(raw, &doc); err != nil || doc.Config == nil || doc.Config.CreditUsagePercent == nil {
+	if err := json.Unmarshal(raw, &doc); err != nil || doc.Config == nil || (doc.Config.CreditUsagePercent == nil && doc.Config.CurrentPeriod.End.IsZero()) {
 		return Reading{Error: "grok did not report its credits (" + firstLine(raw) + ")"}
 	}
 	c := doc.Config
-	return Reading{Plan: doc.Tier, Rows: []Row{{Name: "credits", Windows: []tool.Window{{Label: label(c.CurrentPeriod.Type), Percent: *c.CreditUsagePercent, ResetsAt: c.CurrentPeriod.End}}}}}
+	w := tool.Window{ID: "credits", Label: label(c.CurrentPeriod.Type), ResetsAt: c.CurrentPeriod.End}
+	detail := ""
+	if c.CreditUsagePercent == nil {
+		w.PercentUnknown = true
+		detail = "Usage percentage not reported for this account"
+	} else {
+		w.Percent = *c.CreditUsagePercent
+	}
+	return Reading{Plan: doc.Tier, Rows: []Row{{ID: "credits", Name: "credits", Windows: []tool.Window{w}, Detail: detail}}}
 }

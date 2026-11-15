@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/doguyilmaz/aims/internal/bridge"
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/launch"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -32,6 +33,17 @@ func (e exitError) Error() string { return fmt.Sprintf("exit status %d", e.code)
 
 // Execute runs aims and returns the process exit code.
 func Execute(version string) int {
+	// Executable links are transparent entry points for SDKs/IDEs that accept
+	// one binary path, rather than a command with prefix arguments.
+	if id, m, err := bridge.LauncherInvocation(os.Args[0]); err != nil {
+		ui.Error(err)
+		return 1
+	} else if id != "" {
+		if os.Getenv(config.HomeVar) == "" {
+			_ = os.Setenv(config.HomeVar, m.ConfigHome)
+		}
+		os.Args = append([]string{os.Args[0], "bridge", "run", string(id), "--"}, os.Args[1:]...)
+	}
 	version = resolveVersion(version)
 	appVersion = version
 	ctx := context.Background()
@@ -156,13 +168,14 @@ aims               # status and next steps`,
 	}
 	add("daily", newStatusCmd(), newUsageCmd())
 	add("accounts", newOrderCmd(), newUseCmd(), newAddCmd(), newLogoutCmd(), newRemoveCmd())
-	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd())
-	add("maintain", newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
+	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd(), newExecCmd())
+	add("maintain", newBridgeCmd(), newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
 	root.AddCommand(newStatusLineCmd(), newHookCmd())
 	// Commands that act on an account offer the setup when there is none yet.
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
-	// Commands that run for a tool, or that set the keepalive up themselves.
-	noHeal := []string{"statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
+	// Embedded clients and usage displays must not install background services.
+	// Other entries run for a tool or set the keepalive up themselves.
+	noHeal := []string{"usage", "doctor", "bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		top := cmd
 		for top.HasParent() && top.Parent() != root {

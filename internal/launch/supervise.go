@@ -102,7 +102,10 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return Result{Code: 2, Profile: name}, err
 		}
 		profiles.Track(profiles.OpenSession{Tool: a.ID(), Profile: name, Mode: profiles.Watched, Dir: workDir(o), Started: started})
-		env := sessionEnv(o, cfg, name)
+		env, err := sessionEnv(o, cfg, name)
+		if err != nil {
+			return Result{Code: 1, Profile: name}, err
+		}
 		env = append(env, profiles.RunVar+"="+dir)
 		child, err = proc.StartAttached(bin, watched, env, o.Dir)
 		if err != nil {

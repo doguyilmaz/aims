@@ -22,6 +22,11 @@ func Clean(ctx context.Context) ([]Step, error) {
 	if err != nil {
 		return steps, err
 	}
+	for _, step := range steps {
+		if step.Err != nil {
+			return steps, fmt.Errorf("some integrations could not be removed; aims configuration and marks were kept for retry")
+		}
+	}
 	for _, f := range []string{"config.json", "state.json"} {
 		p := filepath.Join(config.Home(), f)
 		switch err := os.Remove(p); {
@@ -76,6 +81,9 @@ func Wipe(ctx context.Context, force bool) ([]Step, error) {
 			what := n + " logged out and deleted"
 			if !purge {
 				what = n + " forgotten, its folder kept"
+			}
+			if err != nil {
+				what = n + " removal did not complete"
 			}
 			steps = append(steps, Step{Tool: a.ID(), What: what, Target: fsx.Tildify(res.Dir), Err: err})
 			if err != nil {

@@ -14,7 +14,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -36,8 +35,10 @@ const (
 	Skipped  Action = "skipped"  // nothing to link yet
 	Unused   Action = "unused"   // the profile's own copy, which the tool no longer reads
 	Removed  Action = "removed"  // an unused copy deleted and linked to the hub
+	Archived Action = "archived" // unused database kept in a recovery folder
 	Detached Action = "detached" // stopped sharing
 	Conflict Action = "conflict" // needs a person
+	Missing  Action = "missing"  // read-only check: link/target still needs creation
 )
 
 // Report describes one entry.
@@ -45,6 +46,8 @@ type Report struct {
 	Name   string
 	Action Action
 	Detail string
+	// Repairable marks check results handled by the conservative doctor fix.
+	Repairable bool
 	// Quiet conflicts are shown only by doctor and sync, not on every launch.
 	Quiet bool
 }
@@ -57,10 +60,13 @@ type Options struct {
 	Private func(name string) bool
 	// Label names kept duplicates, e.g. "settings.json.aims-work-<time>".
 	Label string
-	// Fix also adopts databases that look open.
+	// Fix archives verified-unused disposable databases. It never forces an
+	// open database or one with recovery sidecars to move.
 	Fix bool
 	// StateShared: the tool reads the profile's databases from the hub.
 	StateShared bool
+	// MissingOnly prevents doctor from reconciling independent content.
+	MissingOnly bool
 }
 
 func readDir(dir string) []string {
@@ -148,21 +154,18 @@ func pointsTo(p, target string) bool {
 	return filepath.Clean(raw) == filepath.Clean(target)
 }
 
-// move renames without replacing anything at to, falling back to copy and
-// delete only across file systems. Any other failure (a file open on Windows,
-// say) is returned as is, with nothing deleted.
+// move renames without replacing anything at to. Cross-filesystem moves need
+// an explicit offline copy: copying and recursively deleting a live source
+// cannot preserve writes made after the copy.
 func move(from, to string) error {
 	if fsx.Lstat(to) != nil {
 		return fmt.Errorf("%s already exists", to)
 	}
-	err := os.Rename(from, to)
+	err := renameNoReplace(from, to)
 	if err == nil || !crossDevice(err) {
 		return err
 	}
-	if err := copyTree(from, to); err != nil {
-		return err
-	}
-	return os.RemoveAll(from)
+	return fmt.Errorf("cross-filesystem move refused; close affected tools and copy %s to %s explicitly: %w", from, to, err)
 }
 
 // unique returns base, or base with a counter, naming nothing that exists yet.
@@ -175,31 +178,59 @@ func unique(base string) string {
 }
 
 func copyTree(from, to string) error {
-	fi, err := os.Stat(from)
+	return copyTreeAt(from, to, from, to)
+}
+
+// rebasedLink preserves external references and moves internal absolute
+// references with the tree. Relative external links become absolute so that
+// moving a skill/plugin does not silently change what it loads.
+func rebasedLink(raw, source, sourceRoot, destRoot string) string {
+	absolute := raw
+	if !filepath.IsAbs(raw) {
+		absolute = filepath.Join(filepath.Dir(source), raw)
+	}
+	if fsx.Within(absolute, sourceRoot) {
+		if !filepath.IsAbs(raw) {
+			return raw
+		}
+		rel, _ := filepath.Rel(sourceRoot, absolute)
+		return filepath.Join(destRoot, rel)
+	}
+	return absolute
+}
+
+func copyTreeAt(from, to, sourceRoot, destRoot string) error {
+	fi, err := os.Lstat(from)
 	if err != nil {
 		return err
 	}
-	if !fi.IsDir() {
-		return copyFile(from, to, fi.Mode().Perm(), fi.ModTime())
-	}
-	return filepath.WalkDir(from, func(p string, d fs.DirEntry, err error) error {
+	if fi.Mode()&fs.ModeSymlink != 0 || isJunction(from) {
+		target, err := os.Readlink(from)
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(from, p)
-		dst := filepath.Join(to, rel)
-		if d.IsDir() {
-			return os.MkdirAll(dst, 0o755)
+		info := fsx.Stat(from)
+		return makeLink(rebasedLink(target, from, sourceRoot, destRoot), to, isJunction(from) || info != nil && info.IsDir())
+	}
+	if !fi.IsDir() {
+		if !fi.Mode().IsRegular() {
+			return fmt.Errorf("refusing to copy special file %s", from)
 		}
-		info, err := os.Stat(p) // follows symlinks: copies content, not links
-		if err != nil {
-			return nil // a dangling link inside is skipped
+		return copyFile(from, to, fi.Mode().Perm(), fi.ModTime())
+	}
+	if err := createCopyDirectory(to, fi.Mode().Perm()|0o700); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(from)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if err := copyTreeAt(filepath.Join(from, e.Name()), filepath.Join(to, e.Name()), sourceRoot, destRoot); err != nil {
+			return err
 		}
-		if info.IsDir() {
-			return copyTree(p, dst)
-		}
-		return copyFile(p, dst, info.Mode().Perm(), info.ModTime())
-	})
+	}
+	return finishCopyPermissions(from, to, fi.Mode().Perm())
 }
 
 func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
@@ -211,7 +242,7 @@ func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
 	}
-	out, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	out, err := fsx.CreatePrivateFile(to)
 	if err != nil {
 		return err
 	}
@@ -222,7 +253,10 @@ func copyFile(from, to string, perm fs.FileMode, mtime time.Time) error {
 	if err := out.Close(); err != nil {
 		return err
 	}
-	return os.Chtimes(to, mtime, mtime)
+	if err := os.Chtimes(to, mtime, mtime); err != nil {
+		return err
+	}
+	return finishCopyPermissions(from, to, perm)
 }
 
 func sameContent(a, b string) bool {
@@ -264,33 +298,100 @@ func sameContent(a, b string) bool {
 // mergeDir moves src's contents into dst without overwriting anything, then
 // removes src. Returns the names of kept duplicates.
 func mergeDir(src, dst, label string) ([]string, error) {
-	var kept []string
+	// Check the entire move before removing even a symlink. A later EXDEV
+	// must not strand earlier links in an otherwise unmigrated profile.
+	if err := preflightTreeMove(src, dst); err != nil {
+		return nil, err
+	}
+	return mergeDirAt(src, dst, label, src, dst)
+}
+
+func mergeDirAt(src, dst, label, sourceRoot, destRoot string) (kept []string, err error) {
 	if si, di := fsx.Stat(src), fsx.Stat(dst); si != nil && di != nil && os.SameFile(si, di) {
 		return nil, fmt.Errorf("%s and %s are the same folder", src, dst) // removing src would empty dst
 	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
+	si, err := os.Stat(src)
+	if err != nil {
 		return nil, err
 	}
-	for _, name := range readDir(src) {
+	if fsx.Lstat(dst) == nil {
+		restore, e := copyPermissionRestorer(src, dst, si.Mode().Perm())
+		if e != nil {
+			return nil, e
+		}
+		if err := createCopyDirectory(dst, si.Mode().Perm()|0o700); err != nil {
+			return nil, err
+		}
+		// Restore read-only modes after population, including on failure.
+		defer func() { err = errors.Join(err, restore()) }()
+	}
+	sourceMode := si.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+	if sourceMode.Perm()&0o700 != 0o700 {
+		if err := os.Chmod(src, sourceMode|0o700); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if e := os.Chmod(src, sourceMode); !errors.Is(e, os.ErrNotExist) {
+				err = errors.Join(err, e)
+			}
+		}()
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
 		s, d := filepath.Join(src, name), filepath.Join(dst, name)
 		sfi, dfi := fsx.Lstat(s), fsx.Lstat(d)
 		switch {
 		case sfi == nil:
-		case dfi == nil:
-			if err := move(s, d); err != nil {
+		case sfi.Mode()&fs.ModeSymlink != 0 || isJunction(s):
+			raw, err := os.Readlink(s)
+			if err != nil {
 				return kept, err
 			}
-		case sfi.IsDir() && dfi.IsDir():
-			sub, err := mergeDir(s, d, label)
+			rebased := rebasedLink(raw, s, sourceRoot, destRoot)
+			resolved := rebased
+			if !filepath.IsAbs(resolved) {
+				resolved = filepath.Join(filepath.Dir(d), resolved)
+			}
+			if dfi != nil && (dfi.Mode()&fs.ModeSymlink != 0 || isJunction(d)) && pointsTo(d, resolved) {
+				if err := os.Remove(s); err != nil {
+					return kept, err
+				}
+				continue
+			}
+			if dfi != nil {
+				d = unique(d + ".aims-" + label + "-" + stamp())
+				kept = append(kept, filepath.Base(d))
+			}
+			info := fsx.Stat(s)
+			if err := makeLink(rebased, d, isJunction(s) || info != nil && info.IsDir()); err != nil {
+				return kept, err
+			}
+			if err := os.Remove(s); err != nil {
+				return kept, err
+			}
+		case sfi.IsDir() && dfi == nil:
+			sub, err := mergeDirAt(s, d, label, sourceRoot, destRoot)
 			kept = append(kept, sub...)
 			if err != nil {
 				return kept, err
 			}
-		case sfi.Mode().IsRegular() && dfi.Mode().IsRegular() && sameContent(s, d):
-			os.Remove(s)
-		case sfi.Mode()&fs.ModeSymlink != 0:
-			os.Remove(s) // a link holds no data; the shared folder's own entry wins
+		case dfi == nil:
+			if err := move(s, d); err != nil {
+				return kept, err
+			}
+		case sfi.IsDir() && dfi.IsDir() && !isJunction(d):
+			sub, err := mergeDirAt(s, d, label, sourceRoot, destRoot)
+			kept = append(kept, sub...)
+			if err != nil {
+				return kept, err
+			}
 		default:
+			// Keep even equal files: a writer may have opened the source
+			// after the idle check, so its inode must remain reachable.
 			alt := unique(d + ".aims-" + label + "-" + stamp())
 			if err := move(s, alt); err != nil {
 				return kept, err
@@ -298,7 +399,86 @@ func mergeDir(src, dst, label string) ([]string, error) {
 			kept = append(kept, filepath.Base(alt))
 		}
 	}
-	return kept, os.RemoveAll(src)
+	// Never recursively remove the source: a concurrent writer or a failed
+	// directory read must leave its remaining entries available for recovery.
+	return kept, os.Remove(src)
+}
+
+func preflightTreeMove(src, dst string) error {
+	src, dst = fsx.Abs(src), fsx.Abs(dst)
+	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		for fsx.Lstat(target) == nil {
+			parent := filepath.Dir(target)
+			if parent == target {
+				return fmt.Errorf("cannot determine destination filesystem")
+			}
+			target = parent
+		}
+		same, err := sameFilesystem(path, target)
+		if err != nil {
+			return err
+		}
+		if !same {
+			return fmt.Errorf("cross-filesystem move refused before changing source %s", src)
+		}
+		if entry.IsDir() && !isJunction(path) && fsx.Lstat(filepath.Join(dst, rel)) == nil {
+			if _, err := copyPermissionRestorer(path, filepath.Join(dst, rel), 0); err != nil {
+				return err
+			}
+		}
+		if entry.Type()&fs.ModeSymlink != 0 || isJunction(path) {
+			raw, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			referent := raw
+			if !filepath.IsAbs(referent) {
+				referent = filepath.Join(filepath.Dir(path), referent)
+			}
+			referent = filepath.Clean(referent)
+			if fsx.Within(referent, src) {
+				// A conflicting file will receive a backup suffix. Rebasing its
+				// incoming link to the unsuffixed hub path would select another
+				// file (or turn a dangling link into an unrelated live reference).
+				// Check ancestors too: a directory/file collision renames the
+				// whole source subtree rather than only its referenced leaf.
+				for originalPath := referent; ; originalPath = filepath.Dir(originalPath) {
+					rel, err := filepath.Rel(src, originalPath)
+					if err != nil {
+						return err
+					}
+					if rel == "." {
+						break
+					}
+					if filepath.Dir(originalPath) == originalPath {
+						return fmt.Errorf("internal link %s did not reach its source root; kept the source tree", path)
+					}
+					destPath := filepath.Join(dst, rel)
+					original, destination := fsx.Lstat(originalPath), fsx.Lstat(destPath)
+					if destination == nil {
+						continue
+					}
+					same := original != nil && os.SameFile(original, destination)
+					mergedDirs := original != nil && original.IsDir() && destination.IsDir() && !isJunction(originalPath) && !isJunction(destPath)
+					if !same && !mergedDirs {
+						return fmt.Errorf("internal link %s would select a conflicting destination; kept the source tree for explicit reconciliation", path)
+					}
+				}
+			}
+		}
+		if entry.IsDir() && isJunction(path) {
+			return filepath.SkipDir
+		}
+		return nil
+	})
 }
 
 var sqliteSidecars = []string{"-wal", "-shm", "-journal"}
@@ -337,7 +517,7 @@ func Ensure(o Options) []Report {
 		entries, _ := os.ReadDir(o.Dir)
 		for _, e := range entries {
 			name := e.Name()
-			if !e.Type().IsRegular() || !o.Layout.IsDisposable(name) || o.Layout.IsShared(name) || fsx.Stat(filepath.Join(o.Hub, name)) == nil {
+			if !e.Type().IsRegular() || !o.Layout.IsDisposable(name) || o.Layout.IsShared(name) || o.Private != nil && o.Private(name) || fsx.Stat(filepath.Join(o.Hub, name)) == nil {
 				continue
 			}
 			r, err := dropUnused(o, name)
@@ -350,33 +530,41 @@ func Ensure(o Options) []Report {
 	return out
 }
 
-// dropUnused deletes a profile's own copy of a database the tool reads from
-// the hub, with its sidecars, when Fix is set and nothing has the folder open.
+// dropUnused archives a profile's unused database with all its sidecars.
+// Recovery data is never deleted by a doctor repair.
 func dropUnused(o Options, name string) (Report, error) {
 	link := filepath.Join(o.Dir, name)
-	r := Report{Name: name, Action: Unused, Detail: "the tool uses the shared copy; `aims doctor --fix` deletes this one"}
+	r := Report{Name: name, Action: Unused, Detail: "the tool uses the shared copy; `aims doctor --fix` archives this one for recovery"}
 	if !o.Fix {
 		return r, nil
 	}
 	held, known := proc.Holding(fsx.Real(o.Dir))
-	// Windows cannot list open files, but refuses to delete one that is open.
 	switch {
 	case held:
 		r.Detail = "a running session has this profile's folder open; close it and run `aims doctor --fix` again"
 		return r, nil
-	case !known && runtime.GOOS != "windows":
+	case !known:
 		r.Detail = "aims cannot tell whether a session has this folder open, so it keeps the copy"
 		return r, nil
 	}
-	for _, s := range append([]string{""}, sqliteSidecars...) {
-		if err := os.Remove(link + s); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			if s == "" {
-				return r, nil
-			}
-			return r, err
-		}
+	archive, err := os.MkdirTemp(o.Dir, ".aims-recovery-")
+	if err != nil {
+		return r, err
 	}
-	r.Action, r.Detail = Removed, ""
+	var moved []string
+	for _, s := range append([]string{""}, sqliteSidecars...) {
+		if fsx.Lstat(link+s) == nil {
+			continue
+		}
+		if err := move(link+s, filepath.Join(archive, name+s)); err != nil {
+			for _, old := range moved {
+				err = errors.Join(err, move(filepath.Join(archive, name+old), link+old))
+			}
+			return r, fmt.Errorf("database recovery folder %s: %w", archive, err)
+		}
+		moved = append(moved, s)
+	}
+	r.Action, r.Detail = Archived, "unused database and sidecars kept in "+archive
 	return r, nil
 }
 
@@ -386,10 +574,47 @@ func ensureOne(o Options, name string) (Report, error) {
 	lfi := fsx.Lstat(link)
 	hfi := fsx.Stat(target)
 	r := Report{Name: name}
+	if o.MissingOnly && lfi != nil && !pointsTo(link, target) && !(hfi != nil && sameFile(lfi, hfi)) && !slices.Contains(o.Layout.LockDirs, name) && !(o.StateShared && o.Layout.IsDisposable(name)) {
+		return Report{Name: name, Action: Conflict, Detail: "independent entry kept; reconcile explicitly with aims sync after closing affected tools"}, nil
+	}
+	if lfi != nil && !lfi.IsDir() && !lfi.Mode().IsRegular() && lfi.Mode()&fs.ModeSymlink == 0 && !isJunction(link) {
+		return Report{Name: name, Action: Conflict, Detail: "special file; left untouched"}, nil
+	}
+	if hfi != nil && !hfi.IsDir() && !hfi.Mode().IsRegular() {
+		return Report{Name: name, Action: Conflict, Detail: "shared target is a special file; left untouched"}, nil
+	}
+	if hfi != nil && (!hfi.IsDir() && slices.Contains(o.Layout.SharedDirs, name) || hfi.IsDir() && name == o.Layout.SettingsFile) {
+		return Report{Name: name, Action: Conflict, Detail: "shared target has the wrong file type; left untouched"}, nil
+	}
+	if tfi := fsx.Lstat(target); lfi != nil && tfi != nil && (tfi.Mode()&fs.ModeSymlink != 0 || isJunction(target)) && !pointsTo(link, target) && !(hfi != nil && sameFile(lfi, hfi)) {
+		return Report{Name: name, Action: Conflict, Detail: "shared entry is externally managed; independent local copy kept"}, nil
+	}
+	// Correct links require no reconciliation. Real directory trees can have
+	// active nested writers; merging/deduplicating them must wait until idle.
+	if lfi != nil && lfi.IsDir() && !isJunction(link) && !slices.Contains(o.Layout.LockDirs, name) {
+		if held, known := proc.HoldingTree(fsx.Real(link)); held || !known {
+			return Report{Name: name, Action: Conflict, Quiet: true, Detail: "folder may be in use; close affected tools before syncing; contents kept"}, nil
+		}
+		if hfi != nil && hfi.IsDir() {
+			if held, known := proc.HoldingTree(fsx.Real(target)); held || !known {
+				return Report{Name: name, Action: Conflict, Quiet: true, Detail: "shared folder may be in use; close affected tools before syncing; contents kept"}, nil
+			}
+		}
+	}
+	if lfi != nil && lfi.Mode().IsRegular() && !strings.HasSuffix(name, ".sqlite") && !(hfi != nil && sameFile(lfi, hfi)) && (holding(o.Dir) || holding(o.Hub)) {
+		return Report{Name: name, Action: Conflict, Quiet: true, Detail: "folder may be in use; close affected tools before reconciling files"}, nil
+	}
 
 	switch {
 	case lfi != nil && lfi.Mode()&fs.ModeSymlink != 0, lfi != nil && isJunction(link):
 		if pointsTo(link, target) {
+			if hfi == nil && slices.Contains(o.Layout.SharedDirs, name) {
+				if err := os.MkdirAll(target, 0o755); err != nil {
+					return r, err
+				}
+				r.Action = Linked
+				return r, nil
+			}
 			r.Action = OK
 			return r, nil
 		}
@@ -422,12 +647,15 @@ func ensureOne(o Options, name string) (Report, error) {
 		return r, nil
 
 	case lfi.IsDir():
+		if hfi != nil && !hfi.IsDir() {
+			return Report{Name: name, Action: Conflict, Detail: "a folder here, a file in the shared folder"}, nil
+		}
 		if slices.Contains(o.Layout.LockDirs, name) {
 			// Moving or deduplicating even an empty lock file changes its
 			// inode and can let two processes own the same conversation:
 			// only a folder no process has a file of open moves aside.
 			if !busyLocks(link) {
-				aside := link + ".aims-" + o.Label + "-" + stamp()
+				aside := unique(link + ".aims-" + o.Label + "-" + stamp())
 				if err := move(link, aside); err != nil {
 					return r, err
 				}
@@ -448,7 +676,9 @@ func ensureOne(o Options, name string) (Report, error) {
 			return r, nil
 		}
 		if hfi == nil {
-			if err := move(link, target); err != nil {
+			// Walk the tree even for first adoption: a rename alone leaves
+			// internal absolute links pointing into the old profile directory.
+			if _, err := mergeDir(link, target, o.Label); err != nil {
 				return r, err
 			}
 			r.Action = Adopted
@@ -470,23 +700,23 @@ func ensureOne(o Options, name string) (Report, error) {
 			fi := fsx.Stat(link + s)
 			return fi != nil && fi.Size() > 0
 		})
-		if hfi == nil && (!busy || o.Fix) {
+		if hfi == nil && !busy && !holding(o.Dir) {
+			// Recovery files in either home belong to that database. Never
+			// overwrite or separate them, even when --fix was requested.
+			for _, s := range sqliteSidecars {
+				if fsx.Lstat(target+s) != nil || fsx.Lstat(link+s) != nil {
+					return Report{Name: name, Action: Conflict, Detail: "database sidecars are present; close the tool and checkpoint or recover SQLite before syncing"}, nil
+				}
+			}
 			if err := move(link, target); err != nil {
 				return r, err
-			}
-			for _, s := range sqliteSidecars {
-				if fsx.Lstat(link+s) != nil {
-					if err := move(link+s, target+s); err != nil {
-						return r, err
-					}
-				}
 			}
 			r.Action = Adopted
 			return r, makeLink(target, link, false)
 		}
 		if hfi != nil && o.StateShared && o.Layout.IsDisposable(name) {
 			r, err := dropUnused(o, name)
-			if err != nil || r.Action != Removed {
+			if err != nil || r.Action != Archived {
 				return r, err
 			}
 			return r, makeLink(target, link, false)
@@ -495,7 +725,7 @@ func ensureOne(o Options, name string) (Report, error) {
 		if hfi != nil {
 			r.Detail = "this profile and the shared folder each have their own database; history sharing is incomplete; both copies are kept, including with --fix"
 		} else {
-			r.Detail = "the database is open; close the tool and run `aims doctor --fix`"
+			r.Detail = "the database may be open or need recovery; close the tool, checkpoint SQLite, then run `aims doctor --fix`; --fix never forces it"
 		}
 		return r, nil
 	}
@@ -511,19 +741,21 @@ func ensureOne(o Options, name string) (Report, error) {
 		}
 		r.Action = Adopted
 	case sameContent(link, target):
-		if err := os.Remove(link); err != nil {
+		backup := unique(link + ".aims-" + o.Label + "-" + stamp())
+		if err := move(link, backup); err != nil {
 			return r, err
 		}
-		r.Action = Linked
+		r.Action, r.Detail = Linked, "source kept as "+filepath.Base(backup)
 	case strings.HasSuffix(name, ".jsonl"):
 		// Append-only logs (prompt history): keep both.
 		if err := appendFile(target, link); err != nil {
 			return r, err
 		}
-		if err := os.Remove(link); err != nil {
+		backup := unique(link + ".aims-" + o.Label + "-" + stamp())
+		if err := move(link, backup); err != nil {
 			return r, err
 		}
-		r.Action = Merged
+		r.Action, r.Detail = Merged, "source kept as "+filepath.Base(backup)
 	default:
 		// The newer copy wins; the other is kept next to it.
 		profileNewer := lfi.ModTime().After(hfi.ModTime())
@@ -533,11 +765,20 @@ func ensureOne(o Options, name string) (Report, error) {
 		}
 		backup := unique(target + ".aims-" + tag + "-" + stamp())
 		if profileNewer {
+			// Reject an impossible replacement before taking the settings used
+			// by every sharing profile out of service.
+			if same, err := sameFilesystem(link, filepath.Dir(target)); err != nil {
+				return r, fmt.Errorf("cannot preflight shared settings replacement: %w", err)
+			} else if !same {
+				return r, fmt.Errorf("cross-filesystem settings replacement refused; both files kept; close affected tools and reconcile %s and %s explicitly", link, target)
+			}
 			if err := move(target, backup); err != nil {
 				return r, err
 			}
 			if err := move(link, target); err != nil {
-				return r, err
+				// Permissions or a concurrent edit can still prevent the second
+				// move. Restore the old hub without replacing any new occupant.
+				return r, errors.Join(err, move(backup, target))
 			}
 		} else if err := move(link, backup); err != nil {
 			return r, err
@@ -605,6 +846,9 @@ func appendFile(dst, src string) error {
 // Detach stops sharing the entries private selects: the link is replaced by a
 // private copy, or by nothing for conversation data.
 func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Report {
+	if fsx.Inside(dir, hub) || fsx.Inside(hub, dir) {
+		return []Report{{Name: dir, Action: Conflict, Detail: "the profile folder overlaps the shared folder; nothing was detached"}}
+	}
 	var out []Report
 	hubAbs := fsx.Abs(hub)
 	hubReal, err := filepath.EvalSymlinks(hub)
@@ -612,7 +856,7 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 		hubReal = hubAbs
 	}
 	for _, name := range readDir(dir) {
-		if private == nil || !private(name) {
+		if !layout.IsShared(name) || private == nil || !private(name) {
 			continue
 		}
 		link := filepath.Join(dir, name)
@@ -643,17 +887,38 @@ func Detach(hub, dir string, private func(string) bool, layout tool.Layout) []Re
 		default:
 			continue
 		}
-		if err := removeLink(link); err != nil {
-			out = append(out, Report{Name: name, Action: Conflict, Detail: err.Error()})
-			continue
-		}
 		detail := "now private and empty"
 		if !layout.IsHistory(name) && fsx.Stat(raw) != nil {
-			if err := copyTree(raw, link); err != nil {
+			// Stage the complete private copy before removing the shared link.
+			// A failed copy must leave access to the user's settings intact.
+			stage, err := os.MkdirTemp(dir, ".aims-detach-")
+			if err != nil {
 				out = append(out, Report{Name: name, Action: Conflict, Detail: err.Error()})
 				continue
 			}
+			copy := filepath.Join(stage, name)
+			if err := copyTreeAt(fsx.Real(raw), copy, fsx.Real(raw), link); err != nil {
+				os.RemoveAll(stage)
+				out = append(out, Report{Name: name, Action: Conflict, Detail: err.Error()})
+				continue
+			}
+			if err := removeLink(link); err != nil {
+				os.RemoveAll(stage)
+				out = append(out, Report{Name: name, Action: Conflict, Detail: err.Error()})
+				continue
+			}
+			if err := os.Rename(copy, link); err != nil {
+				// Keep the staged copy if even restoring the link fails.
+				info := fsx.Stat(raw)
+				restore := makeLink(raw, link, info != nil && info.IsDir())
+				out = append(out, Report{Name: name, Action: Conflict, Detail: fmt.Sprintf("private copy kept at %s: %v", copy, errors.Join(err, restore))})
+				continue
+			}
+			os.Remove(stage)
 			detail = "now a private copy"
+		} else if err := removeLink(link); err != nil {
+			out = append(out, Report{Name: name, Action: Conflict, Detail: err.Error()})
+			continue
 		}
 		out = append(out, Report{Name: name, Action: Detached, Detail: detail})
 	}

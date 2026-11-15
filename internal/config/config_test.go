@@ -8,6 +8,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
+	"github.com/doguyilmaz/aims/internal/tools"
 )
 
 func TestMain(m *testing.M) { testutil.Main(m) }
@@ -100,13 +101,37 @@ func TestHubAndHomeEnv(t *testing.T) {
 		t.Fatal("custom dir")
 	}
 	for value, want := range map[string]string{
-		"": "personal", filepath.Join(home, ".claude"): "personal",
-		filepath.Join(home, ".aims", "profiles", "claude", "work") + string(filepath.Separator): "work",
+		"": "personal", filepath.Join(home, ".claude"): "",
+		filepath.Join(home, ".aims", "profiles", "claude", "work"):                              "work",
+		filepath.Join(home, ".aims", "profiles", "claude", "work") + string(filepath.Separator): "",
 		"/elsewhere": "",
 	} {
 		if got := c.ProfileForHomeEnv("claude", value); got != want {
 			t.Errorf("ProfileForHomeEnv(%q) = %q, want %q", value, got, want)
 		}
+	}
+}
+
+func TestProfileMatchingPreservesLiteralLoginIdentity(t *testing.T) {
+	home := testutil.Sandbox(t)
+	c, _ := Load()
+	for _, id := range tools.IDs() {
+		c.Tools[id].Profiles["default"] = &Profile{Existing: true}
+		c.normalize()
+		c.EnsureHub(id)
+	}
+	// Codex identifies its home by path; Claude's keychain hashes the literal
+	// variable, so spelling out the default or normalizing a custom value is
+	// not evidence that it is the same login.
+	if got := c.ProfileForHomeEnv("codex", filepath.Join(home, ".codex")+string(filepath.Separator)); got != "default" {
+		t.Fatalf("Codex path identity lost: %q", got)
+	}
+	c.Tools["claude"].HubEnv = "~/cfg/claude"
+	if got := c.ProfileForHomeEnv("claude", "~/cfg/claude"); got != "default" {
+		t.Fatal("exact custom login not found")
+	}
+	if got := c.ProfileForHomeEnv("claude", filepath.Join(home, "cfg", "claude")); got != "" {
+		t.Fatal("normalized path mistaken for another keychain login")
 	}
 }
 

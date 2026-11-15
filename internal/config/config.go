@@ -328,9 +328,10 @@ func (c *Config) HomeEnv(id tool.ID, name string) string {
 // ProfileForHomeEnv finds the profile that owns a CLAUDE_CONFIG_DIR /
 // CODEX_HOME value ("" meaning unset).
 func (c *Config) ProfileForHomeEnv(id tool.ID, value string) string {
+	exact := tools.Get(id).Layout().ExactHomeEnv
 	norm := func(v string) string {
-		if v == "" {
-			return ""
+		if exact || v == "" {
+			return v
 		}
 		return fsx.Abs(v)
 	}
@@ -341,7 +342,7 @@ func (c *Config) ProfileForHomeEnv(id tool.ID, value string) string {
 			return n
 		}
 	}
-	if want != "" && t.Hub != "" && want == fsx.Abs(t.Hub) {
+	if !exact && want != "" && t.Hub != "" && want == fsx.Abs(t.Hub) {
 		for _, n := range t.Order {
 			if t.Profiles[n].Existing {
 				return n

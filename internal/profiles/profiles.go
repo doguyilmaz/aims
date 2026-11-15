@@ -16,6 +16,7 @@ import (
 	"github.com/doguyilmaz/aims/internal/config"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
+	"github.com/doguyilmaz/aims/internal/proc"
 	"github.com/doguyilmaz/aims/internal/tool"
 	"github.com/doguyilmaz/aims/internal/tools"
 )
@@ -51,17 +52,45 @@ func Session() (id tool.ID, name string, ok bool) {
 // that do not share history with it, so would not find the conversation.
 func Apart(cfg *config.Config, id tool.ID, name string) []string {
 	t := cfg.Tools[id]
-	layout := tools.Get(id).Layout()
+	a := tools.Get(id)
+	layout := a.Layout()
 	hub := cfg.EnsureHub(id)
 	sharesHistory := func(n string) bool {
 		p := t.Profiles[n]
+		if p != nil {
+			if value, explicit := EnvOverride(p, layout.HomeEnv); explicit && value != cfg.HomeEnv(id, n) {
+				return false
+			}
+		}
 		return p != nil && p.ShareMode() == config.ShareAll && !slices.ContainsFunc(p.Exclude, layout.IsHistory) &&
-			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, tools.Get(id), n))
+			links.HistoryShared(hub, cfg.Dir(id, n), layout, StateShared(cfg, a, n))
+	}
+	// Shared transcript files alone do not prove that persistent memory and
+	// goals are shared: a profile may explicitly redirect their storage.
+	routing := func(n string) []string {
+		env, _ := Env(cfg, a, n, os.Environ())
+		m := envMap(env)
+		var out []string
+		for _, key := range []string{layout.StateEnv, layout.MemoryEnv} {
+			if key == "" {
+				continue
+			}
+			dir := m[key]
+			if dir == "" {
+				dir = cfg.Dir(id, n)
+			}
+			out = append(out, fsx.Real(dir))
+		}
+		return out
 	}
 	shared := sharesHistory(name)
+	var sourceRouting []string
+	if shared {
+		sourceRouting = routing(name)
+	}
 	var out []string
 	for _, n := range t.Order {
-		if n != name && (!shared || !sharesHistory(n)) {
+		if n != name && (!shared || !sharesHistory(n) || !slices.Equal(sourceRouting, routing(n))) {
 			out = append(out, n)
 		}
 	}
@@ -84,13 +113,7 @@ func Bin(a tool.Adapter) string {
 
 // envMap turns KEY=VALUE pairs into a map; later entries win.
 func envMap(env []string) map[string]string {
-	m := make(map[string]string, len(env))
-	for _, kv := range env {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			m[k] = v
-		}
-	}
-	return m
+	return proc.EnvironmentMap(env)
 }
 
 func envList(m map[string]string) []string {
@@ -107,10 +130,11 @@ func envList(m map[string]string) []string {
 // dropped, the profile's own variables added. dropped lists what was removed.
 func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []string, dropped []string) {
 	p := cfg.Tools[a.ID()].Profiles[name]
+	ownEnv := envMap(envList(p.Env))
 	m := envMap(base)
 	l := a.Layout()
 	for _, k := range l.ConflictingEnv {
-		if _, own := p.Env[k]; m[k] != "" && !own {
+		if _, own := ownEnv[k]; m[k] != "" && !own {
 			delete(m, k)
 			dropped = append(dropped, k)
 		}
@@ -134,7 +158,7 @@ func Env(cfg *config.Config, a tool.Adapter, name string, base []string) (env []
 			delete(m, l.MemoryEnv)
 		}
 	}
-	for k, v := range p.Env {
+	for k, v := range ownEnv {
 		m[k] = v
 	}
 	m[SessionVar] = string(a.ID()) + ":" + name
@@ -195,11 +219,14 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 	if p == nil || p.Existing {
 		return nil
 	}
+	if err := HomeConflict(cfg, a, name); err != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: err.Error()}}
+	}
 	hub := cfg.EnsureHub(a.ID())
 	dir := cfg.Dir(a.ID(), name)
 	// Profiles of a tool share one hub: two launches repairing links at once
 	// could move the same file twice. A launch that cannot get the lock skips
-	// the repair; the links it needs are almost always in place already.
+	// repair, then RequireIsolation verifies any pending privacy transition.
 	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
 	if err != nil || !ok {
 		return []links.Report{{Name: dir, Action: links.Conflict, Quiet: true, Detail: "another aims process is repairing the shared folders; skipped"}}
@@ -212,6 +239,49 @@ func Sync(cfg *config.Config, a tool.Adapter, name string, fix bool) []links.Rep
 		return out
 	}
 	return append(out, links.Ensure(links.Options{Hub: hub, Dir: dir, Layout: layout, Private: private, Label: name, Fix: fix, StateShared: StateShared(cfg, a, name)})...)
+}
+
+// CheckSharing is a read-only inspection of the effective sharing policy.
+func CheckSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if p == nil || p.Existing {
+		return nil
+	}
+	return links.Check(links.Options{Hub: cfg.EnsureHub(a.ID()), Dir: cfg.Dir(a.ID(), name),
+		Layout: a.Layout(), Private: Private(p, a.Layout()), StateShared: StateShared(cfg, a, name)})
+}
+
+// RepairSharing creates missing links and applies explicit sharing-policy
+// changes. Independent content is left to `aims sync`; a doctor upgrade must
+// never choose a winner between two settings, histories, or databases.
+func RepairSharing(cfg *config.Config, a tool.Adapter, name string) []links.Report {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if p == nil || p.Existing {
+		return nil
+	}
+	if err := HomeConflict(cfg, a, name); err != nil {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: err.Error()}}
+	}
+	unlock, ok, err := fsx.Lock(filepath.Join(config.Home(), string(a.ID())+"-links"), 5*time.Second)
+	if err != nil || !ok {
+		return []links.Report{{Name: name, Action: links.Conflict, Detail: "cannot acquire the shared-folder repair lock"}}
+	}
+	defer unlock()
+	l := a.Layout()
+	o := links.Options{Hub: cfg.EnsureHub(a.ID()), Dir: cfg.Dir(a.ID(), name), Layout: l, Private: Private(p, l), Label: name, MissingOnly: true, Fix: true, StateShared: StateShared(cfg, a, name)}
+	out := links.Detach(o.Hub, o.Dir, o.Private, l)
+	needed := map[string]bool{}
+	for _, r := range links.Check(o) {
+		if r.Repairable {
+			needed[r.Name] = true
+		}
+	}
+	private := o.Private
+	if len(needed) == 0 {
+		return out
+	}
+	o.Private = func(n string) bool { return private(n) || !needed[n] }
+	return append(out, links.Ensure(o)...)
 }
 
 // StateHome is what a profile's StateEnv should be: for a profile that
@@ -251,11 +321,20 @@ func MemoryHome(cfg *config.Config, a tool.Adapter, name string) string {
 // folder as every other profile that shares history.
 func StateShared(cfg *config.Config, a tool.Adapter, name string) bool {
 	l := a.Layout()
-	if p := cfg.Tools[a.ID()].Profiles[name]; l.StateEnv == "" || p == nil || p.Env[l.StateEnv] != "" {
+	p := cfg.Tools[a.ID()].Profiles[name]
+	if l.StateEnv == "" || p == nil {
+		return false
+	}
+	if _, explicit := EnvOverride(p, l.StateEnv); explicit {
 		return false
 	}
 	v, keep := StateHome(cfg, a, name, os.Getenv(l.StateEnv))
-	return !keep && v != ""
+	return !keep && v != "" && fsx.Real(v) == fsx.Real(cfg.EnsureHub(a.ID()))
+}
+
+// EnvOverride observes platform environment-name rules for profile settings.
+func EnvOverride(p *config.Profile, key string) (string, bool) {
+	return proc.EnvValue(envList(p.Env), key)
 }
 
 // ownDatabase reports whether dir holds a database file of its own, not a
@@ -577,6 +656,8 @@ func firstLine(s string) string {
 func RecordUsage(id tool.ID, name string, windows []tool.Window, source string) error {
 	return config.UpdateState(id, name, func(ps *config.ProfileState) {
 		ps.Usage = &config.Usage{Windows: windows, Source: source, At: config.Now().UTC()}
+		ps.UsageError = ""
+		ps.UsageAttemptedAt = ps.Usage.At
 	})
 }
 
@@ -590,9 +671,59 @@ func RecordAccount(id tool.ID, name, email, plan string) error {
 	})
 }
 
-// Live asks the provider about a profile and stores what it learned.
+// RecordLogin invalidates derived quotas and old limit marks after a successful
+// user-controlled authentication. It never changes native credentials/history.
+func RecordLogin(id tool.ID, name string, acct tool.Account) error {
+	return config.UpdateState(id, name, func(ps *config.ProfileState) {
+		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
+		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
+		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
+		ps.Account = &config.Account{Email: acct.Email, Plan: acct.Plan, Tenant: acct.Tenant}
+	})
+}
+
+func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	h := Home(cfg, a, name)
+	p := a.Probe(ctx, h)
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
+	}
+	if a.ID() == "claude" && p.Email == "" && (p.Status == tool.ProbeOK || p.Status == tool.ProbeLimit) {
+		acct := a.Account(ctx, h)
+		p.Email = acct.Email
+		if p.Plan == "" {
+			p.Plan = acct.Plan
+		}
+		if acct.Stale {
+			p.UsageReported = true
+			p.UsageError = "account identity unavailable"
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
+	}
+	return p
+}
+
+// Live asks the provider and reconciles its usage, limit and login marks.
 func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
-	return record(cfg, a, name, a.Probe(ctx, Home(cfg, a, name)))
+	p := readProbe(ctx, cfg, a, name)
+	if ctx.Err() != nil {
+		return p
+	}
+	return record(cfg, a, name, p)
+}
+
+// ReadUsage updates observation caches without changing manual routing/login
+// marks. A passive usage display must not clear a profile's existing busy mark.
+func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+	p := readProbe(ctx, cfg, a, name)
+	if ctx.Err() != nil {
+		return p
+	}
+	recordObservation(a.ID(), name, p)
+	_ = RecordAccount(a.ID(), name, p.Email, p.Plan)
+	return p
 }
 
 // AskFree asks the provider about the named accounts at once and records
@@ -630,16 +761,46 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 	} else {
 		p = a.Probe(ctx, h)
 	}
+	updated := a.Account(ctx, h)
+	if err := ctx.Err(); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}, updated, true
+	}
+	if a.ID() == "claude" && p.Email == "" {
+		p.Email = updated.Email
+		if p.Plan == "" {
+			p.Plan = updated.Plan
+		}
+		if updated.Stale {
+			p.UsageReported = true
+			p.UsageError = "account identity unavailable"
+		}
+	}
 	record(cfg, a, name, p)
-	return p, a.Account(ctx, h), true
+	return p, updated, true
+}
+
+func recordObservation(id tool.ID, name string, p tool.Probe) {
+	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
+	_ = config.UpdateState(id, name, func(ps *config.ProfileState) {
+		identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
+		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
+		ps.UsageAttemptedAt = config.Now().UTC()
+		ps.UsageError = p.UsageError
+		if p.Status == tool.ProbeError || p.Status == tool.ProbeLogin {
+			ps.UsageError = string(p.Status)
+		}
+		if hasUsage {
+			ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
+		} else if identityChanged || becameAPIKey {
+			ps.Usage = nil // a previous login's quotas must not label the new account
+		}
+	})
 }
 
 // record keeps what a probe found: usage, a limit, a dead login.
 func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.Probe {
 	id := a.ID()
-	if len(p.Windows) > 0 {
-		_ = RecordUsage(id, name, p.Windows, "live")
-	}
+	recordObservation(id, name, p)
 	switch p.Status {
 	case tool.ProbeOK:
 		_ = Clear(id, name)

@@ -55,6 +55,8 @@ A headless run (`claude -p`, `codex exec`, or the `aims_run` MCP tool) that fail
 | same | limit or login, after a tool call | no | the run may already have edited files or run commands |
 | plain text or `json` | limit or login | no | the output does not show whether tools ran |
 
+Output analysis keeps at most 1 MiB per line. A longer line is still passed through unchanged, but aims skips its analysis and does not automatically repeat that attempt. Analysis resumes after the newline, so later status messages remain readable without treating fragments of a large event as separate events.
+
 When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
 
 Errors are read only from the tool's own error output and final status, never from the model's answer or your prompt, so a prompt about rate limits does not trigger a failover.

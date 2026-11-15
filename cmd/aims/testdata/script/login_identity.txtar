@@ -1,0 +1,25 @@
+# An explicit default Claude folder can use another keychain entry. Never
+# attribute its usage to the default profile just because its path matches.
+env NO_COLOR=1
+exec aims add claude default --existing
+cp $HOME/.aims/state.json before.json
+env CLAUDE_CONFIG_DIR=$HOME/.claude
+stdin usage.json
+exec aims statusline
+! stdout 'default'
+cmp $HOME/.aims/state.json before.json
+exec aims bridge --json
+stdout 'same folder can select another keychain'
+cmp $HOME/.aims/state.json before.json
+
+# The adopted login still matches the exact, unset home variable.
+env CLAUDE_CONFIG_DIR=
+stdin usage.json
+exec aims statusline
+stdout '^default '
+exists $HOME/.aims/state.json
+grep '"default"' $HOME/.aims/state.json
+grep '"usage"' $HOME/.aims/state.json
+
+-- usage.json --
+{"rate_limits":{"five_hour":{"used_percentage":97,"resets_at":4102444800}}}

@@ -107,6 +107,14 @@ type Attached struct {
 
 // StartAttached starts bin with the terminal attached.
 func StartAttached(bin string, args, env []string, dir string) (*Attached, error) {
+	resolved, err := LookPathEnv(bin, env)
+	if err != nil {
+		return nil, err
+	}
+	bin, args, err = attachedCommand(resolved, args, env)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.Command(bin, args...)
 	cmd.Env, cmd.Dir = env, dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -117,7 +125,7 @@ func StartAttached(bin string, args, env []string, dir string) (*Attached, error
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	stop := relay(cmd, false)
+	stop := relay(cmd, !term.IsTerminal(a.stdin))
 	go func() {
 		a.code = ExitCode(cmd.Wait())
 		stop()
@@ -185,7 +193,10 @@ type Captured struct {
 	Code int
 	// Committed: stdout was already passed through, too late to retry cleanly.
 	Committed bool
-	flush     func()
+	// AnalysisIncomplete: an oversized line was skipped by OnLine. Raw output
+	// is unchanged, but its analysis cannot establish that retrying is safe.
+	AnalysisIncomplete bool
+	flush              func()
 }
 
 // Flush passes held-back stdout through.
@@ -193,20 +204,49 @@ func (c *Captured) Flush() { c.flush() }
 
 // CaptureOptions configures RunCaptured.
 type CaptureOptions struct {
+	// Context binds this worker to its caller, independently of its timeout.
+	Context context.Context
 	Env     []string
 	Dir     string
 	Stdin   []byte
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Timeout time.Duration
-	// OnLine sees every complete line of output.
+	// OnLine sees complete lines up to maxAnalysisLineBytes. Larger lines are
+	// streamed unchanged but skipped for analysis; see AnalysisIncomplete.
 	OnLine func(stderr bool, line string)
+}
+
+type serialWriter struct {
+	mu *sync.Mutex
+	w  io.Writer
+}
+
+func (s serialWriter) Write(b []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.w == nil {
+		return len(b), nil
+	}
+	return s.w.Write(b)
 }
 
 // RunCaptured runs a headless command. stderr streams live; stdout is held
 // back briefly so a failed attempt can be retried on another profile without
 // mixing two runs' output.
 func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error) {
+	ctx := o.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return &Captured{Code: 127, flush: func() {}}, err
+	}
+	// The caller may use a buffer, including the same buffer for both streams.
+	// Timer/cancellation messages and reader goroutines share this lock too.
+	var streamMu sync.Mutex
+	o.Stdout = serialWriter{&streamMu, o.Stdout}
+	o.Stderr = serialWriter{&streamMu, o.Stderr}
 	cmd := exec.Command(bin, args...)
 	cmd.Env, cmd.Dir = o.Env, o.Dir
 	if len(o.Stdin) > 0 {
@@ -251,18 +291,27 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 		}
 		held = nil
 	}
-	commitTimer := time.AfterFunc(CommitAfter, commit)
+	commitDone := make(chan struct{})
+	commitTimer := time.AfterFunc(CommitAfter, func() { defer close(commitDone); commit() })
 	defer commitTimer.Stop()
-	if o.Timeout > 0 {
+	if o.Timeout > 0 || ctx.Done() != nil {
 		exited := make(chan struct{})
 		defer close(exited)
+		var timeout <-chan time.Time
+		if o.Timeout > 0 {
+			timer := time.NewTimer(o.Timeout)
+			defer timer.Stop()
+			timeout = timer.C
+		}
 		go func() {
 			select {
 			case <-exited:
 				return
-			case <-time.After(o.Timeout):
+			case <-timeout:
+				io.WriteString(o.Stderr, "aims: stopped after "+o.Timeout.String()+"\n")
+			case <-ctx.Done():
+				io.WriteString(o.Stderr, "aims: stopped: "+ctx.Err().Error()+"\n")
 			}
-			io.WriteString(o.Stderr, "aims: stopped after "+o.Timeout.String()+"\n")
 			_ = terminate(cmd.Process)
 			select {
 			case <-exited:
@@ -273,11 +322,12 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	}
 
 	readers := make(chan struct{})
+	var outSkipped, errSkipped bool
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pump(outR, func(chunk []byte) {
+		outSkipped = pump(outR, func(chunk []byte) {
 			mu.Lock()
 			if committed {
 				mu.Unlock()
@@ -295,7 +345,7 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 	}()
 	go func() {
 		defer wg.Done()
-		pump(errR, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
+		errSkipped = pump(errR, func(chunk []byte) { o.Stderr.Write(chunk) }, func(line string) { emit(o.OnLine, true, line) })
 	}()
 	go func() { wg.Wait(); close(readers) }()
 
@@ -308,10 +358,15 @@ func RunCaptured(bin string, args []string, o CaptureOptions) (*Captured, error)
 		errR.Close()
 		<-readers
 	}
+	// AfterFunc.Stop does not join an already running callback. Finish any
+	// commit before reporting whether stdout was exposed or returning buffers.
+	if !commitTimer.Stop() {
+		<-commitDone
+	}
 	mu.Lock()
 	wasCommitted := committed
 	mu.Unlock()
-	return &Captured{Code: code, Committed: wasCommitted, flush: commit}, nil
+	return &Captured{Code: code, Committed: wasCommitted, AnalysisIncomplete: outSkipped || errSkipped, flush: commit}, ctx.Err()
 }
 
 // pipeGrace is how long output may keep arriving after the tool exits.
@@ -328,10 +383,18 @@ func emit(fn func(bool, string), stderr bool, line string) {
 	fn(stderr, line)
 }
 
-// pump copies r chunk by chunk to onChunk and reports complete lines to onLine.
-func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
+// maxAnalysisLineBytes bounds the additional memory used to analyze one line.
+// It does not limit or truncate the raw output passed to the caller.
+const maxAnalysisLineBytes = 1 << 20
+
+// pump copies r chunk by chunk to onChunk and reports bounded lines to onLine.
+// An oversized line is discarded through its newline, never reported as
+// fragments that could be mistaken for independent events. It returns whether
+// any line was skipped, including an oversized final line without a newline.
+func pump(r io.Reader, onChunk func([]byte), onLine func(string)) (skipped bool) {
 	buf := make([]byte, 32<<10)
 	var partial strings.Builder
+	discarding := false
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
@@ -340,19 +403,43 @@ func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
 			data := chunk
 			for {
 				i := bytes.IndexByte(data, '\n')
+				part := data
+				if i >= 0 {
+					part = data[:i]
+				}
+				if !discarding {
+					// Keep one possible CRLF terminator byte across reads. A
+					// content byte beyond the limit still discards the line.
+					if len(part) > maxAnalysisLineBytes+1-partial.Len() {
+						skipped, discarding = true, true
+						partial.Reset()
+					} else {
+						partial.Write(part)
+						if partial.Len() > maxAnalysisLineBytes && !strings.HasSuffix(partial.String(), "\r") {
+							skipped, discarding = true, true
+							partial.Reset()
+						}
+					}
+				}
 				if i < 0 {
-					partial.Write(data)
 					break
 				}
-				partial.Write(data[:i])
-				onLine(strings.TrimSuffix(partial.String(), "\r"))
+				if !discarding {
+					onLine(strings.TrimSuffix(partial.String(), "\r"))
+				}
 				partial.Reset()
+				discarding = false
 				data = data[i+1:]
 			}
 		}
 		if err != nil {
-			if partial.Len() > 0 {
-				onLine(partial.String())
+			if !discarding && partial.Len() > 0 {
+				if partial.Len() > maxAnalysisLineBytes {
+					// Without a newline, the pending CR is content.
+					skipped = true
+				} else {
+					onLine(partial.String())
+				}
 			}
 			return
 		}
@@ -362,7 +449,12 @@ func pump(r io.Reader, onChunk func([]byte), onLine func(string)) {
 // Output runs a short helper command (`claude auth status`, `security`,
 // `--version`) and returns its stdout. It never hangs past timeout.
 func Output(bin string, args, env []string, timeout time.Duration) (string, int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return OutputContext(context.Background(), bin, args, env, timeout)
+}
+
+// OutputContext also stops the helper when the request is cancelled.
+func OutputContext(ctx context.Context, bin string, args, env []string, timeout time.Duration) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = env
@@ -385,7 +477,11 @@ func Output(bin string, args, env []string, timeout time.Duration) (string, int,
 
 // CombinedOutput is Output with stderr included.
 func CombinedOutput(bin string, args, env []string, timeout time.Duration) (string, int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return CombinedOutputContext(context.Background(), bin, args, env, timeout)
+}
+
+func CombinedOutputContext(ctx context.Context, bin string, args, env []string, timeout time.Duration) (string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = env

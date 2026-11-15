@@ -161,6 +161,9 @@ func login(ctx context.Context, a tool.Adapter, name, share string, extra []stri
 		return fmt.Errorf("%s is not installed", a.Title())
 	}
 	reportLinks(a.ID(), name, profiles.Sync(cfg, a, name, false))
+	if err := profiles.RequireIsolation(cfg, a, name); err != nil {
+		return err
+	}
 	ui.Info("logging %s in to %s", ui.Err.Bold.Render(name), a.Title())
 	ui.Hint("%s", a.Commands().LoginTip)
 	env, _ := profiles.Env(cfg, a, name, os.Environ())

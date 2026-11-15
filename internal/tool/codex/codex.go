@@ -35,10 +35,12 @@ func (*Adapter) Title() string { return "Codex" }
 
 func (*Adapter) Layout() tool.Layout {
 	return tool.Layout{
-		Bin:         "codex",
-		BinEnv:      "AIMS_CODEX_BIN",
-		HomeEnv:     "CODEX_HOME",
-		DefaultHome: ".codex",
+		Bin:           "codex",
+		BinEnv:        "AIMS_CODEX_BIN",
+		HomeEnv:       "CODEX_HOME",
+		DefaultHome:   ".codex",
+		TranscriptDir: "sessions",
+		ACPBin:        "codex-acp",
 		Shared: append(tool.Names(
 			"sessions", "thread-writer-locks", // shared rollouts need shared writer ownership
 			"archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "AGENTS.override.md",
@@ -50,8 +52,9 @@ func (*Adapter) Layout() tool.Layout {
 		StateEnv:       "CODEX_SQLITE_HOME",
 		Disposable:     []tool.Entry{{Pattern: regexp.MustCompile(`^(thread_history|logs)_\d+\.sqlite$`)}},
 		History:        append(tool.Names("sessions", "archived_sessions", "history.jsonl", "memories", "session_index.jsonl", "thread-writer-locks"), tool.Entry{Pattern: regexp.MustCompile(`\.sqlite$`)}),
-		ConflictingEnv: []string{"CODEX_API_KEY"},
+		ConflictingEnv: []string{"CODEX_API_KEY", "OPENAI_API_KEY"},
 		SkillsDir:      "skills",
+		SettingsFile:   "config.toml",
 		Markers:        []string{"auth.json", "config.toml", "sessions", "history.jsonl"},
 	}
 }
@@ -183,6 +186,8 @@ func decode(token string, v any) bool {
 }
 
 func (*Adapter) MCPScope() tool.MCPScope { return tool.MCPShared }
+
+func (*Adapter) MCPConfigPath(h tool.Home) string { return filepath.Join(h.Dir, "config.toml") }
 
 var (
 	alreadyRe = regexp.MustCompile(`(?i)already exists`)

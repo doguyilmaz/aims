@@ -33,19 +33,19 @@ func Refresh(ctx context.Context, a tool.Adapter) {
 	if err != nil || cfg.Tools[a.ID()].Hub == "" {
 		return
 	}
-	for _, h := range homes(cfg, a) {
+	for _, h := range IntegrationHomes(cfg, a, a.Layout().SkillsDir) {
 		if dir := a.Layout().SkillsDir; dir != "" {
 			p := filepath.Join(h.Dir, dir, "aims", "SKILL.md")
 			if b, err := os.ReadFile(p); err == nil && string(b) != aims.Skill {
-				_ = fsx.WriteFile(p, []byte(aims.Skill), 0o644)
+				_ = writeSkill(p, []byte(aims.Skill))
 			}
 		}
 	}
 	if au, ok := a.(tool.MCPAuditor); ok && profiles.Bin(a) != "" {
 		server := MCPServer()
-		for _, h := range mcpHomes(cfg, a) {
+		for _, h := range MCPHomes(cfg, a) {
 			if len(au.MCPMissing(h, server)) > 0 {
-				_ = a.RegisterMCP(ctx, h, server)
+				_ = updateMCP(ctx, a, h, server, false)
 			}
 		}
 	}

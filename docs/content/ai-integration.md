@@ -32,11 +32,17 @@ Codex starts MCP servers with only a few variables (`HOME`, `PATH` and the like)
 
 A session started with `aims claude` or `aims codex` (no `@profile`) moves on by itself at a limit; the model has nothing to do, and `aims_move` moves it on purpose. In such a session `aims_failover` moves the conversation too. Any other running session cannot change its own login, so the model tells you to restart (`aims claude --continue`) instead of pretending it switched. Each session started through aims carries `AIMS_SESSION_PROFILE` (for example `claude:work`), which `aims_status` reports and `aims_failover` uses as the account to mark.
 
-`aims_run` is read-only by default: Claude Code runs in plan mode and Codex in its read-only sandbox, whatever your settings allow. With `write: true` the run gets your normal settings, which for a headless Claude Code run still excludes anything that would ask for approval. Unless you approved the tool for good, your client shows the call, `write` included, before it runs. A run started this way cannot start another `aims_run`, and when the MCP client disconnects, aims stops any run it started.
+By default, `aims_run` requests the upstream CLI's restrictive mode: Claude Code's plan mode or Codex's read-only sandbox. These are the installed CLI's permission controls; aims does not add operating-system isolation. With `write: true` the run gets your normal settings, which for a headless Claude Code run still excludes anything that would ask for approval. Review your MCP client's approval settings for this tool, including the `write` argument: aims does not enforce the client's approval policy. A run started this way cannot start another `aims_run`, and when the MCP client disconnects, aims stops any run it started.
+
+Individual MCP request cancellation is also passed to headless workers and live probes. A canceled live-status check stops before probing the next profile and does not replace cached account state with a canceled result. The server remains available for other requests.
+
+Before setup, refresh or removal changes an MCP registration, aims retains a private recovery copy of its settings under `~/.aims/recovery/mcp` (or `$AIMS_HOME/recovery/mcp`). Unchanged contents reuse the same copy. A registration failure names the recovery path; compare it with the current settings before restoring anything, because another tool may have edited them meanwhile. These settings may include inline MCP secrets, so keep recovery files private. Login credential files and keychain entries are not backed up or moved by this mechanism.
 
 ## Skill
 
-`aims setup` writes `skills/aims/SKILL.md` into `~/.claude` and `~/.codex` (and into any profile that shares nothing). It teaches the model when to use the MCP tools (a limit error, a dead login, "which account am I on?") and the rules around them: never copy login files, and never move one account's data to another unasked.
+`aims setup` writes `skills/aims/SKILL.md` into `~/.claude` and `~/.codex` (and into profiles that keep skills private through `share: none` or `exclude`). It teaches the model when to use the MCP tools (a limit error, a dead login, "which account am I on?") and the rules around them: never copy login files, and never move one account's data to another unasked.
+
+Skill updates preserve previous text in a private `.aims-skill-*.bak` beside the installed `aims` skill directory. Externally managed symlinks are left to their owner; uninstall recognizes previously bundled skill versions and keeps edited skills, backups and user additions. `aims doctor --check` diagnoses stale skills and MCP settings without running a provider. Use the indicated setup command to update those integrations deliberately.
 
 ## Claude Code plugin
 

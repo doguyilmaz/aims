@@ -8,8 +8,11 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 // makeLink uses a symlink when Windows allows one (Developer Mode or admin),
@@ -17,6 +20,9 @@ import (
 func makeLink(target, link string, isDir bool) error {
 	if err := os.Symlink(target, link); err == nil {
 		return nil
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(link), target)
 	}
 	if !isDir {
 		return os.Link(target, link)
@@ -55,3 +61,48 @@ func sameFile(a, b fs.FileInfo) bool { return a.Mode().IsRegular() && os.SameFil
 const errNotSameDevice = syscall.Errno(17)
 
 func crossDevice(err error) bool { return errors.Is(err, errNotSameDevice) }
+
+func sameFilesystem(from, to string) (bool, error) {
+	volume := func(path string, follow bool) (string, error) {
+		p, err := windows.UTF16PtrFromString(path)
+		if err != nil {
+			return "", err
+		}
+		flags := uint32(windows.FILE_FLAG_BACKUP_SEMANTICS)
+		if !follow {
+			flags |= windows.FILE_FLAG_OPEN_REPARSE_POINT
+		}
+		h, err := windows.CreateFile(p, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, flags, 0)
+		if err != nil {
+			return "", err
+		}
+		defer windows.CloseHandle(h)
+		buf := make([]uint16, 32768)
+		n, err := windows.GetFinalPathNameByHandle(h, &buf[0], uint32(len(buf)), 1) // VOLUME_NAME_GUID
+		if err == nil && n < uint32(len(buf)) {
+			path := windows.UTF16ToString(buf)
+			if end := strings.Index(path, `}\`); end >= 0 {
+				return path[:end+1], nil
+			}
+		}
+		// Remote volumes expose an UNC share rather than a local volume GUID.
+		n, err = windows.GetFinalPathNameByHandle(h, &buf[0], uint32(len(buf)), 0)
+		if err != nil {
+			return "", err
+		}
+		path = windows.UTF16ToString(buf)
+		if n < uint32(len(buf)) && strings.HasPrefix(strings.ToUpper(path), `\\?\UNC\`) {
+			parts := strings.Split(strings.TrimPrefix(path, `\\?\UNC\`), `\`)
+			if len(parts) >= 2 {
+				return parts[0] + `\` + parts[1], nil
+			}
+		}
+		return "", errors.New("cannot determine destination volume without changing source")
+	}
+	a, err := volume(from, false)
+	if err != nil {
+		return false, err
+	}
+	b, err := volume(to, true)
+	return strings.EqualFold(a, b), err
+}

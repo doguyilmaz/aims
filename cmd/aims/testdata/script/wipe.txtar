@@ -25,7 +25,11 @@ stderr 'add --yes'
 exec aims wipe -y
 stderr 'personal logged out and deleted ~/.aims/profiles/claude/personal'
 grep 'logout as personal' $WORK/side-effects
-! exists $HOME/.aims
+# Recovery settings stay even after wipe; account configuration and profiles go.
+! exists $HOME/.aims/config.json
+! exists $HOME/.aims/state.json
+! exists $HOME/.aims/profiles
+exists $HOME/.aims/recovery/mcp
 exists $HOME/.claude/.credentials.json
 exists $HOME/.claude/projects/t.jsonl
 exec aims wipe -y

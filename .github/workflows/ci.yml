@@ -24,14 +24,79 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: gofmt
         if: runner.os == 'Linux'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Build revision checks
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: bash scripts/test-source-revision.sh
       - run: go vet ./...
-      - run: go test -race ./...
+      - name: Race tests
+        if: runner.os != 'Linux'
+        run: go test -race ./...
+      - name: macOS usage app tests
+        if: runner.os == 'macOS'
+        run: swift test --package-path macos/AimsUsage
+      - name: Build macOS usage app
+        id: macos-app
+        if: runner.os == 'macOS'
+        run: |
+          scripts/build-macos-app.sh
+          codesign --verify --deep --strict 'dist/Aims Usage.app'
+          plutil -lint 'dist/Aims Usage.app/Contents/Info.plist'
+          app_version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' 'dist/Aims Usage.app/Contents/Info.plist')
+          archive="dist/Aims-Usage-${app_version}.zip"
+          ditto -c -k --keepParent 'dist/Aims Usage.app' "$archive"
+          echo "version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+      - name: Upload development app
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aims-Usage-${{ steps.macos-app.outputs.version }}-macOS-${{ runner.arch }}-development
+          path: ${{ steps.macos-app.outputs.archive }}
+          retention-days: 7
+      - name: Build isolated macOS usage preview
+        if: runner.os == 'macOS'
+        run: |
+          AIMS_USAGE_PREVIEW=1 \
+            AIMS_USAGE_CLI_BINARY="$PWD/dist/Aims Usage.app/Contents/Resources/aims" \
+            scripts/build-macos-app.sh
+      - name: Race tests with isolated process visibility
+        if: runner.os == 'Linux'
+        timeout-minutes: 20
+        run: |
+          # Host runner daemons can deny /proc inspection even for the same
+          # user. Keep the fail-closed reconciliation guard and test it in a
+          # dedicated PID namespace, as in the offline local validation.
+          # Idle-process assertions also need other test packages/scripts not
+          # to spawn or replace processes during the /proc snapshot. Explicit
+          # concurrency tests still exercise their own workers and goroutines.
+          # The CLI scripts launch hundreds of race-instrumented subprocesses;
+          # allow their serial run 13 minutes within the 15-minute outer limit.
+          toolchain_version=$(go env GOVERSION)
+          test_image="golang:${toolchain_version#go}-bookworm"
+          docker pull "$test_image"
+          docker run --rm --pull=never --network none --read-only --user 65534:65534 \
+            --memory 3g --memory-swap 3g --cpus 2 --pids-limit 256 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --ulimit nofile=1024:1024 --ulimit fsize=1073741824:1073741824 --ulimit cpu=900:900 \
+            --tmpfs /scratch:rw,exec,size=2g,mode=1777 \
+            --tmpfs /scratch/otherfs:rw,size=32m,mode=1777 --tmpfs /dev/shm:ro,size=16m \
+            --mount "type=bind,src=$PWD,dst=/src,readonly" \
+            --mount "type=bind,src=$(go env GOMODCACHE),dst=/deps,readonly" \
+            --workdir /src --entrypoint /usr/bin/env "$test_image" \
+            -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/scratch/home TMPDIR=/scratch \
+            GOCACHE=/scratch/cache GOMODCACHE=/deps GOPATH=/scratch/gopath \
+            GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOTELEMETRY=off CGO_ENABLED=1 GOMAXPROCS=2 \
+            AIMS_TEST_SECOND_FS=/scratch/otherfs GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=/src \
+            timeout 900 go test -race -count=1 -timeout=13m -p 1 -parallel 1 ./...
 
   release-config:
     runs-on: ubuntu-latest

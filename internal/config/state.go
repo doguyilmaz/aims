@@ -9,9 +9,11 @@ import (
 
 // Usage is the last usage report for a profile.
 type Usage struct {
-	Windows []tool.Window `json:"windows"`
-	Source  string        `json:"source,omitempty"`
-	At      time.Time     `json:"at,omitzero"`
+	Windows []tool.Window      `json:"windows"`
+	Groups  []tool.QuotaGroup  `json:"groups,omitempty"`
+	Resets  *tool.ResetBalance `json:"resets,omitempty"`
+	Source  string             `json:"source,omitempty"`
+	At      time.Time          `json:"at,omitzero"`
 }
 
 // Account is who a profile is logged in as, as last seen.
@@ -34,12 +36,14 @@ type ProfileState struct {
 	NeedsLogin bool   `json:"needsLogin,omitempty"`
 	// MarkedBy and Detail say who set the limit or login mark and the
 	// provider's message, so a surprising mark can be explained.
-	MarkedBy   string    `json:"markedBy,omitempty"`
-	Detail     string    `json:"detail,omitempty"`
-	MarkedAt   time.Time `json:"markedAt,omitzero"`
-	Usage      *Usage    `json:"usage,omitempty"`
-	Account    *Account  `json:"account,omitempty"`
-	LastUsedAt time.Time `json:"lastUsedAt,omitzero"`
+	MarkedBy         string    `json:"markedBy,omitempty"`
+	Detail           string    `json:"detail,omitempty"`
+	MarkedAt         time.Time `json:"markedAt,omitzero"`
+	Usage            *Usage    `json:"usage,omitempty"`
+	UsageError       string    `json:"usageError,omitempty"`
+	UsageAttemptedAt time.Time `json:"usageAttemptedAt,omitzero"`
+	Account          *Account  `json:"account,omitempty"`
+	LastUsedAt       time.Time `json:"lastUsedAt,omitzero"`
 }
 
 // State is ~/.aims/state.json.

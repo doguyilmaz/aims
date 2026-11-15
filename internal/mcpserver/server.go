@@ -146,6 +146,9 @@ func statusTool(ctx context.Context, _ *mcp.CallToolRequest, in statusIn) (*mcp.
 		}
 		for _, id := range idsOrAll(ids) {
 			for _, n := range cfg.Tools[id].Order {
+				if err := ctx.Err(); err != nil {
+					return fail(err)
+				}
 				p := profiles.Live(ctx, cfg, tools.Get(id), n)
 				line := fmt.Sprintf("%s/%s: %s", id, n, p.Status)
 				if p.Detail != "" {
@@ -154,6 +157,9 @@ func statusTool(ctx context.Context, _ *mcp.CallToolRequest, in statusIn) (*mcp.
 				live = append(live, line)
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return fail(err)
 	}
 	report, err := ops.Status(ctx, ids)
 	if err != nil {

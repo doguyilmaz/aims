@@ -26,8 +26,13 @@ stdout 'claude interactive as default'
 exec aims status
 stdout 'no accounts yet'
 
-# doctor names the tools by version and points at what to fix.
+# The default doctor is read-only; login/version inspection is explicit.
 exec aims doctor
+stdout 'Claude Code executable:'
+stdout 'Codex executable:'
+stdout 'aims init'
+! stdout '2\.1\.0'
+exec aims doctor --logins
 stdout '2\.1\.0 .*claude'
 stdout '0\.200\.0 .*codex'
 stdout 'aims init'

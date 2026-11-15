@@ -1,0 +1,14 @@
+{
+  "package": "@lobehub/icons-static-svg",
+  "version": "1.102.0",
+  "source": "https://github.com/lobehub/lobe-icons",
+  "license": "MIT",
+  "icons": [
+    "claude",
+    "openai",
+    "kiro",
+    "grok",
+    "antigravity",
+    "opencode"
+  ]
+}
