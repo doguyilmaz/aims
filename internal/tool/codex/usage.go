@@ -57,10 +57,8 @@ func additionalUsage(raw []byte, p *tool.Probe) {
 				continue
 			}
 			fallback := []string{"5h", "7d"}[i]
-			win := tool.Window{ID: []string{"primary", "secondary"}[i], Label: label(w.WindowDurationMins, fallback), Percent: w.UsedPercent}
-			if w.ResetsAt != nil && *w.ResetsAt > 0 {
-				win.ResetsAt = time.Unix(*w.ResetsAt, 0).UTC()
-			}
+			win := w.usageWindow(fallback)
+			win.ID = []string{"primary", "secondary"}[i]
 			group.Windows = append(group.Windows, win)
 		}
 		if len(group.Windows) > 0 {

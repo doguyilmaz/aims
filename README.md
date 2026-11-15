@@ -52,6 +52,7 @@
 - Claude and Codex accounts stay separate. Choose All or one account for each Dock indicator without changing the active CLI login.
 - Choose the Dock's allowance per provider — 5 hours, weekly, monthly or budget — and show Used or Remaining. Hover retains all account readings.
 - Kiro, Grok, Antigravity model groups and OpenCode budgets use the same usage data as the CLI. Scheduled resets, reported banked resets and personal reminders remain distinct.
+- Provider hover details include Refresh and the age of the readings. Local cache changes from other aims sessions are picked up every minute; provider API refresh remains every five minutes when enabled.
 - Refresh reads quotas without a model prompt. Missing reset times say **Not reported**; a passed reset waits for a new measurement instead of assuming zero.
 
 Build on macOS 14.0.0+ with Swift 6.2.0+ and the Go version declared in [go.mod](go.mod) available on `PATH`:

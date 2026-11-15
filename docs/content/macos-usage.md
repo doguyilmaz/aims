@@ -75,6 +75,8 @@ Automatic hiding is enabled by default. Hover the thin marker in the selected ed
 
 The rail stays clear of the macOS Dock on any side. Hover a provider for all accounts/models, click to pin 400-point details, or open the complete overview. It shows the highest current known usage within each provider's selected Dock accounts and window. If only older readings remain in that selection, the last known percentage stays visible with a small clock badge, a muted ring and its observation time in the tooltip. Readings older than two hours are marked cached; they are not discarded merely because of age. Windows whose reset has passed are excluded from the summary. An unreported percentage (such as Grok billing without a usage ratio) remains an em dash with an explanation in its tooltip. Enable or hide the rail in Settings or More. The app version and Git build revision are visible in More and Settings.
 
+Provider hover details have a **Refresh quotas** button and show the age of the oldest reported reading. Manual refresh updates the provider measurements without a model prompt; it also starts the next five-minute interval, avoiding a second automatic request immediately afterward. The app rereads local usage caches every minute, even when automatic provider refresh is off, so measurements written by another aims session or status hook appear without waiting for the next API poll. A successful cache read does not hide an outstanding provider-refresh failure.
+
 The optional menu-bar percentage also uses current successful readings. It is reevaluated every minute, including with automatic refresh disabled, and hidden after a failed snapshot read. A reset passing removes that window from the summary; it does not invent a new allowance or contact the provider.
 
 ## Provider data and resets
@@ -103,7 +105,7 @@ The passive `--refresh` path updates observation caches without clearing manual 
 
 Finder does not load shell exports. For a custom `AIMS_HOME`, select the existing folder in the app's Settings; the selected data location stays in Settings. A custom home inherited on the first launch is remembered. Additional CLI folders can be entered one per line, including Go/Cargo/npm or version-manager paths. No shell startup script is run, and changing the data location never moves files.
 
-The installed Codex CLI 0.167.1 protocol was inspected with `app-server generate-ts --experimental`. It documents that the reset-credit detail list may be absent or capped, and that `availableCount` is independent of the list length. Other Codex versions may not report this field. Additional quota buckets are for display and do not alter the existing main-account failover decision.
+The installed Codex CLI 0.169.0 protocol was inspected with `app-server generate-ts --experimental`. It documents that the reset-credit detail list may be absent or capped, and that `availableCount` is independent of the list length. Other Codex versions may not report this field. Additional quota buckets are for display and do not alter the existing main-account failover decision.
 
 OpenAI distinguishes [banked, automatic promotional and purchased resets](https://help.openai.com/en/articles/20001498-how-resets-work-in-codex) from scheduled usage refreshes. Promotional resets have no guaranteed schedule; aims does not predict a future grant or redeem an available one. Google's [native quota command](https://antigravity.google/docs/cli/commands/usage) reports model groups that share limits. Kiro's [billing documentation](https://kiro.dev/docs/billing/) describes renewal at the next billing cycle; that URL uses the canonical trailing slash because the slashless URL redirects. OpenCode's [budget documentation](https://opencode.ai/docs/console/budgets) distinguishes overlapping budget policies, and its [API schema](https://opencode.ai/docs/api) reports their individual reset timestamps. The app uses the returned timestamp rather than constructing a billing date.
 
@@ -119,6 +121,14 @@ aims usage reset remove REMINDER_ID
 ```
 
 Custom reminders use a separate private file, `AIMS_HOME/usage-reminders.json`. Damaged or newer reminder formats are retained and reported; they do not suppress other usage data. To repair a malformed file, preserve a copy and correct its JSON. Removing the macOS app does not remove reminders, aims configuration, logins, sessions or history.
+
+## CLI compatibility and update ownership
+
+Quota refresh, authentication keepalive and software upgrades are separate operations. The login keepalive runs hourly through the native tools and renews due logins; it does not redeem a quota reset. `aims upgrade` updates the standalone aims installation through its owner. Provider CLIs keep their own installers/updaters, and a running native process keeps the version it started with.
+
+New provider releases can change commands and data contracts. The adapters are checked with fixtures and selected installed native versions; CI does not claim live authentication/usage coverage for every future CLI release. Invalid replies retain failures or unknown data rather than creating zero usage. Codex's required `usedPercent` field is checked for presence: explicit zero is known zero, while a missing/null/renamed value is unknown, including model/feature groups.
+
+The development app and standalone aims may be different versions. An older standalone writer can omit newer optional cache fields such as banked-reset details; align them through their supported release paths for consistent diagnostics. App refresh does not rewrite or upgrade the standalone CLI, provider CLIs or existing sessions.
 
 ## Application updates
 
