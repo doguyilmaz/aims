@@ -43,9 +43,10 @@ struct DockDisplayPicker: View {
                     position: model.edgeDockPosition, providerCount: model.snapshot?.providers.count ?? 6
                 ).frame(height: 48)
                 HStack(spacing: 5) {
-                    Text(display.name).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                    Text(display.name).font(.system(size: 11, weight: .medium)).lineLimit(2)
+                        .multilineTextAlignment(.center)
                     if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
-                }
+                }.frame(height: 26)
                 Text("\(index + 1)" + (index == 0 ? " · Primary" : ""))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
