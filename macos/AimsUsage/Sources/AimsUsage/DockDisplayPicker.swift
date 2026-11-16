@@ -23,21 +23,20 @@ struct DockDisplayPicker: View {
                     display: display, selected: selected, side: model.edgeDockSide, size: model.edgeDockSize,
                     position: model.edgeDockPosition, providerCount: model.snapshot?.providers.count ?? 6
                 ).frame(height: 48)
-                HStack(spacing: 5) {
-                    Text(display.name).font(.callout.weight(.medium)).lineLimit(2)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
-                }.frame(height: 34)
-                Text("\(index + 1)" + (index == 0 ? " · Primary" : ""))
+                Text(display.name).font(.callout.weight(selected ? .semibold : .medium)).lineLimit(2)
+                    .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 34)
+                Text("\(index + 1) · " + (index == 0 ? "Primary" : "Secondary"))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             .padding(6).frame(maxWidth: .infinity)
             .contentShape(.rect(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-        .help(display.name + " · Preview of the Edge Dock position")
-        .accessibilityLabel("\(display.name), display \(index + 1)" + (index == 0 ? ", primary" : ""))
+        .help(display.name + (selected ? " · Edge Dock is on this display" : " · Place Edge Dock on this display"))
+        .accessibilityLabel("\(display.name), display \(index + 1), " + (index == 0 ? "primary" : "secondary"))
         .accessibilityValue(selected ? "Selected" : "Not selected")
     }
 }
