@@ -31,12 +31,12 @@ struct EdgeDockSettings: View {
             LabeledContent("Screen edge") {
                 Picker("Screen edge", selection: $model.edgeDockSide) {
                     ForEach(EdgeDockSide.allCases) { Text($0.title).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 124)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 124, alignment: .trailing)
             }
             LabeledContent("Dock size") {
                 Picker("Dock size", selection: $model.edgeDockSize) {
                     ForEach(EdgeDockSize.allCases) { Text($0.title).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 124)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 124, alignment: .trailing)
             }
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
@@ -67,7 +67,7 @@ struct EdgeDockSettings: View {
                     : model.edgeDockAutoHide
                         ? "Hover over its edge marker to reveal the Dock." : "The Dock stays visible."
             ).font(.caption).foregroundStyle(.secondary)
-        }.font(.system(size: 12))
+        }.font(.system(size: 12)).labeledContentStyle(SettingsLabeledContentStyle())
     }
 
     private var readings: some View {

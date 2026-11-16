@@ -45,6 +45,7 @@ struct DockDisplayPicker: View {
                 HStack(spacing: 5) {
                     Text(display.name).font(.system(size: 11, weight: .medium)).lineLimit(2)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                     if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                 }.frame(height: 26)
                 Text("\(index + 1)" + (index == 0 ? " · Primary" : ""))
