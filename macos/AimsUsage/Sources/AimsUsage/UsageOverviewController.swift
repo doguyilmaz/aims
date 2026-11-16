@@ -11,6 +11,7 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
     private var configuration = 0
     private var nativeClosing = false
     private var isTerminating = false
+    private var pointerOpening = false
 
     func start(model: UsageModel, anchors: @escaping @MainActor (UsageOverviewSource) -> UsageOverviewAnchor?) {
         self.model = model
@@ -23,6 +24,7 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
 
     func toggle(from source: UsageOverviewSource) {
         guard let model, !focusSheetIfPresent() else { return }
+        pointerOpening = UsagePointerFocus.isPointerEvent
         let source = source == .dock && !model.edgeDockEnabled ? .menuBar : source
         model.overviewPresentation.toggle(
             from: source, pinnedWhenOpening: UserDefaults.standard.bool(forKey: "edgePanelVisible"))
@@ -34,6 +36,7 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
 
     func restorePinned() {
         guard let model, !model.overviewPresentation.isVisible else { return }
+        pointerOpening = true
         let source: UsageOverviewSource = model.edgeDockEnabled ? .dock : .menuBar
         model.overviewPresentation = .presented(UsageOverviewRequest(source: source, pinned: true))
         drive()
@@ -41,11 +44,16 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
 
     func show(from source: UsageOverviewSource) {
         guard let model, !focusSheetIfPresent() else { return }
+        pointerOpening = UsagePointerFocus.isPointerEvent
+        let wasShown = popover.isShown
         let source = source == .dock && !model.edgeDockEnabled ? .menuBar : source
         model.overviewPresentation.show(
             from: source, pinnedWhenOpening: UserDefaults.standard.bool(forKey: "edgePanelVisible"))
         drive()
-        if popover.isShown { host?.view.window?.makeKeyAndOrderFront(nil) }
+        if wasShown && popover.isShown && !nativeClosing {
+            host?.view.window?.makeKeyAndOrderFront(nil)
+            UsagePointerFocus.clear(in: host?.view.window, pointerInitiated: pointerOpening)
+        }
     }
 
     func togglePin() {
@@ -100,8 +108,6 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
             popover.behavior = request.pinned ? .applicationDefined : .transient
             popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             popover.show(relativeTo: anchor.rect, of: anchor.view, preferredEdge: anchor.edge)
-            host?.view.window?.title = "Aims Usage"
-            host?.view.window?.makeKey()
         }
     }
 
@@ -150,6 +156,13 @@ final class UsageOverviewController: NSObject, NSPopoverDelegate {
     }
 
     func popoverShouldClose(_ popover: NSPopover) -> Bool { host?.view.window?.attachedSheet == nil }
+
+    func popoverDidShow(_ notification: Notification) {
+        guard !isTerminating else { return }
+        host?.view.window?.title = "Aims Usage"
+        host?.view.window?.makeKey()
+        UsagePointerFocus.clear(in: host?.view.window, pointerInitiated: pointerOpening)
+    }
 
     func popoverWillClose(_ notification: Notification) {
         guard !isTerminating else { return }

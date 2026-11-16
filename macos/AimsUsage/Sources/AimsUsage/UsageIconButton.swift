@@ -15,9 +15,10 @@ struct UsageIconButton: View {
 
     var body: some View {
         Button(role: role) {
-            let panel = NSApp.currentEvent?.window as? UsagePanel
+            let window = NSApp.currentEvent?.window
+            let pointerInitiated = UsagePointerFocus.isPointerEvent
             action()
-            panel?.clearPointerFocus()
+            UsagePointerFocus.clear(in: window, pointerInitiated: pointerInitiated)
         } label: {
             Group {
                 if busy {
