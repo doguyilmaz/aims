@@ -1,6 +1,6 @@
 # Hugo site config for the aims docs (Hextra theme, GitHub Pages).
 # Build:  hugo --source docs --minify     Serve:  hugo server --source docs
-baseURL: "https://aims.apps.doguyilmaz.com"
+baseURL: "https://aims.doguyilmaz.com"
 title: aims
 
 enableRobotsTXT: true
@@ -39,7 +39,7 @@ menu:
         icon: npm
 
 params:
-  description: "Manage Claude Code and Codex accounts and sessions, and monitor AI usage limits, resets and budgets in your terminal or the Aims Usage macOS menu bar and Edge Dock."
+  description: "Manage Claude Code and Codex accounts. Track AI usage, resets and budgets in the terminal, macOS menu bar and Edge Dock."
   images: ["images/og.png"]
   navbar:
     displayTitle: true

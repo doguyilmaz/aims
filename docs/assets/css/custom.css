@@ -15,3 +15,18 @@
 pre code {
   font-variant-ligatures: none;
 }
+
+/* The exported app surfaces have real alpha; no white screenshot canvas. */
+.usage-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.5rem, 6vw, 3.5rem);
+  margin: 1.5rem 0;
+}
+.usage-preview img { margin: 0; height: auto; border: 0; background: transparent; }
+.usage-preview-overview { width: min(340px, 75%); }
+.usage-preview-dock { width: 64px; max-width: 15%; }
+
+.usage-detail-preview { margin: 1.5rem auto; max-width: 400px; }
+.usage-detail-preview img { width: 100%; height: auto; margin: 0; background: transparent; }

@@ -1,0 +1,21 @@
+{
+  "name": "aims-legacy-redirect",
+  "compatibilityDate": "2026-11-16",
+  "workersDev": false,
+  "previewUrls": false,
+  "domains": [
+    "aims.apps.doguyilmaz.com"
+  ],
+  "observability": {
+    "enabled": true,
+    "redactQueryString": true,
+    "logs": {
+      "enabled": true,
+      "headSamplingRate": 0.1
+    },
+    "traces": {
+      "enabled": true,
+      "headSamplingRate": 0.01
+    }
+  }
+}

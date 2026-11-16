@@ -39,7 +39,7 @@ The manual **Prepare macOS usage release** workflow builds the app, signs/notari
 Use the pinned [Sparkle 2.10.1 distribution](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.1). Its release archive SHA-256 is `1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27`; the workflow verifies it before extracting tools. SwiftPM separately verifies the pinned framework artifact checksum.
 
 1. Generate a dedicated Sparkle key with `bin/generate_keys --account com.doguyilmaz.aims.usage`. Retain the private key securely with an independent backup. Do not replace or reuse another app's Keychain account. Use the tool's export option to provide the release runner with this dedicated key; never commit it or print it in CI logs.
-2. Choose a stable HTTPS appcast address independent of CLI releases. The existing site can serve `https://aims.apps.doguyilmaz.com/usage-appcast.xml` (the eventual signed file belongs under `docs/static/usage-appcast.xml`). Do not commit a dummy feed or use this repository's generic `releases/latest` path: a subsequent CLI release would change that target. Archive downloads remain pinned to `usage-vVERSION-BUILD`. The feed is published last at activation, after its archive exists.
+2. Choose a stable HTTPS appcast address independent of CLI releases. The existing site can serve `https://aims.doguyilmaz.com/usage-appcast.xml` (the eventual signed file belongs under `docs/static/usage-appcast.xml`). Do not commit a dummy feed or use this repository's generic `releases/latest` path: a subsequent CLI release would change that target. Archive downloads remain pinned to `usage-vVERSION-BUILD`. The feed is published last at activation, after its archive exists.
 3. Configure repository variables:
 
 | Variable | Value |
