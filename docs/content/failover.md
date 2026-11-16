@@ -33,6 +33,8 @@ aims tells the 5-hour limit from the weekly one by the provider's message ("sess
 
 A limit mark lasts until the reset time the provider gave ("resets 5pm", "try again in 2 hours") or the last usage report shows, and for 5 hours when neither says. `aims failover --minutes 90` sets it yourself.
 
+After a banked reset, a newer successful quota reading below the threshold for the same window overrides an older automatic plan-limit mark when choosing an account. The stored mark is kept; manual holds, short request-rate limits, unknown windows/percentages and login errors remain authoritative. A quota refresh can succeed while an old login-error mark still blocks CLI routing: it does not verify native model access. If that account already works in its provider CLI, `aims clear claude work` removes only its saved marks, keeping login files, quota readings and conversations.
+
 Every mark remembers who set it and the provider's message. The dashboard's card and `aims status --json` show it, and the line aims prints when it skips an account names it, with the command that removes it:
 
 ```text
@@ -42,7 +44,7 @@ Every mark remembers who set it and the provider's message. The dashboard's card
 
 ## Before a session starts
 
-Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If every account looks limited, Codex is first asked whether that is still so (for free, through its app server), since a limit can lift before its mark does. If every account is limited, it starts the one that resets first and says when it is back (`claude: every account is limited; using work, the first back (in 30m)`). If no reset time is known, it starts the preferred one anyway, with a warning, so you still see the tool's own message. When a session starts on another account than the preferred one, Codex, which has no status line to show it, starts 2 seconds later, so what aims said can be read first.
+Every `aims claude` or `aims codex` without `@profile` checks the preferred account first (the terminal's pin, then the active account). If it is unusable, aims takes the next usable account in failover order and tells you which one it skipped and why. If every account looks limited, Codex is first asked whether that is still so (for free, through its app server), since a limit can lift before its mark does. If no account looks usable but one has a known reset, it tries the one with the earliest reset. Its warning lists each blocking reason, including login errors, and gives recovery hints; a login problem is not described as a quota limit. If no reset time is known, it starts the preferred one anyway, with a warning, so you still see the tool's own message. When a session starts on another account than the preferred one, Codex, which has no status line to show it, starts 2 seconds later, so what aims said can be read first.
 `@profile` means "this account, no matter what": aims warns if it looks unusable but does not switch.
 
 ## During a headless run
@@ -57,7 +59,7 @@ A headless run (`claude -p`, `codex exec`, or the `aims_run` MCP tool) that fail
 
 Output analysis keeps at most 1 MiB per line. A longer line is still passed through unchanged, but aims skips its analysis and does not automatically repeat that attempt. Analysis resumes after the newline, so later status messages remain readable without treating fragments of a large event as separate events.
 
-When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears its account's marks.
+When it does not repeat a run, aims says so, and the next run goes to another account. Output of a failed attempt is held back for a few seconds, so a repeated run prints only the second attempt's answer. A run that succeeds clears the marks it started with, provided the account registration, login identity and marks have not changed while it ran. A later failure or manual hold from another session is preserved.
 
 Errors are read only from the tool's own error output and final status, never from the model's answer or your prompt, so a prompt about rate limits does not trigger a failover.
 
@@ -76,6 +78,8 @@ When the account of a supervised session hits a usage limit or its login dies, a
 - **Before the limit.** If the account is at the threshold (95% by default), the conversation moves on before the hard limit, the same way.
 - **Every account limited.** For Codex, aims first asks the app server about every account, which costs nothing: an account whose mark is out of date takes the conversation right away. Otherwise aims waits for the first reset, a minute after it so the tool's own automatic continue wins, and continues on that account. Meanwhile it looks again every 30 seconds, so an account that comes back sooner (`aims clear`, a live check) takes the conversation, and it asks Codex again every 5 minutes; when an account it was sent to hits the limit again, it asks half as often.
 - **Codex goals.** A `/goal` the limit stopped is set active again before the restart (through Codex's app server), so Codex goes on with it instead of asking "Resume paused goal?". A goal you paused stays paused.
+
+A completed response in a supervised session also clears unchanged marks from before that worker started. An interrupted turn, an idle-session recheck or a failed response does not count as success. Usage readings are kept, and a newer mark or changed login is not cleared by an older worker.
 
 A restart goes on with the model and effort the conversation had at its last turn, also when you changed them inside it (`/model`, `/effort`): Codex restores them itself, and aims passes Claude Code's from its transcript. Claude Code's permission mode (shift+tab) is carried over too, except bypassing permissions, which only the options you started with can turn on. Codex's sandbox and approvals stay as you started the session. The other options you started with are kept. What lives only in the session, such as background shells, is not kept.
 

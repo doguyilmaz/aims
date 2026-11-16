@@ -78,6 +78,12 @@ func TestTurn(t *testing.T) {
 	if !ok || !ev.Started || at.Unix() != 1792449061 {
 		t.Errorf("started: %v %+v %v", ok, ev, at)
 	}
+	for _, kind := range []string{"task_complete", "turn_aborted"} {
+		ev, _, ok := turn([]byte(`{"type":"event_msg","payload":{"type":"` + kind + `"}}`))
+		if !ok || ev.Succeeded != (kind == "task_complete") {
+			t.Fatalf("completion and cancellation conflated: %s %+v", kind, ev)
+		}
+	}
 }
 
 // The follower finds the rollout of this run's conversation, not another

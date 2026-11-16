@@ -206,6 +206,7 @@ func (*Adapter) HookEvent(raw []byte) (tool.SessionEvent, bool) {
 		ev.Started, ev.Prompt = true, j.Get("prompt").String()
 		return ev, true
 	case "Stop":
+		ev.Succeeded = true
 		return ev, true
 	}
 	ev.Text = strings.TrimSpace(j.Get("last_assistant_message").String() + "\n" + j.Get("error_details").String())

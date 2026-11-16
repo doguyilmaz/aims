@@ -379,6 +379,8 @@ type Evaluation struct {
 	ReadyAt time.Time
 	Account tool.Account
 	State   *config.ProfileState
+	// Cooldown reports an effective saved mark, excluding one contradicted by newer quotas.
+	Cooldown bool
 }
 
 // Busy reports whether a short rate limit is all that keeps the profile from
@@ -423,7 +425,8 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	case ps.NeedsLogin:
 		ev.Reasons, open = append(ev.Reasons, "login expired"), true
 	}
-	if ps.Until.After(now) {
+	ev.Cooldown = activeLimitMark(cfg, ps, now)
+	if ev.Cooldown {
 		reason := ps.Reason
 		switch {
 		case reason == "":
@@ -503,7 +506,7 @@ func windowLimitText(w tool.Window) string {
 }
 
 func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (reason string, until time.Time) {
-	if ps.Until.After(now) && ps.Reason != "busy" {
+	if activeLimitMark(cfg, ps, now) && ps.Reason != "busy" {
 		reason, until = "limited for "+Duration(ps.Until.Sub(now)), ps.Until
 	}
 	if ps.Usage != nil {

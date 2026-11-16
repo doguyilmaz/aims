@@ -202,6 +202,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env []string, input []byte, name string, auto bool, tried []string) (Result, profiles.Pick, error) {
 	a := o.Tool
 	an := a.NewAnalyzer(o.Args)
+	successState := config.LoadStateFor(cfg).Get(a.ID(), name)
 	cap, err := proc.RunCaptured(bin, o.Args, proc.CaptureOptions{
 		Context: ctx,
 		Env:     env, Dir: o.Dir, Stdin: input, Stdout: o.Stdout, Stderr: o.Stderr, Timeout: o.Timeout,
@@ -214,10 +215,8 @@ func attempt(ctx context.Context, o Options, cfg *config.Config, bin string, env
 	res.Code, res.FinalText, res.ErrorText = cap.Code, an.FinalText(), an.ErrorText()
 	if cap.Code == 0 && !an.ResultFailed() {
 		cap.Flush()
-		// It just worked, so any limit or login mark on it is out of date.
-		if ps := config.LoadStateFor(cfg).Get(a.ID(), name); ps.NeedsLogin || ps.Until.After(config.Now()) {
-			_ = profiles.Clear(a.ID(), name, cfg)
-		}
+		// It worked; clear only the marks this worker started with.
+		_ = profiles.ClearAfterSuccess(cfg, a.ID(), name, successState)
 		return res, profiles.Pick{}, nil
 	}
 	res.Failure = tool.Classify(res.ErrorText)
@@ -310,10 +309,12 @@ func choose(ctx context.Context, o Options, cfg *config.Config, preferred string
 	case pick.Name != "":
 		o.say(Info, "%s: %s, so this session uses %s", a.ID(), describe(cfg, pick.Skipped), pick.Name)
 	case pick.Soonest != "":
-		o.say(Warn, "%s: every account is limited; using %s, the first back (in %s)", a.ID(), pick.Soonest, profiles.Duration(time.Until(pick.ReadyAt)))
+		o.say(Warn, "%s: no account looks usable: %s; trying %s (earliest known reset in %s)", a.ID(), describe(cfg, pick.Skipped), pick.Soonest, profiles.Duration(time.Until(pick.ReadyAt)))
+		hints(o, pick.Skipped)
 		return pick.Soonest
 	default:
 		o.say(Warn, "%s: no account looks usable: %s; trying %s anyway", a.ID(), describe(cfg, pick.Skipped), preferred)
+		hints(o, pick.Skipped)
 		return preferred
 	}
 	hints(o, pick.Skipped)
@@ -327,7 +328,7 @@ func hints(o Options, skipped []profiles.Evaluation) {
 		case e.State == nil || (e.Account.LoggedIn != nil && !*e.Account.LoggedIn):
 		case e.State.NeedsLogin:
 			o.say(Hint, "log %s in again: aims login %s %s", e.Name, o.Tool.ID(), e.Name)
-		case e.State.Until.After(config.Now()):
+		case e.Cooldown:
 			o.say(Hint, "%s works again? aims clear %s %s", e.Name, o.Tool.ID(), e.Name)
 		}
 	}
@@ -442,7 +443,7 @@ func describe(cfg *config.Config, evs []profiles.Evaluation) string {
 	parts := make([]string, len(evs))
 	for i, e := range evs {
 		why := strings.Join(e.Reasons, ", ")
-		if e.State != nil && e.State.MarkedBy != "" {
+		if e.State != nil && e.State.MarkedBy != "" && (e.Cooldown || e.State.NeedsLogin) {
 			why += ", marked by " + e.State.MarkedBy
 		}
 		early := false
