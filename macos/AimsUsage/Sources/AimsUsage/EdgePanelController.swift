@@ -5,7 +5,7 @@ import SwiftUI
 final class EdgePanelController: NSObject, NSWindowDelegate {
     private var panel: UsagePanel?
     private weak var model: UsageModel?
-    private var screen: NSScreen?
+    private var displaySelection: DockDisplaySelection = .primary
     private var isTerminating = false
     private var desiredHeight: CGFloat = 420
     private var toggleAction: (@MainActor () -> Void)?
@@ -20,7 +20,10 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
         }
         self.model = model
         toggleAction = toggle
-        screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let displays = DockDisplay.connected()
+        displaySelection =
+            displays.first { $0.frame.contains(NSEvent.mouseLocation) }
+            .map { .display($0.id) } ?? .primary
         if panel == nil {
             let panel = UsagePanel(
                 contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -52,12 +55,13 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
     func reposition() { if panel != nil { configureContent() } }
 
     @objc private func screenChanged() {
-        if let old = screen, !NSScreen.screens.contains(old) { screen = NSScreen.main }
         configureContent()
     }
 
+    private var currentDisplay: DockDisplay? { displaySelection.resolve(in: DockDisplay.connected()) }
+
     private func configureContent() {
-        guard let panel, let model, let toggleAction, let frame = (screen ?? NSScreen.main)?.visibleFrame else {
+        guard let panel, let model, let toggleAction, let frame = currentDisplay?.visibleFrame else {
             return
         }
         let width = EdgePanelLayout.frame(in: frame, width: model.displayStyle.preferredWidth, height: desiredHeight)
@@ -84,7 +88,7 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
     }
 
     private func position() {
-        guard let panel, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
+        guard let panel, let frame = currentDisplay?.visibleFrame else { return }
         // The overview stays at the upper right, independent of Edge Dock preferences.
         let nextFrame = EdgePanelLayout.frame(
             in: frame, width: model?.displayStyle.preferredWidth ?? 400, height: desiredHeight)

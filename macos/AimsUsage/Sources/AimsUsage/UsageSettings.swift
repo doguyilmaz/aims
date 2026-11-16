@@ -26,6 +26,11 @@ struct UsageSettings: View {
             }
             Section("Edge Dock") {
                 Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
+                DockDisplayPicker(model: model)
+                if model.edgeDockDisplay != .primary && !model.edgeDockDisplay.isConnected(in: model.dockDisplays) {
+                    Text("Temporarily on the primary display. Reconnect your selected display to move the Dock back.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Picker("Screen edge", selection: $model.edgeDockSide) {
                     ForEach(EdgeDockSide.allCases) { Text($0.title).tag($0) }
                 }

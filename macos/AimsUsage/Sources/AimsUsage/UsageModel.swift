@@ -13,6 +13,13 @@ final class UsageModel {
     var dockBehaviorDidChange: (@MainActor () -> Void)?
     var dockProvider: String?
     var dockPeekPinned = false
+    var dockDisplays: [DockDisplay] = []
+    var edgeDockDisplay = DockDisplaySelection(savedValue: UserDefaults.standard.string(forKey: "edgeDockDisplay")) {
+        didSet {
+            UserDefaults.standard.set(edgeDockDisplay.id, forKey: "edgeDockDisplay")
+            dockConfigurationDidChange?()
+        }
+    }
     var edgeDockPinned = UserDefaults.standard.bool(forKey: "edgeDockPinned") {
         didSet {
             UserDefaults.standard.set(edgeDockPinned, forKey: "edgeDockPinned")

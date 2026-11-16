@@ -33,7 +33,6 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
 
     func togglePanel() {
         dock.closePeek()
-        if !model.panelVisible { dock.moveToPointerScreen() }
         panel.toggle(model: model, toggle: togglePanel)
     }
 
