@@ -13,4 +13,10 @@ enum EdgeDockSize: String, CaseIterable, Identifiable {
     var iconSize: CGFloat { self == .standard ? 19 : 14 }
     var labelSize: CGFloat { self == .standard ? 12 : 11 }
     var chromeHeight: CGFloat { contentInset * 2 + 24 }
+    var peekWidth: CGFloat { self == .standard ? 400 : 300 }
+    var peekInset: CGFloat { self == .standard ? 18 : 12 }
+    var peekHeaderHeight: CGFloat { self == .standard ? 50 : 40 }
+    var peekFooterHeight: CGFloat { self == .standard ? 30 : 24 }
+    var peekChromeHeight: CGFloat { peekHeaderHeight + peekFooterHeight }
+    var peekGap: CGFloat { self == .standard ? 12 : 8 }
 }

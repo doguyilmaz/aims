@@ -5,10 +5,12 @@ struct CompactProviderCard: View {
     let provider: UsageProvider
     var showHeading = true
     var refreshFailed = false
+    @Environment(\.controlSize) private var controlSize
+    private var isMini: Bool { controlSize == .mini }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: isMini ? 6 : 8) {
                 if showHeading {
                     HStack(spacing: 8) {
                         ProviderMark(id: provider.id, size: 20)
@@ -28,14 +30,16 @@ struct CompactProviderCard: View {
                             ? "No accounts · select your data folder in Settings"
                             : provider.installed ? "No reading yet" : "CLI unavailable"
                     )
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(.system(size: isMini ? 11 : 12)).foregroundStyle(.secondary)
                 }
                 ForEach(provider.rows) { row in
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: isMini ? 8 : 12) {
+                        VStack(alignment: .leading, spacing: isMini ? 2 : 4) {
                             HStack(spacing: 4) {
-                                Text(ProviderStyle.accountName(row)).font(.system(size: 12, weight: .medium))
-                                    .lineLimit(1).truncationMode(.middle).help(row.name)
+                                Text(ProviderStyle.accountName(row)).font(
+                                    .system(size: isMini ? 11 : 12, weight: .medium)
+                                )
+                                .lineLimit(1).truncationMode(.middle).help(row.name)
                                 UsageReadingDetails(provider: provider, row: row)
                             }
                             HStack(spacing: 4) {
@@ -52,13 +56,15 @@ struct CompactProviderCard: View {
                                 if row.bankedResets != nil {
                                     UsageReadingDetails(provider: provider, row: row, labelStyle: .compactBanked)
                                 }
-                            }.font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).frame(height: 14)
-                        }.frame(width: 124, alignment: .leading)
+                            }.font(.system(size: isMini ? 10 : 11)).foregroundStyle(.secondary).lineLimit(1).frame(
+                                height: 14)
+                        }.frame(width: isMini ? 96 : 124, alignment: .leading)
                         if let windows = row.windows, !windows.isEmpty {
                             LazyVGrid(
                                 columns: Array(
-                                    repeating: GridItem(.flexible(), spacing: 12), count: min(2, windows.count)),
-                                spacing: 10
+                                    repeating: GridItem(.flexible(), spacing: isMini ? 8 : 12),
+                                    count: min(2, windows.count)),
+                                spacing: isMini ? 6 : 10
                             ) {
                                 ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
                                     UsageMetricView(
@@ -69,10 +75,12 @@ struct CompactProviderCard: View {
                                 }
                             }.frame(maxWidth: .infinity)
                         } else {
-                            Text("Limits not reported").font(.system(size: 12)).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("Limits not reported").font(.system(size: isMini ? 11 : 12)).foregroundStyle(
+                                .secondary
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    }.frame(minHeight: 44)
+                    }.frame(minHeight: isMini ? 36 : 44)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }

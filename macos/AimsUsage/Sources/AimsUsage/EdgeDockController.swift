@@ -160,11 +160,14 @@ final class EdgeDockController: NSObject {
     }
 
     private func configurePeekContent() {
-        guard let peek, let model, let id = model.dockProvider else { return }
-        let maximum = max(140, (screen?.visibleFrame.height ?? 800) - 110)
+        guard let peek, let model, let id = model.dockProvider,
+            let frame = (screen ?? NSScreen.main)?.visibleFrame
+        else { return }
+        let maximum = EdgeDockLayout.peekMaximumBodyHeight(in: frame, size: model.edgeDockSize)
         let root = AnyView(
             ProviderPeekView(
-                model: model, providerID: id, maximumBodyHeight: maximum,
+                model: model, providerID: id,
+                width: EdgeDockLayout.peekWidth(in: frame, size: model.edgeDockSize), maximumBodyHeight: maximum,
                 close: { [weak self] in self?.closePeek() },
                 togglePin: { [weak self, weak model] in
                     model?.dockPeekPinned.toggle()
@@ -189,15 +192,10 @@ final class EdgeDockController: NSObject {
             let id = model.dockProvider,
             let index = model.snapshot?.displayProviders.firstIndex(where: { $0.id == id })
         else { return }
-        let size = model.edgeDockSize
-        let height = min(peekHeight, frame.height - 24)
-        let anchorY = dock.frame.maxY - size.contentInset - (size.rowStride - 4) / 2 - CGFloat(index) * size.rowStride
-        let y = min(frame.maxY - height - 12, max(frame.minY + 12, anchorY - height / 2))
-        let x =
-            model.edgeDockSide == .right
-            ? max(frame.minX + 12, dock.frame.minX - EdgeDockLayout.peekWidth - EdgeDockLayout.gap)
-            : min(frame.maxX - EdgeDockLayout.peekWidth - 12, dock.frame.maxX + EdgeDockLayout.gap)
-        peek.setFrame(NSRect(x: x, y: y, width: EdgeDockLayout.peekWidth, height: height), display: true)
+        peek.setFrame(
+            EdgeDockLayout.peekFrame(
+                in: frame, dock: dock.frame, side: model.edgeDockSide, size: model.edgeDockSize,
+                providerIndex: index, height: peekHeight), display: true)
     }
 
     private func reconcileMonitors() {

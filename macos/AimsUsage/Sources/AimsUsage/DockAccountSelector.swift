@@ -5,11 +5,13 @@ struct DockAccountSelector: View {
     @Bindable var model: UsageModel
     let provider: UsageProvider
     var label = "Account"
+    @Environment(\.controlSize) private var controlSize
+    private var isMini: Bool { controlSize == .mini }
 
     var body: some View {
         let selected = model.dockAccount(for: provider.id)
-        HStack(spacing: 8) {
-            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+        HStack(spacing: isMini ? 6 : 8) {
+            Text(label).font(.system(size: isMini ? 10 : 11)).foregroundStyle(.secondary)
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
                     ForEach(DockAccountFocus.options(for: provider, including: selected)) { account in
@@ -17,9 +19,11 @@ struct DockAccountSelector: View {
                             model.setDockAccount(account, for: provider.id)
                         } label: {
                             Text(account.title(in: provider)).font(
-                                .system(size: 11, weight: selected == account ? .semibold : .regular)
+                                .system(size: isMini ? 10 : 11, weight: selected == account ? .semibold : .regular)
                             )
-                            .lineLimit(1).fixedSize().padding(.horizontal, 8).padding(.vertical, 4)
+                            .lineLimit(1).fixedSize().padding(.horizontal, isMini ? 7 : 8).padding(
+                                .vertical, isMini ? 3 : 4
+                            )
                             .background(
                                 selected == account
                                     ? ProviderStyle.tint(provider.id).opacity(0.2) : Color.primary.opacity(0.05),
@@ -36,7 +40,7 @@ struct DockAccountSelector: View {
                         .help(help(for: account))
                     }
                 }
-            }.scrollIndicators(.hidden).frame(height: 26)
+            }.scrollIndicators(.hidden).frame(height: isMini ? 22 : 26)
         }
     }
 
