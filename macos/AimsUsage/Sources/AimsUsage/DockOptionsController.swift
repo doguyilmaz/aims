@@ -32,17 +32,19 @@ final class DockOptionsController: NSObject, NSWindowDelegate {
             self?.close()
         }
         let maximumBodyHeight = max(0, screen.height - 24 - 43)
-        panel.contentView = NSHostingView(
-            rootView: DockOptionsView(
-                model: model, providerID: providerID, width: DockOptionsLayout.width(in: screen),
-                maximumBodyHeight: maximumBodyHeight, close: { [weak self] in self?.close() },
-                openOverview: openOverview,
-                heightDidChange: { [weak self, weak panel] height in
-                    guard self?.panel === panel else { return }
-                    panel?.setFrame(
-                        DockOptionsLayout.frame(in: screen, dock: dock, side: side, pointerY: pointerY, height: height),
-                        display: true)
-                }))
+        panel.contentView = UsageRoundedHostingView(
+            rootView: AnyView(
+                DockOptionsView(
+                    model: model, providerID: providerID, width: DockOptionsLayout.width(in: screen),
+                    maximumBodyHeight: maximumBodyHeight, close: { [weak self] in self?.close() },
+                    openOverview: openOverview,
+                    heightDidChange: { [weak self, weak panel] height in
+                        guard self?.panel === panel else { return }
+                        panel?.setFrame(
+                            DockOptionsLayout.frame(
+                                in: screen, dock: dock, side: side, pointerY: pointerY, height: height),
+                            display: true)
+                    })), cornerRadius: 12)
         panel.setFrame(
             DockOptionsLayout.frame(in: screen, dock: dock, side: side, pointerY: pointerY, height: 343), display: true)
         visibilityDidChange?()

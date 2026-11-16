@@ -7,7 +7,7 @@ final class EdgeDockController: NSObject {
     private var dockHostingView: NSHostingView<AnyView>?
     private var handle: UsagePanel?
     private var peek: UsagePanel?
-    private var peekHostingView: NSHostingView<AnyView>?
+    private var peekHostingView: UsageRoundedHostingView?
     private weak var model: UsageModel?
     // Only used to detect changes; every layout resolves fresh display geometry.
     private var configuredDisplay: DockDisplay?
@@ -220,9 +220,11 @@ final class EdgeDockController: NSObject {
                 }
             ).id(id))
         if let peekHostingView {
+            peekHostingView.cornerRadius = model.edgeDockSize.peekCornerRadius
             peekHostingView.rootView = root
         } else {
-            let host = NSHostingView(rootView: root)
+            let host = UsageRoundedHostingView(
+                rootView: root, cornerRadius: model.edgeDockSize.peekCornerRadius)
             peekHostingView = host
             peek.contentView = host
         }
