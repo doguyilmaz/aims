@@ -3,7 +3,8 @@ import AppKit
 @MainActor
 final class AimsAppDelegate: NSObject, NSApplicationDelegate {
     let model = UsageModel()
-    let panel = EdgePanelController()
+    let overview = UsageOverviewController()
+    let status = UsageStatusItemController()
     let dock = EdgeDockController()
     private var refreshTask: Task<Void, Never>?
 
@@ -11,39 +12,59 @@ final class AimsAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         ProviderAssets.prepare()
         model.updater.start()
-        dock.start(model: model, openOverview: togglePanel)
+        overview.start(model: model) { [weak self] source in
+            switch source {
+            case .menuBar: self?.status.anchor
+            case .dock: self?.dock.overviewAnchor
+            }
+        }
+        status.start(model: model) { [weak self] in self?.toggleOverview(from: .menuBar) }
+        dock.start(
+            model: model, openOverview: { [weak self] in self?.showOverview(from: .dock) },
+            closeOverview: { [weak self] in self?.overview.close() })
         model.presentationDidChange = { [weak self] in
             self?.dock.update()
-            self?.panel.reposition()
+            self?.overview.reposition()
         }
         model.dockVisibilityDidChange = { [weak self] visible in
             self?.dock.setVisible(visible)
         }
         model.dockConfigurationDidChange = { [weak self] in
             self?.dock.configurationChanged()
+            self?.overview.reposition()
         }
-        model.dockPositionDidChange = { [weak self] in self?.dock.update() }
+        model.dockPositionDidChange = { [weak self] in
+            self?.dock.update()
+            self?.overview.reposition()
+        }
         model.dockBehaviorDidChange = { [weak self] in self?.dock.update() }
         refreshTask = Task { await model.run() }
         UserDefaults.standard.set(true, forKey: "hasLaunched")
-        if model.fixtureURL != nil || UserDefaults.standard.bool(forKey: "edgePanelVisible") {
-            togglePanel()
+        if UserDefaults.standard.bool(forKey: "edgePanelVisible") {
+            overview.restorePinned()
+        } else if model.fixtureURL != nil {
+            showOverview(from: .dock)
         }
     }
 
-    func togglePanel() {
+    func toggleOverview(from source: UsageOverviewSource) {
         dock.closePeek()
-        if !model.panelVisible { dock.moveToPointerScreen() }
-        panel.toggle(model: model, toggle: togglePanel)
+        overview.toggle(from: source)
+    }
+
+    func showOverview(from source: UsageOverviewSource) {
+        dock.closePeek()
+        overview.show(from: source)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag && !model.panelVisible { togglePanel() }
+        if !flag && !model.overviewPresentation.isVisible { showOverview(from: .menuBar) }
         return true
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        panel.prepareForTermination()
+        overview.prepareForTermination()
+        status.stop()
         dock.shutdown()
         refreshTask?.cancel()
         Task {

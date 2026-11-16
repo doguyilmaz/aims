@@ -52,3 +52,42 @@ import Testing
         }
     }
 }
+
+@Test @MainActor func providerDetailsFollowDockSizeAndRemainInsideTheUsableScreen() {
+    for screen in [
+        CGRect(x: 0, y: 76, width: 3440, height: 1333),
+        CGRect(x: -1512, y: -300, width: 1512, height: 872),
+        CGRect(x: 1512, y: 40, width: 1024, height: 700),
+        CGRect(x: -280, y: -180, width: 280, height: 180),
+    ] {
+        for side in EdgeDockSide.allCases {
+            for size in EdgeDockSize.allCases {
+                for position in [0.0, 0.5, 1.0] {
+                    let dock = EdgeDockLayout.frame(
+                        in: screen, providerCount: 6, side: side, size: size, position: position)
+                    for index in [0, 5] {
+                        for height: CGFloat in [120, 5000] {
+                            let peek = EdgeDockLayout.peekFrame(
+                                in: screen, dock: dock, side: side, size: size,
+                                providerIndex: index, height: height)
+                            #expect(screen.insetBy(dx: 12, dy: 12).contains(peek))
+                            #expect(peek.width <= size.peekWidth)
+                            #expect(peek.height <= screen.height - 24)
+                            if screen.width >= size.peekWidth + dock.width + size.peekGap + 12 {
+                                #expect(side == .right ? peek.maxX < dock.minX : peek.minX > dock.maxX)
+                            }
+                        }
+                    }
+                }
+                let maximumBody = EdgeDockLayout.peekMaximumBodyHeight(in: screen, size: size)
+                #expect(maximumBody >= 0)
+                #expect(maximumBody + size.peekChromeHeight <= screen.height - 24)
+            }
+        }
+        if screen.width > EdgeDockSize.standard.peekWidth + 24 {
+            #expect(
+                EdgeDockLayout.peekWidth(in: screen, size: .mini)
+                    < EdgeDockLayout.peekWidth(in: screen, size: .standard))
+        }
+    }
+}

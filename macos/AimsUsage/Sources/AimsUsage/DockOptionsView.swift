@@ -10,7 +10,6 @@ struct DockOptionsView: View {
     let openOverview: @MainActor () -> Void
     let heightDidChange: @MainActor (CGFloat) -> Void
     @State private var contentHeight: CGFloat = 300
-    @Environment(\.colorScheme) private var scheme
 
     private var provider: UsageProvider? {
         model.snapshot?.providers.first { $0.id == providerID }
@@ -86,10 +85,7 @@ struct DockOptionsView: View {
             .scrollIndicators(contentHeight > maximumBodyHeight + 1 ? .automatic : .hidden)
         }
         .frame(width: width)
-        .background(UsageBackdrop(inkOpacity: 0.72)).clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12).stroke(UsagePalette.border(scheme), lineWidth: 1).allowsHitTesting(false)
-        )
+        .usagePanelSurface(in: RoundedRectangle(cornerRadius: 12))
         .background(UsageScrollStyle()).environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onPreferenceChange(ContentHeightKey.self) { value in
             guard value > 0 else { return }

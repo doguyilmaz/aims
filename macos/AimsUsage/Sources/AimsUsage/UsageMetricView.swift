@@ -7,6 +7,8 @@ struct UsageMetricView: View {
     let tint: Color
     let stale: Bool
     let now: Date
+    @Environment(\.controlSize) private var controlSize
+    private var isMini: Bool { controlSize == .mini }
 
     private var expired: Bool { window.needsRefresh(at: now) }
     private var accent: Color {
@@ -39,12 +41,12 @@ struct UsageMetricView: View {
                         .monospacedDigit().lineLimit(1).frame(height: 13)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: isMini ? 2 : 3) {
                     HStack(spacing: 4) {
-                        Text(label).foregroundStyle(.secondary)
+                        Text(label).foregroundStyle(.secondary).lineLimit(isMini ? 1 : nil).help(label)
                         Spacer(minLength: 0)
                         Text(value).fontWeight(.semibold).monospacedDigit().fixedSize()
-                    }.font(.system(size: 12))
+                    }.font(.system(size: isMini ? 11 : 12))
                     GeometryReader { geometry in
                         Capsule().fill(tint.opacity(0.12))
                             .overlay(alignment: .leading) {
@@ -52,9 +54,9 @@ struct UsageMetricView: View {
                                     width: geometry.size.width
                                         * min(1, max(0, (window.periodPercent(at: now) ?? 0) / 100)))
                             }
-                    }.frame(height: 4).accessibilityHidden(true)
+                    }.frame(height: isMini ? 3 : 4).accessibilityHidden(true)
                     Text(expired ? "Reset passed" : window.resetsAt == nil ? "Not reported" : "Reset \(reset)")
-                        .font(.system(size: 11)).monospacedDigit()
+                        .font(.system(size: isMini ? 10 : 11)).monospacedDigit()
                         .foregroundStyle(expired ? .orange : .secondary).lineLimit(1)
                 }
             }

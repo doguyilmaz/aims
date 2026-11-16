@@ -4,42 +4,52 @@ import SwiftUI
 @MainActor
 final class EdgeDockController: NSObject {
     private var dock: UsagePanel?
+    private var dockHostingView: NSHostingView<AnyView>?
     private var handle: UsagePanel?
     private var peek: UsagePanel?
     private var peekHostingView: NSHostingView<AnyView>?
     private weak var model: UsageModel?
-    private var screen: NSScreen?
+    // Only used to detect changes; every layout resolves fresh display geometry.
+    private var configuredDisplay: DockDisplay?
     private var peekHeight: CGFloat = 240
     private let pointerMonitor = EdgeDockPointerMonitor()
     private let options = DockOptionsController()
     private var openOverview: (@MainActor () -> Void)?
+    private var closeOverview: (@MainActor () -> Void)?
     private var expanded = false
     private var hasPresented = false
     private var presentationGeneration = 0
     private var shuttingDown = false
+    private var hoverIntent: EdgeDockHoverIntent = .ready
 
-    func start(model: UsageModel, openOverview: @escaping @MainActor () -> Void) {
+    func start(
+        model: UsageModel, openOverview: @escaping @MainActor () -> Void,
+        closeOverview: @escaping @MainActor () -> Void
+    ) {
         self.model = model
         self.openOverview = openOverview
+        self.closeOverview = closeOverview
         options.visibilityDidChange = { [weak self] in self?.pointerChanged(animated: false) }
-        screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         dock = makePanel(title: "Aims Edge Dock")
         // Pointer-only Dock actions must not steal keyboard focus from the active app.
         dock?.becomesKeyOnlyIfNeeded = true
         handle = makePanel(title: "Aims Dock edge marker")
         handle?.hasShadow = false
-        configureContent()
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        setVisible(model.edgeDockEnabled)
+        update()
     }
 
-    private func configureContent() {
+    private var currentDisplay: DockDisplay? {
+        model?.edgeDockDisplay.resolve(in: DockDisplay.connected())
+    }
+
+    private func configureContent(in frame: CGRect) {
         guard let dock, let model, let openOverview else { return }
-        dock.contentView = NSHostingView(
-            rootView: EdgeDockView(
-                model: model, maximumHeight: (screen?.visibleFrame.height ?? 800) - 16,
+        let root = AnyView(
+            EdgeDockView(
+                model: model, maximumHeight: max(0, frame.height - 16),
                 hoverProvider: { [weak self] id in self?.present(id, pin: false) },
                 selectProvider: { [weak self] id in self?.present(id, pin: true) },
                 openOverview: { [weak self] in
@@ -48,14 +58,30 @@ final class EdgeDockController: NSObject {
                     openOverview()
                 },
                 showOptions: { [weak self] id, point in self?.showOptions(for: id, at: point) }))
+        if let dockHostingView {
+            dockHostingView.rootView = root
+        } else {
+            let host = NSHostingView(rootView: root)
+            dockHostingView = host
+            dock.contentView = host
+        }
         handle?.contentView = NSHostingView(
-            rootView: EdgeDockHandleView(side: model.edgeDockSide, reveal: { [weak self] in self?.reveal() }))
+            rootView: EdgeDockHandleView(
+                side: model.edgeDockSide, style: model.edgeDockMarkerStyle, size: model.edgeDockSize,
+                reveal: { [weak self] in self?.reveal() }))
+    }
+
+    var overviewAnchor: UsageOverviewAnchor? {
+        guard let model, model.edgeDockEnabled, let view = dockHostingView else { return nil }
+        return UsageOverviewAnchor(
+            view: view,
+            rect: EdgeDockLayout.overviewAnchor(in: view.bounds, flipped: view.isFlipped, size: model.edgeDockSize),
+            edge: model.edgeDockSide == .right ? .minX : .maxX)
     }
 
     func configurationChanged() {
         options.close()
-        configureContent()
-        configurePeekContent()
+        configuredDisplay = nil
         update()
     }
 
@@ -66,6 +92,7 @@ final class EdgeDockController: NSObject {
             presentationGeneration += 1
             hasPresented = false
             expanded = false
+            hoverIntent = .ready
             options.close()
             dismissPeek()
             pointerMonitor.stop()
@@ -75,16 +102,33 @@ final class EdgeDockController: NSObject {
     }
 
     func update() {
-        guard !shuttingDown, let model, let dock, let frame = (screen ?? NSScreen.main)?.visibleFrame else { return }
+        guard !shuttingDown, let model, let dock else { return }
+        let displays = DockDisplay.connected()
+        if model.dockDisplays != displays { model.dockDisplays = displays }
+        guard let display = model.edgeDockDisplay.resolve(in: displays) else {
+            configuredDisplay = nil
+            setVisible(false)
+            return
+        }
         guard model.edgeDockEnabled else {
             setVisible(false)
             return
+        }
+        let frame = display.visibleFrame
+        if configuredDisplay != display {
+            configuredDisplay = display
+            options.close()
+            configureContent(in: frame)
+            configurePeekContent()
         }
         let dockFrame = EdgeDockLayout.frame(
             in: frame, providerCount: model.snapshot?.providers.count ?? 0,
             side: model.edgeDockSide, size: model.edgeDockSize, position: model.edgeDockPosition)
         dock.setFrame(dockFrame, display: true)
-        handle?.setFrame(EdgeDockLayout.handleFrame(for: dockFrame, side: model.edgeDockSide), display: true)
+        handle?.setFrame(
+            EdgeDockLayout.handleFrame(
+                for: dockFrame, side: model.edgeDockSide, marker: model.edgeDockMarkerStyle,
+                size: model.edgeDockSize), display: true)
         if let id = model.dockProvider, model.snapshot?.providers.contains(where: { $0.id == id }) != true {
             dismissPeek()
         }
@@ -115,27 +159,24 @@ final class EdgeDockController: NSObject {
         setVisible(false)
     }
 
-    func moveToPointerScreen() {
-        options.close()
-        screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        configureContent()
-        update()
-    }
-
     private func reveal() {
         guard !shuttingDown, model?.edgeDockEnabled == true else { return }
         setExpanded(true, animated: true)
     }
 
     private func present(_ id: String, pin: Bool) {
-        guard let model else { return }
+        guard !shuttingDown, let model, model.edgeDockEnabled else { return }
+        if !pin {
+            guard expanded, dock?.isVisible == true, hoverIntent.acceptsHover(at: NSEvent.mouseLocation) else { return }
+        }
+        defer { if pin { hoverIntent = .ready } }
         if options.isPresented {
             if !pin { return }
             options.close()
         }
-        if model.panelVisible {
+        if model.overviewPresentation.isVisible {
             if !pin { return }
-            openOverview?()
+            closeOverview?()
         }
         if !pin && model.dockPeekPinned { return }
         if model.dockProvider == id {
@@ -160,11 +201,14 @@ final class EdgeDockController: NSObject {
     }
 
     private func configurePeekContent() {
-        guard let peek, let model, let id = model.dockProvider else { return }
-        let maximum = max(140, (screen?.visibleFrame.height ?? 800) - 110)
+        guard let peek, let model, let id = model.dockProvider,
+            let frame = currentDisplay?.visibleFrame
+        else { return }
+        let maximum = EdgeDockLayout.peekMaximumBodyHeight(in: frame, size: model.edgeDockSize)
         let root = AnyView(
             ProviderPeekView(
-                model: model, providerID: id, maximumBodyHeight: maximum,
+                model: model, providerID: id,
+                width: EdgeDockLayout.peekWidth(in: frame, size: model.edgeDockSize), maximumBodyHeight: maximum,
                 close: { [weak self] in self?.closePeek() },
                 togglePin: { [weak self, weak model] in
                     model?.dockPeekPinned.toggle()
@@ -185,19 +229,14 @@ final class EdgeDockController: NSObject {
     }
 
     private func positionPeek() {
-        guard let peek, let dock, let model, let frame = (screen ?? NSScreen.main)?.visibleFrame,
+        guard let peek, let dock, let model, let frame = currentDisplay?.visibleFrame,
             let id = model.dockProvider,
             let index = model.snapshot?.displayProviders.firstIndex(where: { $0.id == id })
         else { return }
-        let size = model.edgeDockSize
-        let height = min(peekHeight, frame.height - 24)
-        let anchorY = dock.frame.maxY - size.contentInset - (size.rowStride - 4) / 2 - CGFloat(index) * size.rowStride
-        let y = min(frame.maxY - height - 12, max(frame.minY + 12, anchorY - height / 2))
-        let x =
-            model.edgeDockSide == .right
-            ? max(frame.minX + 12, dock.frame.minX - EdgeDockLayout.peekWidth - EdgeDockLayout.gap)
-            : min(frame.maxX - EdgeDockLayout.peekWidth - 12, dock.frame.maxX + EdgeDockLayout.gap)
-        peek.setFrame(NSRect(x: x, y: y, width: EdgeDockLayout.peekWidth, height: height), display: true)
+        peek.setFrame(
+            EdgeDockLayout.peekFrame(
+                in: frame, dock: dock.frame, side: model.edgeDockSide, size: model.edgeDockSize,
+                providerIndex: index, height: peekHeight), display: true)
     }
 
     private func reconcileMonitors() {
@@ -223,7 +262,8 @@ final class EdgeDockController: NSObject {
         let visible = EdgeDockVisibility.shouldReveal(
             autoHide: model.edgeDockAutoHide, expanded: expanded || dock.isVisible,
             pinned: model.dockPeekPinned && peek?.isVisible == true,
-            dockPinned: model.edgeDockPinned, optionsPresented: options.isPresented,
+            dockPinned: model.edgeDockPinned,
+            optionsPresented: options.isPresented || model.overviewPresentation.holdsDockOpen,
             pointer: point,
             dock: dock.frame, peek: peek?.isVisible == true ? peek?.frame : nil, activation: handle.frame)
         setExpanded(visible, animated: animated)
@@ -232,7 +272,7 @@ final class EdgeDockController: NSObject {
 
     private func showOptions(for providerID: String?, at point: CGPoint?) {
         guard let model, let dock, model.edgeDockEnabled,
-            let frame = (screen ?? NSScreen.main)?.visibleFrame
+            let frame = currentDisplay?.visibleFrame
         else { return }
         let index = model.snapshot?.displayProviders.firstIndex { $0.id == providerID }
         if providerID != nil && index == nil { return }
@@ -253,7 +293,12 @@ final class EdgeDockController: NSObject {
 
     private func setExpanded(_ visible: Bool, animated: Bool) {
         guard let dock, let handle else { return }
+        let automaticEntry = model?.edgeDockAutoHide == true && model?.edgeDockPinned != true
+        if !visible || !automaticEntry { hoverIntent = .ready }
         guard !hasPresented || expanded != visible else { return }
+        if visible && automaticEntry, let model {
+            hoverIntent = .awaitingEntry(anchorX: NSEvent.mouseLocation.x, side: model.edgeDockSide)
+        }
         hasPresented = true
         expanded = visible
         presentationGeneration += 1
@@ -294,9 +339,6 @@ final class EdgeDockController: NSObject {
 
     @objc private func screenChanged() {
         options.close()
-        if let old = screen, !NSScreen.screens.contains(old) { screen = NSScreen.main }
-        configureContent()
-        configurePeekContent()
         update()
     }
 

@@ -1,9 +1,41 @@
 import Foundation
 
 enum EdgeDockLayout {
-    static let peekWidth: CGFloat = 400
-    static let gap: CGFloat = 12
     static let handleWidth: CGFloat = 16
+
+    static func overviewAnchor(in bounds: CGRect, flipped: Bool, size: EdgeDockSize) -> CGRect {
+        let buttonWidth: CGFloat = size == .mini ? 20 : 24
+        let spacing: CGFloat = size == .mini ? 0 : 8
+        let width = min(buttonWidth, max(0, bounds.width))
+        let height = min(20, max(0, bounds.height))
+        let preferredX = bounds.midX - (buttonWidth * 2 + spacing) / 2
+        let preferredY = flipped ? bounds.maxY - size.contentInset - 20 : bounds.minY + size.contentInset
+        return CGRect(
+            x: min(bounds.maxX - width, max(bounds.minX, preferredX)),
+            y: min(bounds.maxY - height, max(bounds.minY, preferredY)), width: width, height: height)
+    }
+
+    static func peekWidth(in visibleFrame: CGRect, size: EdgeDockSize) -> CGFloat {
+        min(size.peekWidth, max(0, visibleFrame.width - 24))
+    }
+
+    static func peekMaximumBodyHeight(in visibleFrame: CGRect, size: EdgeDockSize) -> CGFloat {
+        max(0, visibleFrame.height - size.peekChromeHeight - 24)
+    }
+
+    static func peekFrame(
+        in visibleFrame: CGRect, dock: CGRect, side: EdgeDockSide, size: EdgeDockSize,
+        providerIndex: Int, height: CGFloat
+    ) -> CGRect {
+        let width = peekWidth(in: visibleFrame, size: size)
+        let height = min(max(0, height), max(0, visibleFrame.height - 24))
+        let anchorY = dock.maxY - size.contentInset - (size.rowStride - 4) / 2 - CGFloat(providerIndex) * size.rowStride
+        let preferredX = side == .right ? dock.minX - width - size.peekGap : dock.maxX + size.peekGap
+        return CGRect(
+            x: min(visibleFrame.maxX - width - 12, max(visibleFrame.minX + 12, preferredX)),
+            y: min(visibleFrame.maxY - height - 12, max(visibleFrame.minY + 12, anchorY - height / 2)),
+            width: width, height: height)
+    }
 
     static func normalizedPosition(_ position: Double) -> Double {
         position.isFinite ? min(1, max(0, position)) : 0.5
@@ -26,8 +58,10 @@ enum EdgeDockLayout {
             width: dockWidth, height: height)
     }
 
-    static func handleFrame(for dock: CGRect, side: EdgeDockSide) -> CGRect {
-        let width = min(handleWidth, max(0, dock.width))
+    static func handleFrame(
+        for dock: CGRect, side: EdgeDockSide, marker: EdgeDockMarkerStyle = .line, size: EdgeDockSize = .standard
+    ) -> CGRect {
+        let width = min(marker.activationWidth(for: size), max(0, dock.width))
         return CGRect(
             x: side == .right ? dock.maxX - width : dock.minX, y: dock.minY,
             width: width, height: dock.height)

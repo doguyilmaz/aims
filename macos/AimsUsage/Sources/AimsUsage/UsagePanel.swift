@@ -8,22 +8,12 @@ final class UsagePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     func presentForInteraction() {
-        let pointerOpening = Self.pointerInteraction
+        let pointerOpening = UsagePointerFocus.isPointerEvent
         makeKeyAndOrderFront(nil)
-        if pointerOpening { makeFirstResponder(nil) }
-    }
-
-    func clearPointerFocus() {
-        if Self.pointerInteraction { makeFirstResponder(nil) }
+        UsagePointerFocus.clear(in: self, pointerInitiated: pointerOpening)
     }
 
     override func cancelOperation(_ sender: Any?) {
         if let onCancel { onCancel() } else { super.cancelOperation(sender) }
-    }
-
-    private static var pointerInteraction: Bool {
-        guard let type = NSApp.currentEvent?.type else { return false }
-        return [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp].contains(
-            type)
     }
 }

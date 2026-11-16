@@ -13,6 +13,13 @@ final class UsageModel {
     var dockBehaviorDidChange: (@MainActor () -> Void)?
     var dockProvider: String?
     var dockPeekPinned = false
+    var dockDisplays: [DockDisplay] = []
+    var edgeDockDisplay = DockDisplaySelection(savedValue: UserDefaults.standard.string(forKey: "edgeDockDisplay")) {
+        didSet {
+            UserDefaults.standard.set(edgeDockDisplay.id, forKey: "edgeDockDisplay")
+            dockConfigurationDidChange?()
+        }
+    }
     var edgeDockPinned = UserDefaults.standard.bool(forKey: "edgeDockPinned") {
         didSet {
             UserDefaults.standard.set(edgeDockPinned, forKey: "edgeDockPinned")
@@ -62,6 +69,14 @@ final class UsageModel {
             dockBehaviorDidChange?()
         }
     }
+    var edgeDockMarkerStyle = EdgeDockMarkerStyle(
+        savedValue: UserDefaults.standard.string(forKey: "edgeDockMarkerStyle"))
+    {
+        didSet {
+            UserDefaults.standard.set(edgeDockMarkerStyle.rawValue, forKey: "edgeDockMarkerStyle")
+            dockConfigurationDidChange?()
+        }
+    }
     var edgeDockEnabled = UserDefaults.standard.object(forKey: "edgeDockEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(edgeDockEnabled, forKey: "edgeDockEnabled")
@@ -71,7 +86,9 @@ final class UsageModel {
     var error: String?
     private(set) var summaryDate = Date()
     var isRefreshing = false
-    var panelVisible = false
+    var overviewPresentation: UsageOverviewPresentation = .hidden {
+        didSet { if overviewPresentation != oldValue { dockBehaviorDidChange?() } }
+    }
     var slimScrollbars = UserDefaults.standard.object(forKey: "slimScrollbars") as? Bool ?? false {
         didSet { UserDefaults.standard.set(slimScrollbars, forKey: "slimScrollbars") }
     }
