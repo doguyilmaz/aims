@@ -30,19 +30,7 @@ struct UsageSettings: View {
                 }.padding(16)
             }.navigationSplitViewColumnWidth(min: 160, ideal: 168, max: 190)
         } detail: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(selectedSection.title).font(.system(size: 21, weight: .semibold))
-                        Text(selectedSection.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if selectedSection == .dock {
-                        Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
-                            .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                            .help("Show Edge Dock")
-                    }
-                }.padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 20)
+            Group {
                 switch selectedSection {
                 case .general: generalSettings
                 case .dock: EdgeDockSettings(model: model)
@@ -50,6 +38,17 @@ struct UsageSettings: View {
                 case .updates: updateSettings
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .navigationTitle(selectedSection.title)
+                .navigationSubtitle(selectedSection.subtitle)
+                .toolbar {
+                    if selectedSection == .dock {
+                        ToolbarItem(placement: .primaryAction) {
+                            Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
+                                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                                .help("Show Edge Dock")
+                        }
+                    }
+                }
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar(removing: .sidebarToggle)

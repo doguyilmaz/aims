@@ -11,7 +11,7 @@ struct EdgeDockSettings: View {
                     GroupBox("Placement") { placement.padding(8) }.frame(maxWidth: .infinity)
                     GroupBox("Readings") { readings.padding(8) }.frame(maxWidth: .infinity)
                 }
-            }.padding(.horizontal, 20).padding(.bottom, 20)
+            }.padding(20)
         }
     }
 
