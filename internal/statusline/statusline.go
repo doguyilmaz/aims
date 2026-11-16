@@ -32,9 +32,9 @@ func Run(ctx context.Context, w io.Writer) error {
 		return nil
 	}
 	name := cfg.ProfileForHomeEnv(claude.ID, os.Getenv("CLAUDE_CONFIG_DIR"))
-	changedProfile := false
+	generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
+	changedProfile := supplied && name == ""
 	if name != "" {
-		generation, supplied := os.LookupEnv(config.GenerationVar(claude.ID))
 		expected := cfg.Tools[claude.ID].Profiles[name].Generation
 		if (supplied || expected != "") && generation != expected {
 			name, changedProfile = "", true
@@ -49,7 +49,13 @@ func Run(ctx context.Context, w io.Writer) error {
 	if changedProfile {
 		parts = append(parts, "aims: profile changed; restart via aims")
 	}
-	if chain := cfg.Status.Chain; chain != "" && !claude.IsAimsStatusLine(chain) {
+	home := os.Getenv("CLAUDE_CONFIG_DIR")
+	if home == "" || name != "" && !profiles.Private(cfg.Tools[claude.ID].Profiles[name], tools.Get(claude.ID).Layout())("settings.json") {
+		// Shared settings were installed once in the hub; their saved command
+		// belongs to that integration home, including Windows hard-link shims.
+		home = profiles.HubHome(cfg, tools.Get(claude.ID)).Dir
+	}
+	if chain := cfg.Status.CommandForHome(home); !changedProfile && chain != "" && !claude.IsAimsStatusLine(chain) {
 		if out := runChain(ctx, chain, raw); out != "" {
 			parts = append(parts, out)
 		}
@@ -155,6 +161,15 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	}
 	var tail []string
 	for _, w := range windows {
+		if w.PercentUnknown {
+			text := paint(dim, w.Label+" —")
+			if w.Limited {
+				limited = true
+				text = paint(dim, w.Label+" ") + paint(red, "limited")
+			}
+			tail = append(tail, text)
+			continue
+		}
 		c := level(w.Percent)
 		var p string
 		if w.Label == "5h" {

@@ -13,6 +13,7 @@ struct UsageDashboard: View {
     @Environment(\.openWindow) private var openWindow
     @State private var editingReminder = false
     @State private var showingReminders = false
+    @State private var showingTerminalCommand = false
     @State private var contentHeight: CGFloat = 320
 
     var body: some View {
@@ -45,6 +46,7 @@ struct UsageDashboard: View {
         .background(UsageBackdrop())
         .background(UsageScrollStyle())
         .sheet(isPresented: $editingReminder) { CustomResetEditor(model: model) }
+        .sheet(isPresented: $showingTerminalCommand) { TerminalCommandSheet() }
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
     }
 
@@ -83,6 +85,7 @@ struct UsageDashboard: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            AimsBrandMark().fill(.primary).frame(width: 21, height: 18).accessibilityHidden(true)
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
@@ -104,6 +107,7 @@ struct UsageDashboard: View {
                     .disabled(
                         model.fixtureURL != nil || model.snapshot?.providers.allSatisfy { $0.rows.isEmpty } != false)
                 Button("Settings…") { showSettings() }
+                Button("Terminal command…") { showingTerminalCommand = true }
                 if model.updater.isConfigured {
                     CheckForUpdatesButton(updater: model.updater)
                 }

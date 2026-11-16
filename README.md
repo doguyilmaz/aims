@@ -52,16 +52,22 @@
 - Claude and Codex accounts stay separate. Choose All or one account for each Dock indicator without changing the active CLI login.
 - Choose the Dock's allowance per provider — 5 hours, weekly, monthly or budget — and show Used or Remaining. Hover retains all account readings.
 - Kiro, Grok, Antigravity model groups and OpenCode budgets use the same usage data as the CLI. Scheduled resets, reported banked resets and personal reminders remain distinct.
+- Provider hover details include Refresh and the age of the readings. Local cache changes from other aims sessions are picked up every minute; provider API refresh remains every five minutes when enabled.
 - Refresh reads quotas without a model prompt. Missing reset times say **Not reported**; a passed reset waits for a new measurement instead of assuming zero.
 
 Build on macOS 14.0.0+ with Swift 6.2.0+ and the Go version declared in [go.mod](go.mod) available on `PATH`:
 
 ```sh
 scripts/build-macos-app.sh
-open 'dist/Aims Usage.app'
+'dist/Aims Usage.app/Contents/Resources/aims' app install --from 'dist/Aims Usage.app'
+"$HOME/Applications/Aims Usage.app/Contents/Resources/aims" app open
 ```
 
-For daily use, quit the development app and move the bundle to your Applications folder. It includes its own aims executable and reads your existing aims profiles and native provider logins. Use the CLI to set up/manage Claude and Codex accounts; select an existing custom `AIMS_HOME` in the app's Settings when needed. Provider CLIs retain their own installation and authentication.
+The local installer verifies the app signature, copies it to `~/Applications` and keeps any existing app. The bundle includes aims and reads your existing profiles and native provider logins. Use the CLI to set up/manage Claude and Codex accounts; select an existing custom `AIMS_HOME` in Settings when needed. Provider CLIs retain their own installation and authentication.
+
+On macOS, `aims app` and the dashboard’s **m** key install/open the companion, including a local build. `init --app` and `setup --app` also offer installation. The public cask path becomes available when the app is released. The prepared app cask installs the separate CLI as a dependency; CLI-initiated app installation keeps an existing CLI’s installer.
+
+Direct-download users can choose **More → Terminal command…** or the same section in Settings to add the bundled command to `~/.local/bin` when no CLI exists. Add that folder to your shell PATH if needed; shell files are kept.
 
 See the [macOS app guide](docs/content/macos-usage.md) for setup, account/window controls and data-source limits, or [release operations](docs/macos-release.md) for the prepared signed ZIP, separate cask and Sparkle channel. Updating or removing the app preserves account data, sessions and history.
 

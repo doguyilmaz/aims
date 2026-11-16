@@ -226,7 +226,7 @@ func TestCompletedLogoutPurgeResumesWithoutProviderAndNeverRepairsItsHome(t *tes
 	if probe := profiles.Live(t.Context(), cfg, probeAdapter, "work"); probe.Status != tool.ProbeError {
 		t.Fatal("pending purge returned a live reading")
 	}
-	if probe := profiles.ReadUsage(t.Context(), cfg, probeAdapter, "work"); probe.Status != tool.ProbeError {
+	if probe, _ := profiles.ReadUsage(t.Context(), cfg, probeAdapter, "work"); probe.Status != tool.ProbeError {
 		t.Fatal("pending purge returned a fresh usage reading")
 	}
 	if _, _, renewed := profiles.KeepAlive(t.Context(), cfg, probeAdapter, "work"); renewed {

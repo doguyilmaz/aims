@@ -23,6 +23,9 @@ struct ProviderPeekView: View {
                     Text("\(provider.rows.count) \(unit)\(provider.rows.count == 1 ? "" : "s")")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
+                UsageIconButton(title: "Refresh quotas", icon: .refresh, busy: model.isRefreshing) {
+                    Task { await model.refresh() }
+                }.disabled(model.isRefreshing).help("Refresh quotas without a model prompt")
                 UsageIconButton(
                     title: model.dockPeekPinned ? "Unpin provider details" : "Pin provider details",
                     icon: model.dockPeekPinned ? .pinned : .pin, selected: model.dockPeekPinned, action: togglePin)
@@ -51,8 +54,22 @@ struct ProviderPeekView: View {
                 TapGesture().onEnded {
                     if model.dockProvider == providerID { model.dockPeekPinned = true }
                 })
-            Text("% used · reset countdowns").font(.system(size: 11)).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).frame(height: 30)
+            HStack(spacing: 4) {
+                Text("% used ·")
+                if model.isRefreshing {
+                    Text("Refreshing…")
+                } else if let provider = model.snapshot?.providers.first(where: { $0.id == providerID }),
+                    let oldest = provider.rows.compactMap(\.observedAt).min()
+                {
+                    Text("Data age")
+                    Text(oldest, style: .relative)
+                        .help("Oldest reported update: \(oldest.formatted(date: .abbreviated, time: .shortened))")
+                } else {
+                    Text("Update time unavailable")
+                }
+                Spacer(minLength: 0)
+            }.font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.horizontal, 18).frame(height: 30)
         }
         .frame(width: EdgeDockLayout.peekWidth)
         .background(UsageBackdrop(inkOpacity: 0.72)).clipShape(RoundedRectangle(cornerRadius: 18))

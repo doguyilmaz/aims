@@ -65,6 +65,22 @@ func TestPrivateCreationOverridesPublicInheritedDACL(t *testing.T) {
 	if err != nil || dacl.AceCount != 1 {
 		t.Fatalf("credential child inherited extra grants: %v", err)
 	}
+	cache := filepath.Join(root, "usage-observations.json")
+	if err := os.WriteFile(cache, []byte("public old cache"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePrivateFile(cache, []byte("private replacement")); err != nil {
+		t.Fatal(err)
+	}
+	wantPrivate, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;" + sid + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := windows.GetNamedSecurityInfo(cache, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil || actual.String() != wantPrivate.String() {
+		t.Fatalf("private replacement retained public DACL: %v", err)
+	}
+
 	if _, err := f.WriteString(`{"apiKey":"DUMMY-SECRET"}`); err != nil {
 		t.Fatal(err)
 	}

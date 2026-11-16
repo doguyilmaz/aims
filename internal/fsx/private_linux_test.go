@@ -86,4 +86,14 @@ func TestAtomicWritePreservesUnixAccessControls(t *testing.T) {
 	if content, err := os.ReadFile(path); err != nil || string(content) != "new" {
 		t.Fatal("atomic write did not update content")
 	}
+	if err := WritePrivateFile(path, []byte("private cache")); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("private replacement retained public mode: %v", err)
+	}
+	if _, err := unix.Getxattr(path, "system.posix_acl_access", nil); !errors.Is(err, unix.ENODATA) {
+		t.Fatalf("private replacement retained old ACL: %v", err)
+	}
+
 }

@@ -83,6 +83,7 @@ struct UsageSettings: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
+            TerminalCommandSettings()
             Section("App updates") {
                 AppUpdateSettings(updater: model.updater)
             }

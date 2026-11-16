@@ -49,7 +49,7 @@ func Load(filter string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	state := config.LoadStateFor(cfg)
+	state, observationErr := config.LoadStateView(cfg)
 	s := Snapshot{SchemaVersion: 1, GeneratedAt: config.Now().UTC(), Providers: []Provider{}}
 	custom, err := readCustom()
 	if err != nil {
@@ -61,6 +61,9 @@ func Load(filter string) (Snapshot, error) {
 	for _, id := range tools.IDs() {
 		a := tools.Get(id)
 		p := Provider{ID: string(id), Name: a.Title(), Installed: profiles.Bin(a) != "", Rows: []Row{}}
+		if observationErr != nil {
+			p.Error = "Usage observation cache could not be read; usage-observations.json was left unchanged. Run aims doctor --check."
+		}
 		for _, n := range cfg.Tools[id].Order {
 			cached := state.Get(id, n)
 			r := Row{ID: n, Name: n, Windows: []tool.Window{}, Error: cached.UsageError, AttemptedAt: cached.UsageAttemptedAt}

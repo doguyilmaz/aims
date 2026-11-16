@@ -79,6 +79,9 @@ final class UsageModel {
     private(set) var additionalPaths = UserDefaults.standard.string(forKey: "additionalPaths") ?? ""
     private var command: UsageCommand?
     private var shuttingDown = false
+    private var nextProviderRefresh = ContinuousClock.now
+    private var providerRefreshError: String?
+    private let commandRunner: (@MainActor ([String]) async throws -> Data)?
     var displayStyle =
         UsageDisplayStyle(rawValue: UserDefaults.standard.string(forKey: "displayStyle") ?? "") ?? .compact
     {
@@ -88,7 +91,12 @@ final class UsageModel {
         }
     }
 
-    init() {
+    init(configHomeOverride: String? = nil, commandRunner: (@MainActor ([String]) async throws -> Data)? = nil) {
+        self.commandRunner = commandRunner
+        if let configHomeOverride {
+            configHome = configHomeOverride
+            return
+        }
         let stored = UserDefaults.standard.string(forKey: "configHome")
         configHome = stored ?? ProcessInfo.processInfo.environment["AIMS_HOME"] ?? ""
         if stored == nil && !configHome.isEmpty { UserDefaults.standard.set(configHome, forKey: "configHome") }
@@ -169,40 +177,49 @@ final class UsageModel {
 
     func run() async {
         await refresh(live: false)
-        var nextRefresh = Date()
+        if automaticRefresh && fixtureURL == nil { await refresh() }
         while !Task.isCancelled {
-            summaryDate = Date()
-            if automaticRefresh && fixtureURL == nil && summaryDate >= nextRefresh {
-                await refresh(live: true)
-                nextRefresh = Date().addingTimeInterval(300)
-            }
             do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            summaryDate = Date()
+            if automaticRefresh && fixtureURL == nil && ContinuousClock.now >= nextProviderRefresh {
+                await refresh()
+            } else {
+                await reloadCached()
+            }
         }
     }
 
-    func refresh(live: Bool = true) async {
+    // Other aims sessions/status hooks may update caches between API polls.
+    // A local read must not clear a failed real request's error indication.
+    func reloadCached() async { await readSnapshot(live: false, preserveRefreshError: true) }
+
+    func refresh(live: Bool = true) async { await readSnapshot(live: live, preserveRefreshError: false) }
+
+    private func readSnapshot(live: Bool, preserveRefreshError: Bool) async {
         guard !isRefreshing, !shuttingDown else { return }
         isRefreshing = true
         defer {
             isRefreshing = false
             command = nil
+            if live { nextProviderRefresh = ContinuousClock.now.advanced(by: .seconds(300)) }
         }
         do {
             let data: Data
-            if let fixtureURL {
+            if commandRunner == nil, let fixtureURL {
                 data = try Data(contentsOf: fixtureURL)
             } else {
-                let command = UsageCommand()
-                self.command = command
-                data = try await command.run(
-                    executable: executable(), arguments: ["usage", "--json"] + (live ? ["--refresh"] : []),
-                    configHome: configHome, additionalPaths: additionalPaths)
+                data = try await runCommand(["usage", "--json"] + (live ? ["--refresh"] : []))
             }
             try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
             summaryDate = Date()
-            error = nil
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+            if !preserveRefreshError { providerRefreshError = nil }
+            error = providerRefreshError
+        } catch is CancellationError {
+        } catch {
+            if live { providerRefreshError = error.localizedDescription }
+            self.error = error.localizedDescription
+        }
     }
 
     func addReminder(provider: String, row: String, label: String, at: Date) async -> Bool {
@@ -223,18 +240,25 @@ final class UsageModel {
             command = nil
         }
         do {
-            let command = UsageCommand()
-            self.command = command
-            let data = try await command.run(
-                executable: executable(), arguments: arguments, configHome: configHome, additionalPaths: additionalPaths
-            )
+            let data = try await runCommand(arguments)
+            try Task.checkCancellation()
             snapshot = try UsageSnapshot.decode(data)
-            error = nil
+            error = providerRefreshError
             return true
+        } catch is CancellationError {
+            return false
         } catch {
             self.error = error.localizedDescription
             return false
         }
+    }
+
+    private func runCommand(_ arguments: [String]) async throws -> Data {
+        if let commandRunner { return try await commandRunner(arguments) }
+        let command = UsageCommand()
+        self.command = command
+        return try await command.run(
+            executable: executable(), arguments: arguments, configHome: configHome, additionalPaths: additionalPaths)
     }
 
     private func executable() throws -> URL {

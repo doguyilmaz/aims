@@ -4,6 +4,7 @@ package profiles
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"os"
 	"os/exec"
@@ -393,6 +394,26 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		return Evaluation{Name: name, State: ps, Reasons: []string{"profile purge is pending; retry aims rm --purge"}}
 	}
 	acct := a.Account(ctx, Home(cfg, a, name))
+	if acct.Email != "" {
+		corrected := config.Account{Email: acct.Email, Tenant: acct.Tenant, Plan: acct.Plan}
+		if ps.Account != nil && strings.EqualFold(ps.Account.Email, acct.Email) {
+			if corrected.Plan == "" {
+				corrected.Plan = ps.Account.Plan
+			}
+		}
+		if accountChanged(ps.Account, &corrected) {
+			// Do not mutate the shared snapshot: EvaluateAll reads it in parallel.
+			local := *ps
+			local.Account, local.Usage, local.UsageError, local.UsageAttemptedAt = &corrected, nil, "", time.Time{}
+			ps = &local
+			_ = config.UpdateStateFor(cfg, a.ID(), name, func(s *config.ProfileState) {
+				s.Account, s.AccountRevision = &corrected, rand.Text()
+				s.Usage, s.UsageError, s.UsageAttemptedAt = nil, "", time.Time{}
+			})
+			// The revision invalidates old observations. Do not delete by label:
+			// this evaluation may outlive removal/recreation of that label.
+		}
+	}
 	ev := Evaluation{Name: name, Account: acct, State: ps}
 	now := config.Now()
 	open := false // something keeps the profile out with no known end
@@ -415,8 +436,8 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
-			if w.Percent >= cfg.Failover.Threshold && (w.ResetsAt.IsZero() || w.ResetsAt.After(now)) {
-				r := fmt.Sprintf("%s at %.0f%%", w.Label, w.Percent)
+			if windowLimited(cfg, w) && (w.ResetsAt.IsZero() || w.ResetsAt.After(now)) {
+				r := windowLimitText(w)
 				if w.ResetsAt.IsZero() {
 					open = true
 				} else {
@@ -428,14 +449,6 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 		}
 	}
 	id := identity(acct, ps)
-	if acct.Email != "" && (ps.Account == nil || ps.Account.Email != acct.Email || ps.Account.Tenant != acct.Tenant) {
-		_ = config.UpdateStateFor(cfg, a.ID(), name, func(ps *config.ProfileState) {
-			if ps.Account == nil {
-				ps.Account = &config.Account{}
-			}
-			ps.Account.Email, ps.Account.Tenant = acct.Email, acct.Tenant
-		})
-	}
 	if id.Email != "" && id.Tenant != "" {
 		for _, n := range cfg.Tools[a.ID()].Order {
 			other := st.Get(a.ID(), n)
@@ -449,6 +462,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 			if r, until := sameAccount(cfg, other, now); r != "" {
 				ev.Reasons = append(ev.Reasons, "same account as "+n+", "+r)
 				ev.ReadyAt = later(ev.ReadyAt, until)
+				open = open || until.IsZero()
 			}
 		}
 	}
@@ -476,14 +490,29 @@ func identity(acct tool.Account, ps *config.ProfileState) config.Account {
 // sameAccount says what limits a profile, as far as it counts for another
 // login of the same account: the plan's limits, which the account shares,
 // and not a short rate limit or a dead login, which are the login's own.
+// An explicit provider limit remains authoritative when its percentage is absent.
+func windowLimited(cfg *config.Config, w tool.Window) bool {
+	return w.Limited || !w.PercentUnknown && w.Percent >= cfg.Failover.Threshold
+}
+
+func windowLimitText(w tool.Window) string {
+	if w.PercentUnknown {
+		return w.Label + " limit"
+	}
+	return fmt.Sprintf("%s at %.0f%%", w.Label, w.Percent)
+}
+
 func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (reason string, until time.Time) {
 	if ps.Until.After(now) && ps.Reason != "busy" {
 		reason, until = "limited for "+Duration(ps.Until.Sub(now)), ps.Until
 	}
 	if ps.Usage != nil {
 		for _, w := range ps.Usage.Windows {
-			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
-				reason, until = fmt.Sprintf("%s at %.0f%% for %s", w.Label, w.Percent, Duration(w.ResetsAt.Sub(now))), w.ResetsAt
+			if windowLimited(cfg, w) && w.ResetsAt.IsZero() {
+				return windowLimitText(w), time.Time{}
+			}
+			if windowLimited(cfg, w) && w.ResetsAt.After(now) && w.ResetsAt.After(until) {
+				reason, until = windowLimitText(w)+" for "+Duration(w.ResetsAt.Sub(now)), w.ResetsAt
 			}
 		}
 	}
@@ -579,7 +608,7 @@ func MarkLimited(cfg *config.Config, id tool.ID, name string, l Limit) error {
 			}
 			if ps.Usage != nil {
 				for _, w := range ps.Usage.Windows {
-					if (l.Window == "" || w.Label == l.Window) && w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
+					if (l.Window == "" || w.Label == l.Window) && windowLimited(cfg, w) && w.ResetsAt.After(now) && (until.IsZero() || w.ResetsAt.Before(until)) {
 						until = w.ResetsAt
 					}
 				}
@@ -640,7 +669,7 @@ func LimitWindow(cfg *config.Config, detail string, windows []tool.Window) strin
 	now := config.Now()
 	found := ""
 	for _, w := range windows {
-		if w.Percent < cfg.Failover.Threshold || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
+		if !windowLimited(cfg, w) || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
 			continue
 		}
 		if !w.Short() {
@@ -677,19 +706,50 @@ func RecordAccount(id tool.ID, name, email, plan string, snapshots ...*config.Co
 		return nil
 	}
 	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
-		ps.Account = &config.Account{Email: email, Plan: plan}
+		old := ps.Account
+		observeAccount(ps, email, plan)
+		if accountChanged(old, ps.Account) {
+			ps.AccountRevision = rand.Text()
+			ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
+		}
 	})
+}
+
+func accountChanged(old, current *config.Account) bool {
+	if old == nil || current == nil {
+		return old != current
+	}
+	return !sameLogin(*old, *current) || strings.EqualFold(old.Plan, "apiKey") != strings.EqualFold(current.Plan, "apiKey")
+}
+
+func observeAccount(ps *config.ProfileState, email, plan string) {
+	account := config.Account{Email: email, Plan: plan}
+	if old := ps.Account; old != nil && (email == "" || strings.EqualFold(email, old.Email)) && !strings.EqualFold(plan, "apiKey") {
+		account = *old
+		if email != "" {
+			account.Email = email
+		}
+		if plan != "" {
+			account.Plan = plan
+		}
+	}
+	ps.Account = &account
 }
 
 // RecordLogin invalidates derived quotas and old limit marks after a successful
 // user-controlled authentication. It never changes native credentials/history.
 func RecordLogin(id tool.ID, name string, acct tool.Account, snapshots ...*config.Config) error {
-	return updateState(snapshots, id, name, func(ps *config.ProfileState) {
+	if err := updateState(snapshots, id, name, func(ps *config.ProfileState) {
 		ps.Until, ps.Reason, ps.Window, ps.NeedsLogin = time.Time{}, "", "", false
 		ps.MarkedBy, ps.Detail, ps.MarkedAt = "", "", time.Time{}
 		ps.Usage, ps.UsageError, ps.UsageAttemptedAt = nil, "", time.Time{}
 		ps.Account = &config.Account{Email: acct.Email, Plan: acct.Plan, Tenant: acct.Tenant}
-	})
+		ps.AccountRevision = rand.Text()
+	}); err != nil {
+		return err
+	}
+	_ = config.RemoveUsageObservation(id, name) // registration identity already invalidates old observations
+	return nil
 }
 
 func readProbe(ctx context.Context, cfg *config.Config, a tool.Adapter, name string, usageOnly bool) tool.Probe {
@@ -734,14 +794,21 @@ func Live(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) 
 
 // ReadUsage updates observation caches without changing manual routing/login
 // marks. A passive usage display must not clear a profile's existing busy mark.
-func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) tool.Probe {
+func ReadUsage(ctx context.Context, cfg *config.Config, a tool.Adapter, name string) (tool.Probe, error) {
+	binding, revision := config.CaptureUsageAccount(a.ID(), name)
 	p := readProbe(ctx, cfg, a, name, true)
 	if ctx.Err() != nil {
-		return p
+		return p, ctx.Err()
 	}
-	recordObservation(cfg, a.ID(), name, p)
-	_ = RecordAccount(a.ID(), name, p.Email, p.Plan, cfg)
-	return p
+	if err := config.CommitUsageObservation(cfg, a.ID(), name, binding, revision, func(ps *config.ProfileState) {
+		applyObservation(ps, p)
+		if p.Email != "" || p.Plan != "" {
+			observeAccount(ps, p.Email, p.Plan)
+		}
+	}); err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "usage cache could not be stored; run aims doctor --check", UsageError: "usage cache could not be stored"}, fmt.Errorf("usage cache could not be stored; existing files kept: %w", err)
+	}
+	return p, nil
 }
 
 // AskFree asks the provider about the named accounts at once and records
@@ -801,21 +868,36 @@ func KeepAlive(ctx context.Context, cfg *config.Config, a tool.Adapter, name str
 }
 
 func recordObservation(cfg *config.Config, id tool.ID, name string, p tool.Probe) {
-	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
+	visibleAccount := config.LoadStateFor(cfg).Get(id, name).Account
 	_ = config.UpdateStateFor(cfg, id, name, func(ps *config.ProfileState) {
-		identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
-		becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
-		ps.UsageAttemptedAt = config.Now().UTC()
-		ps.UsageError = p.UsageError
-		if ps.UsageError == "" && (p.Status == tool.ProbeError || p.Status == tool.ProbeLogin) {
-			ps.UsageError = string(p.Status)
-		}
-		if hasUsage {
-			ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
-		} else if identityChanged || becameAPIKey {
-			ps.Usage = nil // a previous login's quotas must not label the new account
+		applyObservation(ps, p)
+		if p.Email != "" || p.Plan != "" {
+			old := ps.Account
+			observeAccount(ps, p.Email, p.Plan)
+			if accountChanged(old, ps.Account) || visibleAccount != nil && accountChanged(visibleAccount, ps.Account) {
+				ps.AccountRevision = rand.Text()
+				if !p.UsageReported && len(p.Windows) == 0 && len(p.Groups) == 0 && p.Resets == nil {
+					ps.Usage = nil
+				}
+			}
 		}
 	})
+}
+
+func applyObservation(ps *config.ProfileState, p tool.Probe) {
+	hasUsage := p.UsageReported || len(p.Windows) > 0 || len(p.Groups) > 0 || p.Resets != nil
+	identityChanged := ps.Account != nil && p.Email != "" && ps.Account.Email != "" && !strings.EqualFold(p.Email, ps.Account.Email)
+	becameAPIKey := strings.EqualFold(p.Plan, "apiKey") && (ps.Account == nil || !strings.EqualFold(ps.Account.Plan, "apiKey"))
+	ps.UsageAttemptedAt = config.Now().UTC()
+	ps.UsageError = p.UsageError
+	if ps.UsageError == "" && (p.Status == tool.ProbeError || p.Status == tool.ProbeLogin) {
+		ps.UsageError = string(p.Status)
+	}
+	if hasUsage {
+		ps.Usage = &config.Usage{Windows: p.Windows, Groups: p.Groups, Resets: p.Resets, Source: "live", At: config.Now().UTC()}
+	} else if identityChanged || becameAPIKey {
+		ps.Usage = nil // a previous login's quotas must not label the new account
+	}
 }
 
 // record keeps what a probe found: usage, a limit, a dead login.
@@ -830,7 +912,7 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 	case tool.ProbeLimit:
 		resets := tool.ResetTime(p.Detail, config.Now())
 		for _, w := range p.Windows {
-			if w.Percent >= cfg.Failover.Threshold && w.ResetsAt.After(resets) {
+			if windowLimited(cfg, w) && w.ResetsAt.After(resets) {
 				resets = w.ResetsAt
 			}
 		}
@@ -840,7 +922,6 @@ func record(cfg *config.Config, a tool.Adapter, name string, p tool.Probe) tool.
 		}
 		_ = MarkLimited(cfg, id, name, Limit{ResetsAt: resets, Window: LimitWindow(cfg, p.Detail, windows), By: "a live check", Detail: p.Detail})
 	}
-	_ = RecordAccount(id, name, p.Email, p.Plan, cfg)
 	return p
 }
 

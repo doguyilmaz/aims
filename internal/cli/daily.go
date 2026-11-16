@@ -75,9 +75,10 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet, usageOnly bool) error 
 		}
 		for _, n := range cfg.Tools[id].Order {
 			var p tool.Probe
+			var readErr error
 			run := func() {
 				if usageOnly {
-					p = profiles.ReadUsage(ctx, cfg, a, n)
+					p, readErr = profiles.ReadUsage(ctx, cfg, a, n)
 				} else {
 					p = profiles.Live(ctx, cfg, a, n)
 				}
@@ -86,6 +87,9 @@ func checkLive(ctx context.Context, ids []tool.ID, quiet, usageOnly bool) error 
 				run()
 			} else {
 				ui.Spin(fmt.Sprintf("checking %s/%s", id, n), run)
+			}
+			if readErr != nil {
+				return readErr
 			}
 			if !quiet && p.Status != tool.ProbeOK {
 				ui.Warn("%s/%s: %s%s", id, n, p.Status, suffix(p.Detail))

@@ -16,6 +16,7 @@ import (
 
 	"github.com/doguyilmaz/aims/internal/bridge"
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/launch"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/tool"
@@ -167,6 +168,9 @@ aims               # status and next steps`,
 		add("daily", newToolCmd(a))
 	}
 	add("daily", newStatusCmd(), newUsageCmd())
+	if desktop.Supported() {
+		add("daily", newAppCmd())
+	}
 	add("accounts", newOrderCmd(), newUseCmd(), newAddCmd(), newLogoutCmd(), newRemoveCmd())
 	add("manual", newFailoverCmd(), newMoveCmd(), newClearCmd(), newRunCmd(), newEnvCmd(), newExecCmd())
 	add("maintain", newBridgeCmd(), newDoctorCmd(version), newKeepAliveCmd(), newSyncCmd(), newShellInitCmd(), newMCPCmd(version), newCleanCmd(), newWipeCmd(), newUpgradeCmd(version))
@@ -175,7 +179,7 @@ aims               # status and next steps`,
 	needAccounts := []string{"use", "env", "failover", "clear", "order", "logout", "rm", "sync"}
 	// Embedded clients and usage displays must not install background services.
 	// Other entries run for a tool or set the keepalive up themselves.
-	noHeal := []string{"usage", "doctor", "bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
+	noHeal := []string{"app", "usage", "doctor", "bridge", "exec", "statusline", "hook", "mcp", "keepalive", "clean", "wipe", "setup", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		top := cmd
 		for top.HasParent() && top.Parent() != root {
@@ -214,14 +218,27 @@ func home(ctx context.Context, cmd *cobra.Command, version string) error {
 		fmt.Println("  " + ui.Out.Title.Render("aims") + "  " + ui.Out.Dim.Render("several Claude Code and Codex accounts on one machine"))
 		fmt.Println()
 		start := true
-		if err := ui.NewRail().Confirm("No accounts yet. Set them up now?", "", &start); err != nil {
+		if desktop.Supported() {
+			choice := "accounts"
+			options := []ui.Option{{Label: "Set up Claude/Codex accounts", Value: "accounts"}, {Label: "macOS menu bar and Edge Dock", Value: "app", Hint: "install/open usage without setting up accounts"}, {Label: "Not now", Value: "later"}}
+			if err := ui.NewRail().Select("Get started", "No accounts yet. Usage monitoring is also available separately.", options, &choice); err != nil {
+				return err
+			}
+			if choice == "app" {
+				return runAppMenu(cmd)
+			}
+			start = choice == "accounts"
+		} else if err := ui.NewRail().Confirm("No accounts yet. Set them up now?", "", &start); err != nil {
 			return err
 		}
 		if !start {
 			fmt.Println("  Run " + ui.Kbd(ui.Out, "aims init") + " whenever you are ready.")
 			return nil
 		}
-		return runInit(ctx, defaultInit(version))
+		if err := runInit(ctx, defaultInit(version)); err != nil {
+			return err
+		}
+		return offerDesktopApp(cmd)
 	}
 	req, err := ui.RunDashboard(ctx, version)
 	if err != nil || req == nil {

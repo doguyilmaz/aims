@@ -143,11 +143,28 @@ func Stat(p string) fs.FileInfo {
 //
 // An existing file keeps its permissions; perm applies to a new file.
 func WriteFile(path string, data []byte, perm fs.FileMode) error {
-	if real, err := filepath.EvalSymlinks(path); err == nil {
+	return writeFile(path, data, perm, false)
+}
+
+// WritePrivateFile atomically replaces an aims-owned cache with new private
+// access controls. Unlike settings files, caches must not inherit public modes
+// or ACLs from an older file, or follow a managed symlink to another resource.
+func WritePrivateFile(path string, data []byte) error {
+	return writeFile(path, data, 0o600, true)
+}
+
+func writeFile(path string, data []byte, perm fs.FileMode, private bool) error {
+	if private {
+		if fi, err := os.Lstat(path); err == nil && !fi.Mode().IsRegular() {
+			return fmt.Errorf("private cache is not a regular file; kept it")
+		} else if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	} else if real, err := filepath.EvalSymlinks(path); err == nil {
 		path = real
 	}
 	var restore func() error
-	if fi := Stat(path); fi != nil && fi.Mode().IsRegular() {
+	if fi := Stat(path); !private && fi != nil && fi.Mode().IsRegular() {
 		perm = fi.Mode().Perm()
 	}
 	dir := filepath.Dir(path)
@@ -159,7 +176,7 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 		return err
 	}
 	name := tmp.Name()
-	if fi := Stat(path); fi != nil && fi.Mode().IsRegular() {
+	if fi := Stat(path); !private && fi != nil && fi.Mode().IsRegular() {
 		restore, err = AccessRestorer(path, name)
 		if err != nil {
 			tmp.Close()
@@ -178,7 +195,7 @@ func WriteFile(path string, data []byte, perm fs.FileMode) error {
 	}
 	if restore != nil {
 		err = restore()
-	} else {
+	} else if !private {
 		err = os.Chmod(name, perm)
 	}
 	if err != nil {

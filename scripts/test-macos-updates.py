@@ -98,6 +98,7 @@ class UsageCaskTests(unittest.TestCase):
             self.assertIn('cask "aims-usage"', result)
             self.assertIn("auto_updates true", result)
             self.assertNotIn("\n  binary ", result)
+            self.assertIn('depends_on cask: "doguyilmaz/tap/aims"', result)
             self.assertNotIn("zap", result)
             self.assertNotIn(".aims", result.replace("com.doguyilmaz.aims.usage", ""))
 

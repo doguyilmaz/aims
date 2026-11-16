@@ -546,7 +546,7 @@ func appServer(loggedIn, limited bool, dir, label string) int {
 			if !loggedIn {
 				reply["result"] = map[string]any{"account": nil, "requiresOpenaiAuth": true}
 			} else {
-				reply["result"] = map[string]any{"account": map[string]any{"type": "chatgpt", "email": label + "@example.com", "planType": "plus"}}
+				reply["result"] = map[string]any{"account": map[string]any{"type": "chatgpt", "email": appServerEmail(dir, label), "planType": "plus"}}
 			}
 		case "account/rateLimits/read":
 			primary := map[string]any{"usedPercent": pct, "windowDurationMins": 300, "resetsAt": 4102444800}
@@ -570,4 +570,28 @@ func appServer(loggedIn, limited bool, dir, label string) int {
 		emit(reply)
 	}
 	return 0
+}
+
+// The fake RPC identity must agree with the fake login written to this home.
+// Otherwise status correctly invalidates a quota attributed to another email.
+func appServerEmail(dir, label string) string {
+	var auth struct {
+		Tokens struct {
+			IDToken string `json:"id_token"`
+		} `json:"tokens"`
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "auth.json"))
+	if json.Unmarshal(b, &auth) == nil {
+		parts := strings.Split(auth.Tokens.IDToken, ".")
+		if len(parts) == 3 {
+			payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
+			var claims struct {
+				Email string `json:"email"`
+			}
+			if json.Unmarshal(payload, &claims) == nil && claims.Email != "" {
+				return claims.Email
+			}
+		}
+	}
+	return label + "@example.com"
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/launch"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/mcpserver"
@@ -24,7 +25,7 @@ import (
 )
 
 func newSetupCmd() *cobra.Command {
-	var all, noSkill, noMCP, statusLine, keepAlive, trustHooks bool
+	var all, noSkill, noMCP, statusLine, keepAlive, trustHooks, app bool
 	var sh, only string
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -42,6 +43,12 @@ aims setup --statusline --shell zsh
 aims setup --tools codex --no-skill`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if app {
+				if cmd.Flags().NFlag() != 1 {
+					return fmt.Errorf("use aims setup --app separately from tool integration flags")
+				}
+				return installApp(cmd, "")
+			}
 			if cmd.Flags().NFlag() == 0 && ui.Interactive() {
 				cfg, err := config.Load()
 				if err != nil {
@@ -77,6 +84,9 @@ aims setup --tools codex --no-skill`,
 			markOffered()
 			return reportSteps(steps, "restart running sessions to pick these up")
 		},
+	}
+	if desktop.Supported() {
+		cmd.Flags().BoolVar(&app, "app", false, "install the optional macOS menu bar and Edge Dock")
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "everything: skill, MCP server, status line, shell integration and keepalive")
 	cmd.Flags().BoolVar(&keepAlive, "keepalive", false, "renew logins before they lapse unused")

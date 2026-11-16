@@ -14,7 +14,8 @@ struct AimsUsageApp: App {
             )
         } label: {
             HStack(spacing: 4) {
-                UsageControlSymbol(icon: .usage, pointSize: 15)
+                Image(nsImage: AimsBrandMark.menuImage).renderingMode(.template)
+                    .accessibilityLabel("aims")
                 if let summary = delegate.model.menuSummary { Text(summary).monospacedDigit() }
             }
         }

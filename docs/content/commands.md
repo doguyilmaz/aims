@@ -76,6 +76,12 @@ Scheduled resets, banked reset inventory and user reminders are separate. Banked
 
 For the optional native menu bar, Edge Dock and pinned overview, see [Aims Usage for macOS](../macos-usage).
 
+### `aims app` (macOS only)
+
+Install/open the optional menu bar and Edge Dock. `aims app install` uses the separate public Homebrew app cask and retains a CLI already on PATH. Until that cask is published, build from source and use `aims app install --from 'dist/Aims Usage.app'`; the verified local bundle goes into `~/Applications`, and existing app paths are preserved. `aims app open` launches the detected bundle. `aims app status --json` is read-only; `aims app link-cli` exposes a bundled CLI in `~/.local/bin` only when no CLI is on PATH and never overwrites a file/link. Add the directory to PATH if needed. No shell file is changed.
+
+The TUI's **m** shortcut and `init --app` / `setup --app` lead to this installation. App controls and optional informational doctor checks are absent on Linux and Windows. `doctor --fix` never installs it.
+
 ### `aims use [tool] <profile>`
 
 Makes a profile the account new sessions start on in this project, and puts it first in the project's failover order. A project is the git repository you are in, or the folder itself outside one; its order is kept in `~/.aims/config.json`, never in the project. aims says what changed and what other folders use. Without a tool, every tool that has a profile with that name switches.

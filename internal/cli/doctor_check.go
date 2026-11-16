@@ -11,6 +11,7 @@ import (
 	"github.com/doguyilmaz/aims"
 	"github.com/doguyilmaz/aims/internal/bridge"
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/links"
 	"github.com/doguyilmaz/aims/internal/ops"
@@ -82,6 +83,15 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 		}
 	}
 	add("aims", "ok", "aims "+version, "")
+	for _, note := range config.UsageObservationNotes(cfg) {
+		add("usage-cache", "info", note, "")
+	}
+	if cfg.Status.Chain != "" {
+		add("statusline/chain", "info", "legacy or explicit global statusline.chain is still set; review its intended homes before sharing personal/work commands", "aims config")
+	}
+	if desktop.Supported() {
+		r.Checks = append(r.Checks, appDoctorCheck())
+	}
 	for _, a := range tools.All() {
 		id, l := a.ID(), a.Layout()
 		t := cfg.Tools[id]

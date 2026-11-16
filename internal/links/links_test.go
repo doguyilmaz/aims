@@ -453,3 +453,44 @@ func assertArchivedDatabase(t *testing.T, dir string) {
 		t.Fatal("recovery data lost")
 	}
 }
+
+func TestDetachRefusesDifferentHubEntry(t *testing.T) {
+	hub, dir := t.TempDir(), t.TempDir()
+	testutil.Write(t, filepath.Join(hub, "settings.json"), "expected settings")
+	marker := filepath.Join(hub, "other-marker")
+	testutil.Write(t, marker, "unrelated data")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Symlink(marker, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	reps := Detach(hub, dir, func(string) bool { return true }, layout)
+	if len(reps) != 1 || reps[0].Action != Conflict {
+		t.Fatalf("unexpected resource was accepted: %+v", reps)
+	}
+	if got, err := os.Readlink(link); err != nil || got != marker {
+		t.Fatalf("unexpected link changed: %q %v", got, err)
+	}
+	if testutil.Read(t, marker) != "unrelated data" {
+		t.Fatal("unrelated hub resource changed")
+	}
+}
+
+func TestDetachWindowsCaseVariantTarget(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows case-insensitive link target")
+	}
+	hub, dir := t.TempDir(), t.TempDir()
+	target := filepath.Join(hub, "skills")
+	testutil.Write(t, filepath.Join(target, "marker"), "keep")
+	link := filepath.Join(dir, "skills")
+	if err := makeLink(strings.ToUpper(target), link, true); err != nil {
+		t.Fatal(err)
+	}
+	reps := Detach(hub, dir, func(string) bool { return true }, layout)
+	if len(reps) != 1 || reps[0].Action != Detached || isJunction(link) {
+		t.Fatalf("valid Windows target stayed shared: %+v", reps)
+	}
+	if got := testutil.Read(t, filepath.Join(link, "marker")); got != "keep" {
+		t.Fatal("private copy lost data")
+	}
+}

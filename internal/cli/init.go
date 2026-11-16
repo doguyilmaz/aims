@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/doguyilmaz/aims/internal/config"
+	"github.com/doguyilmaz/aims/internal/desktop"
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/ops"
 	"github.com/doguyilmaz/aims/internal/proc"
@@ -66,6 +67,7 @@ func offerInit(ctx context.Context) (*config.Config, error) {
 
 func newInitCmd(version string) *cobra.Command {
 	o := defaultInit(version)
+	var app bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up your accounts step by step",
@@ -75,9 +77,26 @@ func newInitCmd(version string) *cobra.Command {
 		Example: `aims init
 aims init --yes --current personal --second work --share settings`,
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return runInit(cmd.Context(), o) },
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := runInit(cmd.Context(), o); err != nil {
+				if app && errors.Is(err, errNoTools) {
+					return installApp(cmd, "")
+				}
+				return err
+			}
+			if app {
+				return installApp(cmd, "")
+			}
+			if ui.Interactive() && !o.yes {
+				return offerDesktopApp(cmd)
+			}
+			return nil
+		},
 	}
 	f := cmd.Flags()
+	if desktop.Supported() {
+		f.BoolVar(&app, "app", false, "also install the optional macOS menu bar and Edge Dock")
+	}
 	f.BoolVarP(&o.yes, "yes", "y", false, "no questions: use the flags and defaults (logins are left for later)")
 	f.StringVar(&o.tools, "tools", "", "comma-separated tools (default: every installed one)")
 	f.StringVar(&o.current, "current", o.current, "name for the login you already have")
@@ -584,6 +603,9 @@ func howItWorks(r *ui.Rail, newShell bool) {
 		rows = append(rows, [2]string{"at a limit", "waits for the reset"})
 	}
 	rows = append(rows, [2]string{ui.Kbd(s, "aims"), "status and next steps"})
+	if desktop.Supported() {
+		rows = append(rows, [2]string{ui.Kbd(s, "aims app"), "install or open the macOS menu bar and Edge Dock"})
+	}
 	w := 0
 	for _, row := range rows {
 		w = max(w, lipgloss.Width(row[0])+2)
@@ -618,10 +640,17 @@ func initAgain(ctx context.Context, r *ui.Rail, cfg *config.Config, inst []found
 		{Label: "Change what aims connects", Value: "connect", Hint: "MCP server and skill, status line, shell, login keepalive, Codex hooks"},
 		{Label: "Nothing, show my accounts", Value: "status"},
 	}
+	if desktop.Supported() {
+		opts = append(opts, ui.Option{Label: "macOS menu bar and Edge Dock", Value: "app", Hint: "install or open Aims Usage; keeps all accounts"})
+	}
 	if err := r.Select("What would you like to do?", "", opts, &choice); err != nil {
 		return cancelled(r, err)
 	}
 	switch choice {
+	case "app":
+		cmd := &cobra.Command{}
+		cmd.SetContext(ctx)
+		return runAppMenu(cmd)
 	case "connect":
 		return reconnect(ctx, r, inst)
 	case "again":

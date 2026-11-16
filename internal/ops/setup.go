@@ -144,9 +144,20 @@ func setup(ctx context.Context, ids []tool.ID, in Integrations) ([]Step, error) 
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {
 			cmd := shellJoin(append(command, "statusline"))
 			for _, h := range IntegrationHomes(cfg, a, a.Layout().SettingsFile) {
+				alreadyInstalled := sl.HasStatusLine(h.Dir)
 				prev, err := sl.InstallStatusLine(h.Dir, cmd)
-				if err == nil && prev != "" {
-					_, err = config.Update(func(c *config.Config) error { c.Status.Chain = prev; return nil })
+				if err == nil && (prev != "" || !alreadyInstalled) {
+					_, err = config.Update(func(c *config.Config) error {
+						if c.Status.HomeChains == nil {
+							c.Status.HomeChains = map[string]string{}
+						}
+						c.Status.HomeChains[fsx.Real(h.Dir)] = prev
+						return nil
+					})
+					if err != nil {
+						_, restoreErr := sl.RemoveStatusLine(h.Dir, cmd, prev)
+						err = errors.Join(err, restoreErr)
+					}
 				}
 				steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
 			}
@@ -259,7 +270,7 @@ func uninstall(ctx context.Context, in Integrations) ([]Step, error) {
 		if sl, ok := a.(tool.StatusLiner); ok && in.StatusLine {
 			cmd := shellJoin(append(command, "statusline"))
 			for _, h := range IntegrationHomes(cfg, a, a.Layout().SettingsFile) {
-				if removed, err := sl.RemoveStatusLine(h.Dir, cmd, cfg.Status.Chain); removed || err != nil {
+				if removed, err := sl.RemoveStatusLine(h.Dir, cmd, cfg.Status.CommandForHome(h.Dir)); removed || err != nil {
 					steps = append(steps, Step{Tool: id, What: "status line", Target: fsx.Tildify(filepath.Join(h.Dir, "settings.json")), Err: err})
 				}
 			}

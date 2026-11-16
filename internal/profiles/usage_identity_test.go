@@ -78,7 +78,7 @@ func TestUsageDisplayRefreshPreservesManualRoutingMarks(t *testing.T) {
 			until := now.Add(RefreshDue)
 			_ = config.UpdateState(a.ID(), "a", func(ps *config.ProfileState) { ps.Until = until; ps.Reason = "busy"; ps.MarkedBy = "owner" })
 			ReadUsage(t.Context(), cfg, observationProbe{a, status}, "a")
-			ps := config.LoadState().Get(a.ID(), "a")
+			ps := config.LoadStateFor(cfg).Get(a.ID(), "a")
 			if !ps.Until.Equal(until) || ps.Reason != "busy" || ps.MarkedBy != "owner" || ps.NeedsLogin {
 				t.Fatalf("passive usage refresh changed manual routing: %+v", ps)
 			}

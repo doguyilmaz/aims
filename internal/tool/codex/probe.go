@@ -129,9 +129,9 @@ func rpc(ctx context.Context, h tool.Home, calls []call) (map[string]*reply, err
 }
 
 type window struct {
-	UsedPercent        float64 `json:"usedPercent"`
-	ResetsAt           *int64  `json:"resetsAt"`
-	WindowDurationMins *int64  `json:"windowDurationMins"`
+	UsedPercent        *float64 `json:"usedPercent"`
+	ResetsAt           *int64   `json:"resetsAt"`
+	WindowDurationMins *int64   `json:"windowDurationMins"`
 }
 
 func interpret(acct, limits *reply) tool.Probe {
@@ -196,10 +196,7 @@ func interpret(acct, limits *reply) tool.Probe {
 		if w.w == nil {
 			continue
 		}
-		win := tool.Window{Label: label(w.w.WindowDurationMins, w.fallback), Percent: w.w.UsedPercent}
-		if w.w.ResetsAt != nil && *w.w.ResetsAt > 0 {
-			win.ResetsAt = time.Unix(*w.w.ResetsAt, 0).UTC()
-		}
+		win := w.w.usageWindow(w.fallback)
 		p.Windows = append(p.Windows, win)
 	}
 	if l.RateLimits.RateLimitReachedType != nil || (l.OrdinaryUsageAllowed != nil && !*l.OrdinaryUsageAllowed) {
@@ -211,6 +208,17 @@ func interpret(acct, limits *reply) tool.Probe {
 		}
 	}
 	return p
+}
+
+func (w *window) usageWindow(fallback string) tool.Window {
+	win := tool.Window{Label: label(w.WindowDurationMins, fallback), PercentUnknown: w.UsedPercent == nil}
+	if w.UsedPercent != nil {
+		win.Percent = *w.UsedPercent
+	}
+	if w.ResetsAt != nil && *w.ResetsAt > 0 {
+		win.ResetsAt = time.Unix(*w.ResetsAt, 0).UTC()
+	}
+	return win
 }
 
 func failure(msg string) tool.Probe {
