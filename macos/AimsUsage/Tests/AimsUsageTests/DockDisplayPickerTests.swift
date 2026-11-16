@@ -13,7 +13,8 @@ import Testing
         }
         let host = NSHostingView(rootView: DockDisplayPicker(model: model).frame(width: 560))
         let fitting = host.fittingSize
-        #expect(fitting.height > 0 && fitting.height <= 140)
+        #expect(fitting.height > 0)
+        #expect(fitting.height <= 140)
         #expect(fitting.width == 560)
     }
 }

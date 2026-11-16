@@ -50,7 +50,7 @@ struct DockDisplayPicker: View {
                 Text("\(index + 1)" + (index == 0 ? " · Primary" : ""))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
-            .padding(8).frame(maxWidth: .infinity)
+            .padding(6).frame(maxWidth: .infinity)
             .background(
                 selected ? Color.accentColor.opacity(0.06) : .clear, in: .rect(cornerRadius: 8)
             )
