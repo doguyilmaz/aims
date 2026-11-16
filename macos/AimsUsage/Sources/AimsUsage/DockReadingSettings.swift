@@ -6,8 +6,12 @@ struct DockReadingSettings: View {
     var body: some View {
         Form {
             Section {
-                Picker("Show percentages as", selection: $model.edgeDockValueMode) {
-                    ForEach(DockValueMode.allCases) { Text($0.title).tag($0) }
+                HStack(alignment: .center) {
+                    Text("Show percentages as").accessibilityHidden(true)
+                    Spacer()
+                    Picker("Show percentages as", selection: $model.edgeDockValueMode) {
+                        ForEach(DockValueMode.allCases) { Text($0.title).tag($0) }
+                    }.labelsHidden().fixedSize()
                 }
             } header: {
                 Text("Percentage display")
