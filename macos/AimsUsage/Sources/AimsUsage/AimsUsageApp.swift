@@ -21,6 +21,7 @@ struct AimsUsageApp: App {
         }
         .menuBarExtraStyle(.window)
         Settings { UsageSettings(model: delegate.model).frame(width: 840, height: 660) }
+            .windowToolbarStyle(.unifiedCompact)
         #if AIMS_USAGE_PREVIEW
             Window("Menu preview", id: "usage-menu-preview") {
                 UsageDashboard(
