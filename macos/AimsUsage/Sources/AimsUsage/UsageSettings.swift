@@ -15,40 +15,57 @@ struct UsageSettings: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(alignment: .leading, spacing: 0) {
-                List(UsageSettingsSection.allCases, selection: $section) { section in
-                    NavigationLink(value: section) {
-                        Label(section.title, systemImage: section.symbol)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 3)
+            List(selection: $section) {
+                NavigationLink(value: UsageSettingsSection.general) {
+                    SettingsNavigationLabel(section: .general)
+                }
+                Section("Edge Dock") {
+                    ForEach([UsageSettingsSection.dock, .readings]) { section in
+                        NavigationLink(value: section) { SettingsNavigationLabel(section: section) }
                     }
-                }.listStyle(.sidebar).scrollDisabled(true).toolbar(removing: .sidebarToggle)
-                HStack(spacing: 8) {
-                    Image(nsImage: AimsBrandMark.menuImage).frame(width: 20, height: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Aims Usage").font(.system(size: 11, weight: .medium))
-                        Text(version).font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                Section("Application") {
+                    ForEach([UsageSettingsSection.cli, .updates]) { section in
+                        NavigationLink(value: section) { SettingsNavigationLabel(section: section) }
                     }
-                }.padding(16)
-            }.navigationSplitViewColumnWidth(min: 160, ideal: 168, max: 190)
+                }
+            }.listStyle(.sidebar)
+                .safeAreaInset(edge: .bottom, alignment: .leading) {
+                    HStack(spacing: 8) {
+                        Image(nsImage: AimsBrandMark.menuImage).frame(width: 20, height: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aims Usage").font(.caption.weight(.medium))
+                            Text(version + " · " + sourceRevision).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }.padding(16)
+                }.navigationSplitViewColumnWidth(196)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(selectedSection.title).font(.system(size: 20, weight: .semibold))
+                HStack(spacing: 14) {
+                    Image(systemName: selectedSection.symbol)
+                        .font(.system(size: 28, weight: .medium)).foregroundStyle(selectedSection.tint)
+                        .frame(width: 36, height: 42)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(selectedSection.title).font(.title2.weight(.semibold))
+                        Text(selectedSection.subtitle).font(.callout).foregroundStyle(.secondary)
+                    }
                     Spacer()
                     if selectedSection == .dock {
                         Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
-                            .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                            .toggleStyle(.switch).labelsHidden()
                             .help("Show Edge Dock")
                     }
-                }.padding(.horizontal, 24).frame(height: 52)
+                }.padding(.horizontal, 24).frame(height: 76)
                 ZStack(alignment: .topLeading) {
-                    selectedPage.id(selectedSection).transition(.opacity)
+                    selectedPage.contentMargins(.vertical, 8, for: .scrollContent)
+                        .controlSize(.large).toggleStyle(.switch)
+                        .id(selectedSection).transition(.opacity)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: selectedSection)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .navigationTitle("Settings")
         }
-        .navigationSplitViewStyle(.balanced)
         .background(UsageScrollStyle())
         .background(SettingsWindowStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
@@ -59,10 +76,16 @@ struct UsageSettings: View {
         }
     }
 
+    private var sourceRevision: String {
+        let revision = Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development"
+        return String(revision.prefix(7)) + (revision.contains("dirty") ? "+" : "")
+    }
+
     @ViewBuilder private var selectedPage: some View {
         switch selectedSection {
         case .general: generalSettings
         case .dock: EdgeDockSettings(model: model)
+        case .readings: DockReadingSettings(model: model)
         case .cli: cliSettings
         case .updates: updateSettings
         }
@@ -76,17 +99,19 @@ struct UsageSettings: View {
                         Label(style.title, systemImage: style.symbol).tag(style)
                     }
                 }
-                Toggle("Show highest current usage in menu bar", isOn: $model.showMenuPercent)
+                Toggle("Show usage in the menu bar", isOn: $model.showMenuPercent)
                 Toggle("Use slim scrollbars", isOn: $model.slimScrollbars)
                     .help(
                         "Use compact overlay indicators. Turn off to follow macOS scrollbar appearance and visibility.")
             }
-            Section("Refresh") {
+            Section {
                 Toggle("Refresh providers every 5 minutes", isOn: $model.automaticRefresh)
+            } header: {
+                Text("Refresh")
+            } footer: {
                 Text(
                     "Automatic refresh reads provider quotas without a model prompt. Claude Code owns renewal of its login. No credits are bought or resets redeemed."
                 )
-                .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped)
     }
