@@ -7,6 +7,7 @@ struct UsageIconButton: View {
     var selected = false
     var busy = false
     var tint: Color?
+    var symbolSize: CGFloat? = nil
     var width: CGFloat = 24
     var height: CGFloat = 24
     var role: ButtonRole?
@@ -24,7 +25,7 @@ struct UsageIconButton: View {
                 if busy {
                     ProgressView().controlSize(.mini)
                 } else {
-                    UsageControlSymbol(icon: icon)
+                    UsageControlSymbol(icon: icon, fittedSize: symbolSize)
                 }
             }.frame(width: 16, height: 16)
         }

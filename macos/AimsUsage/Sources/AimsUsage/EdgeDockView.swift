@@ -9,6 +9,7 @@ struct EdgeDockView: View {
     let openOverview: @MainActor () -> Void
     let showOptions: @MainActor (String?, CGPoint?) -> Void
     private var size: EdgeDockSize { model.edgeDockSize }
+    private var footerSymbolSize: CGFloat? { size == .mini ? 12 : nil }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -105,7 +106,8 @@ struct EdgeDockView: View {
             HStack(spacing: size == .mini ? 0 : 8) {
                 UsageIconButton(
                     title: "Open overview", icon: model.error == nil ? .overview : .warning,
-                    tint: model.error == nil ? nil : .orange, width: size == .mini ? 20 : 24, height: 20,
+                    tint: model.error == nil ? nil : .orange, symbolSize: footerSymbolSize,
+                    width: size == .mini ? 20 : 24, height: 20,
                     action: openOverview
                 )
                 .help(model.error ?? "Open overview · right-click for Dock options").accessibilityLabel("Open overview")
@@ -114,6 +116,7 @@ struct EdgeDockView: View {
                 UsageIconButton(
                     title: model.edgeDockPinned ? "Unpin Edge Dock" : "Pin Edge Dock",
                     icon: model.edgeDockPinned ? .pinned : .pin, selected: model.edgeDockPinned,
+                    symbolSize: footerSymbolSize,
                     width: size == .mini ? 20 : 24, height: 20
                 ) {
                     model.edgeDockPinned.toggle()
