@@ -76,8 +76,7 @@ final class EdgePanelController: NSObject, NSWindowDelegate {
                     self?.position()
                 }
             )
-            .frame(maxHeight: .infinity, alignment: .top)
-            .clipShape(RoundedRectangle(cornerRadius: 18)).ignoresSafeArea())
+            .frame(maxHeight: .infinity, alignment: .top).ignoresSafeArea())
         if let hostingView {
             hostingView.rootView = root
         } else {

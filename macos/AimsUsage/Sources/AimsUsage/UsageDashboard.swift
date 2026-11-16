@@ -43,7 +43,7 @@ struct UsageDashboard: View {
             heightDidChange(min(contentHeight, maximumBodyHeight) + model.displayStyle.chromeHeight)
         }
         .frame(width: width)
-        .background(UsageBackdrop())
+        .usagePanelSurface(in: RoundedRectangle(cornerRadius: 18), systemPopover: surface == .popover)
         .background(UsageScrollStyle())
         .sheet(isPresented: $editingReminder) { CustomResetEditor(model: model) }
         .sheet(isPresented: $showingTerminalCommand) { TerminalCommandSheet() }

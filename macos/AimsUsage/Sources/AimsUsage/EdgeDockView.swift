@@ -8,7 +8,6 @@ struct EdgeDockView: View {
     let selectProvider: @MainActor (String) -> Void
     let openOverview: @MainActor () -> Void
     let showOptions: @MainActor (String?, CGPoint?) -> Void
-    @Environment(\.colorScheme) private var scheme
     private var size: EdgeDockSize { model.edgeDockSize }
 
     var body: some View {
@@ -122,10 +121,6 @@ struct EdgeDockView: View {
         }
         .padding(.vertical, size.contentInset).frame(width: size.width)
         .frame(maxHeight: .infinity)
-        .background(UsageBackdrop(inkOpacity: 0.58))
-        .clipShape(EdgeDockShape(side: model.edgeDockSide))
-        .overlay(
-            EdgeDockShape(side: model.edgeDockSide).stroke(UsagePalette.border(scheme), lineWidth: 1)
-                .allowsHitTesting(false))
+        .usagePanelSurface(in: EdgeDockShape(side: model.edgeDockSide))
     }
 }

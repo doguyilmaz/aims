@@ -13,7 +13,7 @@ struct UsageSettings: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 List(UsageSettingsSection.allCases, selection: $section) { section in
                     Label(section.title, systemImage: section.symbol).tag(section)
@@ -26,8 +26,8 @@ struct UsageSettings: View {
                         Text(version).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }.padding(16)
-            }.frame(width: 168).background(.bar)
-            Divider()
+            }.navigationSplitViewColumnWidth(min: 160, ideal: 168, max: 190)
+        } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
@@ -49,6 +49,7 @@ struct UsageSettings: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .navigationSplitViewStyle(.balanced)
         .background(UsageScrollStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
