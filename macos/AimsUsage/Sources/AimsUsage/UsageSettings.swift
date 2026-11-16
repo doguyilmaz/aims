@@ -53,6 +53,7 @@ struct UsageSettings: View {
         .background(SettingsWindowStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
+            NSApp.activate(ignoringOtherApps: true)
             configHome = model.configHome
             additionalPaths = model.additionalPaths
         }
