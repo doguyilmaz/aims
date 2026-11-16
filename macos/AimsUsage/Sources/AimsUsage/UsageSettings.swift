@@ -38,6 +38,7 @@ struct UsageSettings: View {
                     if selectedSection == .dock {
                         Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
                             .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                            .help("Show Edge Dock")
                     }
                 }.padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 20)
                 switch selectedSection {
