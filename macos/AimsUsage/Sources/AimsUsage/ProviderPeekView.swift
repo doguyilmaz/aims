@@ -77,7 +77,7 @@ struct ProviderPeekView: View {
         }
         .frame(width: width)
         .environment(\.controlSize, isMini ? .mini : .regular)
-        .usagePanelSurface(in: RoundedRectangle(cornerRadius: isMini ? 14 : 18))
+        .usagePanelSurface(in: RoundedRectangle(cornerRadius: size.peekCornerRadius))
         .background(UsageScrollStyle())
         .onPreferenceChange(ContentHeightKey.self) { value in
             guard value > 0 else { return }
