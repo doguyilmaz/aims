@@ -7,27 +7,36 @@ struct EdgeDockSettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 GroupBox("Display") { DockDisplayPicker(model: model).padding(8) }
-                HStack(alignment: .top, spacing: 16) {
-                    GroupBox("Placement") { placement.padding(8) }.frame(maxWidth: .infinity)
-                    GroupBox("Readings") { readings.padding(8) }.frame(maxWidth: .infinity)
+                GroupBox {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Placement").font(.system(size: 12, weight: .semibold)).accessibilityAddTraits(
+                                .isHeader)
+                            placement
+                        }.frame(maxWidth: .infinity, alignment: .topLeading)
+                        Divider()
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Readings").font(.system(size: 12, weight: .semibold)).accessibilityAddTraits(
+                                .isHeader)
+                            readings
+                        }.frame(maxWidth: .infinity, alignment: .topLeading)
+                    }.fixedSize(horizontal: false, vertical: true).padding(10)
                 }
             }.padding(20)
         }
     }
 
     private var placement: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Screen edge").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            LabeledContent("Screen edge") {
                 Picker("Screen edge", selection: $model.edgeDockSide) {
                     ForEach(EdgeDockSide.allCases) { Text($0.title).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 124)
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Dock size").font(.caption).foregroundStyle(.secondary)
+            LabeledContent("Dock size") {
                 Picker("Dock size", selection: $model.edgeDockSize) {
                     ForEach(EdgeDockSize.allCases) { Text($0.title).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 124)
             }
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
@@ -44,27 +53,31 @@ struct EdgeDockSettings: View {
                     Text("Bottom").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             }
-            Toggle("Automatically hide", isOn: $model.edgeDockAutoHide)
-                .toggleStyle(.switch).controlSize(.small)
-            Toggle("Pin Edge Dock", isOn: $model.edgeDockPinned)
-                .toggleStyle(.switch).controlSize(.small)
+            LabeledContent("Automatically hide") {
+                Toggle("Automatically hide", isOn: $model.edgeDockAutoHide).labelsHidden()
+                    .toggleStyle(.switch).controlSize(.small)
+            }
+            LabeledContent("Pin Edge Dock") {
+                Toggle("Pin Edge Dock", isOn: $model.edgeDockPinned).labelsHidden()
+                    .toggleStyle(.switch).controlSize(.small)
+            }
             Text(
                 model.edgeDockPinned
                     ? "Pinned: the Dock stays visible."
                     : model.edgeDockAutoHide
                         ? "Hover over its edge marker to reveal the Dock." : "The Dock stays visible."
             ).font(.caption).foregroundStyle(.secondary)
-        }
+        }.font(.system(size: 12))
     }
 
     private var readings: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                 GridRow {
                     Text("Percentages")
                     Picker("Percentages", selection: $model.edgeDockValueMode) {
                         ForEach(DockValueMode.allCases) { Text($0.title).tag($0) }
-                    }.labelsHidden().frame(maxWidth: .infinity, alignment: .trailing)
+                    }.labelsHidden().frame(width: 110)
                 }
                 Divider().gridCellColumns(2)
                 if let providers = model.snapshot?.displayProviders {
@@ -72,13 +85,13 @@ struct EdgeDockSettings: View {
                         GridRow {
                             Text(ProviderStyle.title(provider)).lineLimit(1)
                             DockFocusPicker(model: model, provider: provider, title: ProviderStyle.title(provider))
-                                .labelsHidden().frame(maxWidth: .infinity, alignment: .trailing)
+                                .labelsHidden().frame(width: 110)
                         }
                     }
                 }
             }
             Text("Choose the limit window for each provider. Select accounts in hover details or Dock options.")
                 .font(.caption).foregroundStyle(.secondary)
-        }.controlSize(.small)
+        }.font(.system(size: 12)).controlSize(.small)
     }
 }

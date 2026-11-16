@@ -6,6 +6,7 @@ struct UsageSettings: View {
     @State private var section: UsageSettingsSection? = .general
     @State private var configHome = ""
     @State private var additionalPaths = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var selectedSection: UsageSettingsSection { section ?? .general }
     private var version: String {
@@ -20,7 +21,7 @@ struct UsageSettings: View {
                         Label(section.title, systemImage: section.symbol)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 3)
                     }
-                }.listStyle(.sidebar).scrollDisabled(true)
+                }.listStyle(.sidebar).scrollDisabled(true).toolbar(removing: .sidebarToggle)
                 HStack(spacing: 8) {
                     Image(nsImage: AimsBrandMark.menuImage).frame(width: 20, height: 20)
                     VStack(alignment: .leading, spacing: 2) {
@@ -30,31 +31,39 @@ struct UsageSettings: View {
                 }.padding(16)
             }.navigationSplitViewColumnWidth(min: 160, ideal: 168, max: 190)
         } detail: {
-            Group {
-                switch selectedSection {
-                case .general: generalSettings
-                case .dock: EdgeDockSettings(model: model)
-                case .cli: cliSettings
-                case .updates: updateSettings
-                }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .navigationTitle(selectedSection.title)
-                .toolbar {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(selectedSection.title).font(.system(size: 20, weight: .semibold))
+                    Spacer()
                     if selectedSection == .dock {
-                        ToolbarItem(placement: .primaryAction) {
-                            Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
-                                .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                                .help("Show Edge Dock")
-                        }
+                        Toggle("Show Edge Dock", isOn: $model.edgeDockEnabled)
+                            .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                            .help("Show Edge Dock")
                     }
-                }
+                }.padding(.horizontal, 24).frame(height: 52)
+                ZStack(alignment: .topLeading) {
+                    selectedPage.id(selectedSection).transition(.opacity)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: selectedSection)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationSplitViewStyle(.balanced)
         .background(UsageScrollStyle())
+        .background(SettingsWindowStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
             configHome = model.configHome
             additionalPaths = model.additionalPaths
+        }
+    }
+
+    @ViewBuilder private var selectedPage: some View {
+        switch selectedSection {
+        case .general: generalSettings
+        case .dock: EdgeDockSettings(model: model)
+        case .cli: cliSettings
+        case .updates: updateSettings
         }
     }
 
