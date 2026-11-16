@@ -7,7 +7,7 @@ final class EdgeDockController: NSObject {
     private var dockHostingView: NSHostingView<AnyView>?
     private var handle: UsagePanel?
     private var peek: UsagePanel?
-    private var peekHostingView: UsageRoundedHostingView<AnyView>?
+    private var peekHostingView: UsageRoundedHostingView?
     private weak var model: UsageModel?
     // Only used to detect changes; every layout resolves fresh display geometry.
     private var configuredDisplay: DockDisplay?

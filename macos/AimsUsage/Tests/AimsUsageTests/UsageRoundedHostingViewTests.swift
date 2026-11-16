@@ -21,6 +21,8 @@ import Testing
         host.rootView = AnyView(Color.clear)
         panel.setContentSize(size)
         host.layoutSubtreeIfNeeded()
+        let content = try #require(host.subviews.first)
+        #expect(content.frame == host.bounds)
         let layer = try #require(host.layer)
         // Native descendants, including material layers, must obey the host's outline.
         let fill = CALayer()

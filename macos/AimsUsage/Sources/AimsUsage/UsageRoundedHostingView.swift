@@ -2,23 +2,33 @@ import AppKit
 import SwiftUI
 
 /// Keep native hosting/effect layers inside the same outline as the SwiftUI surface.
-final class UsageRoundedHostingView<Content: View>: NSHostingView<Content> {
-    var cornerRadius: CGFloat = 0 {
+final class UsageRoundedHostingView: NSView {
+    private let host: NSHostingView<AnyView>
+    var rootView: AnyView {
+        get { host.rootView }
+        set { host.rootView = newValue }
+    }
+    var cornerRadius: CGFloat {
         didSet { updateOutline() }
     }
     private var shadowBounds: CGRect?
     private var shadowCornerRadius: CGFloat?
 
-    required init(rootView: Content) {
-        super.init(rootView: rootView)
+    init(rootView: AnyView, cornerRadius: CGFloat) {
+        host = NSHostingView(rootView: rootView)
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
         wantsLayer = true
         clipsToBounds = true
+        host.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host)
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: trailingAnchor),
+            host.topAnchor.constraint(equalTo: topAnchor),
+            host.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
         updateOutline()
-    }
-
-    convenience init(rootView: Content, cornerRadius: CGFloat) {
-        self.init(rootView: rootView)
-        self.cornerRadius = cornerRadius
     }
 
     @available(*, unavailable)
