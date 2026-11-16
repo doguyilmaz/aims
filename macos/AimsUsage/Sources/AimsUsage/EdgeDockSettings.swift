@@ -74,7 +74,7 @@ struct EdgeDockSettings: View {
         VStack(alignment: .leading, spacing: 12) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                 GridRow {
-                    Text("Percentages")
+                    Text("Percentages").frame(maxWidth: .infinity, alignment: .leading)
                     Picker("Percentages", selection: $model.edgeDockValueMode) {
                         ForEach(DockValueMode.allCases) { Text($0.title).tag($0) }
                     }.labelsHidden().frame(width: 110)
@@ -84,6 +84,7 @@ struct EdgeDockSettings: View {
                     ForEach(providers) { provider in
                         GridRow {
                             Text(ProviderStyle.title(provider)).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             DockFocusPicker(model: model, provider: provider, title: ProviderStyle.title(provider))
                                 .labelsHidden().frame(width: 110)
                         }
