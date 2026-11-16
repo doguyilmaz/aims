@@ -4,13 +4,12 @@ import UsageCore
 
 struct UsageDashboard: View {
     @Bindable var model: UsageModel
-    let togglePanel: @MainActor () -> Void
-    let surface: UsageSurface
+    let togglePin: @MainActor () -> Void
+    let close: @MainActor () -> Void
     var width: CGFloat = 400
     var maximumBodyHeight: CGFloat = 1_100
     var heightDidChange: @MainActor (CGFloat) -> Void = { _ in }
     @Environment(\.openSettings) private var openSettings
-    @Environment(\.openWindow) private var openWindow
     @State private var editingReminder = false
     @State private var showingReminders = false
     @State private var showingTerminalCommand = false
@@ -43,7 +42,6 @@ struct UsageDashboard: View {
             heightDidChange(min(contentHeight, maximumBodyHeight) + model.displayStyle.chromeHeight)
         }
         .frame(width: width)
-        .usagePanelSurface(in: RoundedRectangle(cornerRadius: 18), systemPopover: surface == .popover)
         .background(UsageScrollStyle())
         .sheet(isPresented: $editingReminder) { CustomResetEditor(model: model) }
         .sheet(isPresented: $showingTerminalCommand) { TerminalCommandSheet() }
@@ -93,9 +91,10 @@ struct UsageDashboard: View {
                 Task { await model.refresh() }
             }.disabled(model.isRefreshing).help("Refresh quotas without a model prompt")
             UsageIconButton(
-                title: surface == .panel ? "Close overview" : model.panelVisible ? "Unpin overview" : "Pin overview",
-                icon: surface == .panel ? .close : model.panelVisible ? .pinned : .pin,
-                selected: surface != .panel && model.panelVisible, action: togglePanel)
+                title: model.overviewPresentation.isPinned ? "Unpin overview" : "Pin overview",
+                icon: model.overviewPresentation.isPinned ? .pinned : .pin,
+                selected: model.overviewPresentation.isPinned, action: togglePin)
+            UsageIconButton(title: "Close overview", icon: .close, action: close)
             Menu {
                 Button(
                     model.edgeDockEnabled ? "Hide Edge Dock" : "Show Edge Dock",
@@ -111,16 +110,6 @@ struct UsageDashboard: View {
                 if model.updater.isConfigured {
                     CheckForUpdatesButton(updater: model.updater)
                 }
-                if Bundle.main.object(forInfoDictionaryKey: "AimsUsagePreview") as? Bool == true {
-                    Button("Preview menu layout…") { openWindow(id: "usage-menu-preview") }
-                }
-                #if AIMS_USAGE_PREVIEW
-                    Button("Preview small-screen overflow…") { openWindow(id: "usage-small-preview") }
-                    Button("Toggle preview appearance") {
-                        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                        NSApp.appearance = NSAppearance(named: dark ? .aqua : .darkAqua)
-                    }
-                #endif
                 Divider()
                 Text(
                     "Aims Usage \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0")"

@@ -78,7 +78,9 @@ final class UsageModel {
     var error: String?
     private(set) var summaryDate = Date()
     var isRefreshing = false
-    var panelVisible = false
+    var overviewPresentation: UsageOverviewPresentation = .hidden {
+        didSet { if overviewPresentation != oldValue { dockBehaviorDidChange?() } }
+    }
     var slimScrollbars = UserDefaults.standard.object(forKey: "slimScrollbars") as? Bool ?? false {
         didSet { UserDefaults.standard.set(slimScrollbars, forKey: "slimScrollbars") }
     }

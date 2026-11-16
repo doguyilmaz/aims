@@ -1,16 +1,13 @@
 import SwiftUI
 
-/// One native material per floating surface. System popovers own their material.
+/// One native material per custom Dock surface. The overview uses NSPopover’s own material.
 struct UsagePanelSurface<S: Shape>: ViewModifier {
     let shape: S
-    var systemPopover = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     @ViewBuilder func body(content: Content) -> some View {
-        if systemPopover {
-            content
-        } else if reduceTransparency {
+        if reduceTransparency {
             content.clipShape(shape).background(Color(nsColor: .windowBackgroundColor), in: shape)
                 .overlay {
                     shape.stroke(.primary.opacity(contrast == .increased ? 0.5 : 0.15), lineWidth: 1)

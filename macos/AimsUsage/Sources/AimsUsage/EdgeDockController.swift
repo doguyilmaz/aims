@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class EdgeDockController: NSObject {
     private var dock: UsagePanel?
+    private var dockHostingView: NSHostingView<AnyView>?
     private var handle: UsagePanel?
     private var peek: UsagePanel?
     private var peekHostingView: NSHostingView<AnyView>?
@@ -14,14 +15,19 @@ final class EdgeDockController: NSObject {
     private let pointerMonitor = EdgeDockPointerMonitor()
     private let options = DockOptionsController()
     private var openOverview: (@MainActor () -> Void)?
+    private var closeOverview: (@MainActor () -> Void)?
     private var expanded = false
     private var hasPresented = false
     private var presentationGeneration = 0
     private var shuttingDown = false
 
-    func start(model: UsageModel, openOverview: @escaping @MainActor () -> Void) {
+    func start(
+        model: UsageModel, openOverview: @escaping @MainActor () -> Void,
+        closeOverview: @escaping @MainActor () -> Void
+    ) {
         self.model = model
         self.openOverview = openOverview
+        self.closeOverview = closeOverview
         options.visibilityDidChange = { [weak self] in self?.pointerChanged(animated: false) }
         dock = makePanel(title: "Aims Edge Dock")
         // Pointer-only Dock actions must not steal keyboard focus from the active app.
@@ -40,8 +46,8 @@ final class EdgeDockController: NSObject {
 
     private func configureContent(in frame: CGRect) {
         guard let dock, let model, let openOverview else { return }
-        dock.contentView = NSHostingView(
-            rootView: EdgeDockView(
+        let root = AnyView(
+            EdgeDockView(
                 model: model, maximumHeight: max(0, frame.height - 16),
                 hoverProvider: { [weak self] id in self?.present(id, pin: false) },
                 selectProvider: { [weak self] id in self?.present(id, pin: true) },
@@ -51,8 +57,23 @@ final class EdgeDockController: NSObject {
                     openOverview()
                 },
                 showOptions: { [weak self] id, point in self?.showOptions(for: id, at: point) }))
+        if let dockHostingView {
+            dockHostingView.rootView = root
+        } else {
+            let host = NSHostingView(rootView: root)
+            dockHostingView = host
+            dock.contentView = host
+        }
         handle?.contentView = NSHostingView(
             rootView: EdgeDockHandleView(side: model.edgeDockSide, reveal: { [weak self] in self?.reveal() }))
+    }
+
+    var overviewAnchor: UsageOverviewAnchor? {
+        guard let model, model.edgeDockEnabled, let view = dockHostingView else { return nil }
+        return UsageOverviewAnchor(
+            view: view,
+            rect: EdgeDockLayout.overviewAnchor(in: view.bounds, flipped: view.isFlipped, size: model.edgeDockSize),
+            edge: model.edgeDockSide == .right ? .minX : .maxX)
     }
 
     func configurationChanged() {
@@ -142,9 +163,9 @@ final class EdgeDockController: NSObject {
             if !pin { return }
             options.close()
         }
-        if model.panelVisible {
+        if model.overviewPresentation.isVisible {
             if !pin { return }
-            openOverview?()
+            closeOverview?()
         }
         if !pin && model.dockPeekPinned { return }
         if model.dockProvider == id {
@@ -230,7 +251,8 @@ final class EdgeDockController: NSObject {
         let visible = EdgeDockVisibility.shouldReveal(
             autoHide: model.edgeDockAutoHide, expanded: expanded || dock.isVisible,
             pinned: model.dockPeekPinned && peek?.isVisible == true,
-            dockPinned: model.edgeDockPinned, optionsPresented: options.isPresented,
+            dockPinned: model.edgeDockPinned,
+            optionsPresented: options.isPresented || model.overviewPresentation.holdsDockOpen,
             pointer: point,
             dock: dock.frame, peek: peek?.isVisible == true ? peek?.frame : nil, activation: handle.frame)
         setExpanded(visible, animated: animated)

@@ -6,48 +6,17 @@ struct AimsUsageApp: App {
     @NSApplicationDelegateAdaptor(AimsAppDelegate.self) private var delegate
 
     var body: some Scene {
-        MenuBarExtra {
-            UsageDashboard(
-                model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                width: delegate.model.displayStyle.menuWidth,
-                maximumBodyHeight: maximumBodyHeight()
-            )
-        } label: {
-            HStack(spacing: 4) {
-                Image(nsImage: AimsBrandMark.menuImage).renderingMode(.template)
-                    .accessibilityLabel("aims")
-                if let summary = delegate.model.menuSummary { Text(summary).monospacedDigit() }
-            }
-        }
-        .menuBarExtraStyle(.window)
         Settings {
             UsageSettings(model: delegate.model)
                 .frame(
                     minWidth: SettingsWindowMetrics.minimumContentSize.width,
                     minHeight: SettingsWindowMetrics.minimumContentSize.height)
         }
-        #if AIMS_USAGE_PREVIEW
-            Window("Menu preview", id: "usage-menu-preview") {
-                UsageDashboard(
-                    model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                    width: delegate.model.displayStyle.menuWidth,
-                    maximumBodyHeight: maximumBodyHeight()
-                )
+        .commands {
+            CommandGroup(after: .appSettings) {
+                Button("Show usage") { delegate.showOverview(from: .menuBar) }
+                    .keyboardShortcut("u", modifiers: [.command, .shift])
             }
-            .windowResizability(.contentSize)
-            Window("Small-screen preview", id: "usage-small-preview") {
-                UsageDashboard(
-                    model: delegate.model, togglePanel: delegate.togglePanel, surface: .popover,
-                    width: delegate.model.displayStyle.menuWidth,
-                    maximumBodyHeight: 300)
-            }
-            .windowResizability(.contentSize)
-        #endif
+        }
     }
-
-    private func maximumBodyHeight() -> CGFloat {
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        return max(200, (screen?.visibleFrame.height ?? 900) - 24 - delegate.model.displayStyle.chromeHeight)
-    }
-
 }

@@ -3,7 +3,7 @@ title: Aims Usage for macOS
 weight: 9
 ---
 
-Aims Usage is one native macOS app with three surfaces: a menu-bar popover, an optional Edge Dock and an overview you can pin open. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
+Aims Usage is one native macOS app with an optional Edge Dock. The menu-bar icon and Dock overview button open the same native popover, which you can pin in place. The macOS Dock can remain on the bottom or either side; the usage rail attaches to your chosen usable screen edge. It reads the same usage snapshot as `aims usage --json`; personal/work profiles, model groups, reset inventories and custom reminders remain separate.
 
 ## Availability and installation
 
@@ -31,13 +31,13 @@ Every app includes its CLI. For a direct-download install, **More → Terminal c
 
 Doctor reports an absent app as **info**, with an install hint. `doctor --fix` does not install the optional app. No companion app check appears on other systems.
 
-## One app, three surfaces
+## One app, shared overview
 
 | Surface | Use it for |
 | --- | --- |
 | Menu bar | Open a quick usage summary; choose Compact or Gauges in Settings |
 | Edge Dock | Keep provider indicators at either edge, hover for detail, or pin the rail |
-| Pinned overview | Leave the complete usage summary open while you work |
+| Overview pin | Keep that same summary open while you work |
 
 <table>
   <tr><th>Gauges overview</th><th>Edge Dock</th></tr>
@@ -55,9 +55,9 @@ Doctor reports an absent app as **info**, with an install hint. `doctor --fix` d
 
 Settings uses native grouped forms and system-sized controls. Its sidebar separates **General**, **Edge Dock → Layout & display**, **Edge Dock → Usage readings**, **CLI & paths** and **Updates**. Layout & display holds monitor previews, placement and visibility; Usage readings holds percentages and per-provider limit windows. The window can be resized; pages keep a stable size and position. The native toolbar and floating sidebar use the system’s adaptive corner geometry, without a separate title-bar divider. The app version and source revision are always visible in the sidebar footer. Terminal integration, executable and data-folder preferences are under **CLI & paths**.
 
-On **macOS 26 and newer**, custom floating surfaces use native **Liquid Glass**: the Edge Dock, provider details, options and pinned overview. The menu popover and Settings split view retain their system-provided material. Glass is applied once per floating surface; quota rows stay readable without extra glass layers. With **Reduce Transparency**, custom panels use an opaque system background. Earlier macOS versions use standard material. The app follows the Mac's appearance and accessibility choices without changing them.
+On **macOS 26 and newer**, custom floating surfaces use native **Liquid Glass**: the Edge Dock, provider details and options. The shared overview is a native `NSPopover`; it and the Settings split view retain their system-provided material and corner geometry. Glass is applied once per floating surface; quota rows stay readable without extra glass layers. With **Reduce Transparency**, custom panels use an opaque system background. Earlier macOS versions use standard material. The app follows the Mac's appearance and accessibility choices without changing them.
 
-Choose **Compact** (the default) or **Gauges** in Settings → General → Usage appearance. Compact uses 400-point provider rows with usage bars. Gauges uses the same 340-point layout in the menu and pinned overview: one heading per provider, short account/model rows, small rings and adjacent reset countdowns. Extra windows wrap within their own account; no reported window is dropped. The saved choice applies to menu and overview, and is independent of Edge Dock appearance. Both measure their content, growing to fit and scrolling only when the screen has insufficient room. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
+Choose **Compact** (the default) or **Gauges** in Settings → General → Usage appearance. Compact uses 400-point provider rows with usage bars. Gauges uses a 340-point layout in the shared overview: one heading per provider, short account/model rows, small rings and adjacent reset countdowns. Extra windows wrap within their own account; no reported window is dropped. The saved choice applies to the shared overview, and is independent of Edge Dock appearance. Both measure their content, growing to fit and scrolling only when the screen has insufficient room. System light/dark appearance, native provider marks and reduced-motion/transparency preferences are respected. Account info and banked-reset buttons open the full reading and expiry details; unknown values stay unknown.
 
 Application controls share monochrome SF Symbols with consistent hover and press feedback. Pinned controls use the Mac's accent color and a filled pin. The overview icon depicts stacked rows; banked resets use a reset arrow. The menu-bar symbol uses the inner aims terminal mark, also shown beside the popover's aims heading; More uses a plain ellipsis. Provider marks remain separate. Pointer actions leave no keyboard-focus frame behind; Tab navigation retains its visible focus indicator and Escape dismisses the floating panel.
 
@@ -77,7 +77,7 @@ The same menu offers **Used** or **Remaining** percentages for the entire Dock. 
 
 The Dock's footer pin button keeps the rail visible, independently of pinning a provider detail card. It preserves the Automatically hide setting: unpinning resumes that behavior. Pin state survives relaunches. The footer keeps its existing dimensions with overview and pin buttons; Hide remains available in the options panel and the app's More menu. An open options panel temporarily keeps the rail visible. The rail itself does not become key for pointer-only actions; the options panel accepts keyboard input without leaving an unrelated provider focus highlight behind. Keyboard navigation remains available.
 
-The menu popover stays anchored to its menu-bar icon. The pinned overview stays at the upper right of its screen; changing the Edge Dock's side, size, vertical position or visibility does not move it.
+The menu icon and Dock overview button open **one shared native popover**, anchored to the control used to open it. Its appearance and contents stay the same. Pin keeps this same popover open when you click elsewhere; it does not open a separate window. Unpin restores automatic dismissal; **×** or **Escape** closes it. The pin preference is restored on relaunch. While the popover is attached to the Dock, its anchor stays visible without changing saved Dock pin/auto-hide preferences. **Show usage** in the app menu (⌘⇧U) opens the menu-bar entry.
 
 Automatic hiding is enabled by default. Hover the thin marker in the selected edge region to reveal the rail; it hides after the pointer leaves the Dock and its detail card. Crossing into details and pinned cards keep it visible. Uncheck the option for an always-visible Dock. Disabling Edge Dock removes both rail and marker. Short fades respect reduced motion and keyboard actions. Mouse-movement monitors are removed when no longer needed; no keyboard events are monitored or suppressed.
 

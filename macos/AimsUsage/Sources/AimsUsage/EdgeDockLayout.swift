@@ -3,6 +3,18 @@ import Foundation
 enum EdgeDockLayout {
     static let handleWidth: CGFloat = 16
 
+    static func overviewAnchor(in bounds: CGRect, flipped: Bool, size: EdgeDockSize) -> CGRect {
+        let buttonWidth: CGFloat = size == .mini ? 20 : 24
+        let spacing: CGFloat = size == .mini ? 0 : 8
+        let width = min(buttonWidth, max(0, bounds.width))
+        let height = min(20, max(0, bounds.height))
+        let preferredX = bounds.midX - (buttonWidth * 2 + spacing) / 2
+        let preferredY = flipped ? bounds.maxY - size.contentInset - 20 : bounds.minY + size.contentInset
+        return CGRect(
+            x: min(bounds.maxX - width, max(bounds.minX, preferredX)),
+            y: min(bounds.maxY - height, max(bounds.minY, preferredY)), width: width, height: height)
+    }
+
     static func peekWidth(in visibleFrame: CGRect, size: EdgeDockSize) -> CGFloat {
         min(size.peekWidth, max(0, visibleFrame.width - 24))
     }
