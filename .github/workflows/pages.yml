@@ -37,7 +37,8 @@ jobs:
       - id: pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
-      - run: hugo --source docs --gc --minify ${{ steps.pages.outputs.base_url && format('--baseURL "{0}/"', steps.pages.outputs.base_url) }}
+      # Keep canonical/OG URLs on HTTPS while Pages provisions a new domain certificate.
+      - run: hugo --source docs --gc --minify
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
