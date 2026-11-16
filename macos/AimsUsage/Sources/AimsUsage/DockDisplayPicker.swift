@@ -4,7 +4,7 @@ struct DockDisplayPicker: View {
     @Bindable var model: UsageModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(116), spacing: 12), count: columnCount), spacing: 10) {
                 ForEach(Array(model.dockDisplays.enumerated()), id: \.element.id) { index, display in
                     displayCard(display, index: index)
