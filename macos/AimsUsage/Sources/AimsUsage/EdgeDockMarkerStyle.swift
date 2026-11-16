@@ -3,6 +3,7 @@ import Foundation
 enum EdgeDockMarkerStyle: String, CaseIterable, Identifiable {
     case line
     case aims
+    case logo
     case pill
 
     init(savedValue: String?) {
@@ -15,6 +16,7 @@ enum EdgeDockMarkerStyle: String, CaseIterable, Identifiable {
         switch self {
         case .line: "Line"
         case .aims: "Aims"
+        case .logo: "Logo"
         case .pill: "Pill"
         }
     }
@@ -22,7 +24,8 @@ enum EdgeDockMarkerStyle: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .line: "A thin line at the screen edge."
-        case .aims: "The aims mark in a small edge tab."
+        case .aims: "The menu-bar aims mark in a small edge tab."
+        case .logo: "The same aims mark without a background."
         case .pill: "A short, rounded handle."
         }
     }
@@ -31,6 +34,7 @@ enum EdgeDockMarkerStyle: String, CaseIterable, Identifiable {
         switch self {
         case .line: CGSize(width: 3, height: size == .mini ? 32 : 44)
         case .aims: CGSize(width: size == .mini ? 26 : 30, height: size == .mini ? 30 : 36)
+        case .logo: CGSize(width: size == .mini ? 20 : 24, height: size == .mini ? 24 : 28)
         case .pill: CGSize(width: size == .mini ? 6 : 8, height: size == .mini ? 24 : 30)
         }
     }

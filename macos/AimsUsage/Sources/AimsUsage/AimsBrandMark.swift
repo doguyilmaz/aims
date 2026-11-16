@@ -3,13 +3,7 @@ import SwiftUI
 
 // The terminal chevron and cursor from assets/logo-small.svg, without the
 // app-icon tile. Template alpha adapts to light/dark menu bars.
-struct AimsBrandMark: Shape {
-    nonisolated func path(in rect: CGRect) -> Path {
-        var mark = Self.chevron()
-        mark.addPath(Self.cursor(in: CGRect(x: 23, y: 23, width: 20, height: 9)))
-        return Self.fitted(mark, in: rect)
-    }
-
+enum AimsBrandMark {
     nonisolated private static func chevron() -> Path {
         var chevron = Path()
         chevron.move(to: CGPoint(x: 4, y: 4))

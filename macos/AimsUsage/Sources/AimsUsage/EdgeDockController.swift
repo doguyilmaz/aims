@@ -20,6 +20,7 @@ final class EdgeDockController: NSObject {
     private var hasPresented = false
     private var presentationGeneration = 0
     private var shuttingDown = false
+    private var hoverIntent: EdgeDockHoverIntent = .ready
 
     func start(
         model: UsageModel, openOverview: @escaping @MainActor () -> Void,
@@ -91,6 +92,7 @@ final class EdgeDockController: NSObject {
             presentationGeneration += 1
             hasPresented = false
             expanded = false
+            hoverIntent = .ready
             options.close()
             dismissPeek()
             pointerMonitor.stop()
@@ -163,7 +165,11 @@ final class EdgeDockController: NSObject {
     }
 
     private func present(_ id: String, pin: Bool) {
-        guard let model else { return }
+        guard !shuttingDown, let model, model.edgeDockEnabled else { return }
+        if !pin {
+            guard expanded, dock?.isVisible == true, hoverIntent.acceptsHover(at: NSEvent.mouseLocation) else { return }
+        }
+        defer { if pin { hoverIntent = .ready } }
         if options.isPresented {
             if !pin { return }
             options.close()
@@ -287,7 +293,12 @@ final class EdgeDockController: NSObject {
 
     private func setExpanded(_ visible: Bool, animated: Bool) {
         guard let dock, let handle else { return }
+        let automaticEntry = model?.edgeDockAutoHide == true && model?.edgeDockPinned != true
+        if !visible || !automaticEntry { hoverIntent = .ready }
         guard !hasPresented || expanded != visible else { return }
+        if visible && automaticEntry, let model {
+            hoverIntent = .awaitingEntry(anchorX: NSEvent.mouseLocation.x, side: model.edgeDockSide)
+        }
         hasPresented = true
         expanded = visible
         presentationGeneration += 1

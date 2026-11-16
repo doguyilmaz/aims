@@ -63,7 +63,9 @@ struct EdgeDockView: View {
                                     .contentShape(RoundedRectangle(cornerRadius: 13))
                                 }
                                 .buttonStyle(.plain)
-                                .onHover { if $0 { hoverProvider(provider.id) } }
+                                .onContinuousHover { phase in
+                                    if case .active = phase { hoverProvider(provider.id) }
+                                }
                                 .overlay {
                                     DockContextMenu { showOptions(provider.id, $0) }
                                         .accessibilityHidden(true)

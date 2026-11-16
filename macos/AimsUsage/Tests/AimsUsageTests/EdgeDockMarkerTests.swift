@@ -61,10 +61,10 @@ import Testing
     #expect(model.edgeDockMarkerStyle == .line)
     var changes = 0
     model.dockConfigurationDidChange = { changes += 1 }
-    for style in [EdgeDockMarkerStyle.aims, .pill, .line] {
+    for style in [EdgeDockMarkerStyle.aims, .logo, .pill, .line] {
         model.edgeDockMarkerStyle = style
         #expect(UsageModel(configHomeOverride: "").edgeDockMarkerStyle == style)
     }
-    #expect(changes == 3)
+    #expect(changes == 4)
     #expect(EdgeDockMarkerStyle(savedValue: "future-style") == .line)
 }

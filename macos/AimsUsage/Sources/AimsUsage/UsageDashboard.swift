@@ -83,7 +83,8 @@ struct UsageDashboard: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            AimsBrandMark().fill(.primary).frame(width: 21, height: 18).accessibilityHidden(true)
+            Image(nsImage: AimsBrandMark.menuImage).resizable().scaledToFit()
+                .frame(width: 21, height: 18).accessibilityHidden(true)
             Text("aims").font(.system(size: 17, weight: .bold)).tracking(-0.5)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
