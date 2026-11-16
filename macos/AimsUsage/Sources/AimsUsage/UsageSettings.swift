@@ -29,7 +29,7 @@ struct UsageSettings: View {
                         NavigationLink(value: section) { SettingsNavigationLabel(section: section) }
                     }
                 }
-            }.listStyle(.sidebar).focusEffectDisabled()
+            }.listStyle(.sidebar).scrollContentBackground(.hidden)
                 .safeAreaInset(edge: .bottom, alignment: .leading) {
                     HStack(spacing: 8) {
                         Image(nsImage: AimsBrandMark.menuImage).frame(width: 20, height: 20)
