@@ -130,6 +130,17 @@ func CommitUsageObservation(before *Config, id tool.ID, name string, account *Ac
 			return err
 		}
 		return fsx.WithLock(usageObservationsPath(), func() error {
+			// Legacy writers lock only state.json. Keep identity recapture and
+			// the seeded view together; a busy legacy writer defers this optional
+			// observation immediately rather than delaying native lifecycle work.
+			unlock, ok, err := fsx.Lock(statePath(), 0)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("native state is busy; retry usage refresh")
+			}
+			defer unlock()
 			cache, err := readUsageObservations()
 			if err != nil {
 				return err // never overwrite damaged or newer-format data

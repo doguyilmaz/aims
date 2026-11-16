@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/testutil"
 	"github.com/doguyilmaz/aims/internal/tool"
 )
@@ -253,5 +254,35 @@ func TestOverlayDoesNotMixTwoNativeStateSnapshots(t *testing.T) {
 	}
 	if fresh := LoadStateFor(cfg).Get("codex", "work"); fresh.Account.Email != "second@example.test" || fresh.Usage.Windows[0].Percent != 2 {
 		t.Fatalf("fresh snapshot lost current identity: %+v", fresh)
+	}
+}
+
+func TestUsageCommitDefersBusyLegacyWriterAndSerializesSeed(t *testing.T) {
+	testutil.Sandbox(t)
+	cfg, _ := Update(func(c *Config) error { c.Tools["codex"].Profiles["work"] = &Profile{}; return nil })
+	unlock, ok, err := fsx.Lock(statePath(), 0)
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	err = UpdateUsageObservationFor(cfg, "codex", "work", func(*ProfileState) { t.Fatal("busy legacy state reached commit") })
+	unlock()
+	if err == nil {
+		t.Fatal("busy native state was ignored")
+	}
+	if err := UpdateUsageObservationFor(cfg, "codex", "work", func(s *ProfileState) {
+		release, acquired, e := fsx.Lock(statePath(), 0)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if acquired {
+			release()
+			t.Fatal("legacy writer can replace identity while seeding cache")
+		}
+		s.Usage = &Usage{Windows: []tool.Window{{Label: "7d", Percent: 2}}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if ps := LoadStateFor(cfg).Get("codex", "work"); ps.Usage == nil || ps.Usage.Windows[0].Percent != 2 {
+		t.Fatal("deferred cache did not recover")
 	}
 }
