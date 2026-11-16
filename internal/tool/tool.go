@@ -131,6 +131,8 @@ type SessionEvent struct {
 	// no turn yet. Started: a turn began (the user sent a prompt).
 	Opened  bool `json:"opened,omitempty"`
 	Started bool `json:"started,omitempty"`
+	// Succeeded distinguishes a completed response from an interrupted turn.
+	Succeeded bool `json:"succeeded,omitempty"`
 	// Transcript is the file the conversation is saved to, when the tool
 	// says; until it exists there is nothing to resume.
 	Transcript string `json:"transcript,omitempty"`

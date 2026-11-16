@@ -113,7 +113,6 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 	if t.Project != "" {
 		ts.Everywhere = t.Everywhere
 	}
-	now := config.Now()
 	evs := profiles.EvaluateAll(ctx, cfg, st, a)
 	standIn, preferred := "", ""
 	if cfg.Failover.Auto {
@@ -143,10 +142,10 @@ func toolStatus(ctx context.Context, cfg *config.Config, st config.State, a tool
 			row.UsageGroups = ps.Usage.Groups
 		}
 		row.UsageError = ps.UsageError
-		if ps.Until.After(now) {
+		if ev.Cooldown {
 			row.Until, row.Reason = ps.Until, ps.Reason
 		}
-		if row.Until.After(now) || ps.NeedsLogin {
+		if ev.Cooldown || ps.NeedsLogin {
 			row.MarkedBy, row.Detail, row.MarkedAt = ps.MarkedBy, ps.Detail, ps.MarkedAt
 		}
 		if ev.Name == standIn && standIn != preferred {

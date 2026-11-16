@@ -578,7 +578,7 @@ func turn(line []byte) (tool.SessionEvent, time.Time, bool) {
 	at := when("completed_at")
 	e := p.Get("error")
 	if !e.Exists() || e.Type == gjson.Null {
-		return tool.SessionEvent{}, at, true
+		return tool.SessionEvent{Succeeded: true}, at, true
 	}
 	ev := tool.SessionEvent{Text: e.Get("message").String()}
 	switch e.Get("codex_error_info").String() {

@@ -116,6 +116,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return Result{Code: 1, Profile: name}, err
 		}
 		env = append(env, profiles.RunVar+"="+dir)
+		successState := config.LoadStateFor(cfg).Get(a.ID(), name)
 		child, err = proc.StartAttached(bin, watched, env, o.Dir)
 		if err != nil {
 			return Result{Code: 127, Profile: name}, err
@@ -183,6 +184,11 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 					// below looks again right away.
 					early, checked = false, time.Time{}
 				default:
+					if ev.Succeeded {
+						if err := profiles.ClearAfterSuccess(cfg, a.ID(), name, successState); err == nil {
+							successState = nil
+						}
+					}
 					running, wake = false, nil
 					chosen, chosenWhy = onStop(ctx, o, name, held)
 					checked = time.Now()

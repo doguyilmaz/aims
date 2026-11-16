@@ -166,7 +166,7 @@ func TestHookEvent(t *testing.T) {
 		t.Fatal("an error another account cannot fix is no event")
 	}
 	ev, ok = a.HookEvent([]byte(`{"hook_event_name":"Stop","session_id":"S","last_assistant_message":"401 unauthorized is a status code"}`))
-	if !ok || ev.Failure != tool.FailNone || ev.Text != "" {
+	if !ok || !ev.Succeeded || ev.Failure != tool.FailNone || ev.Text != "" {
 		t.Fatalf("a turn that went well is not read for errors: %+v", ev)
 	}
 	if ev, ok := a.HookEvent([]byte(`{"hook_event_name":"SessionStart","session_id":"S","transcript_path":"/t/S.jsonl"}`)); !ok || !ev.Opened || ev.Transcript != "/t/S.jsonl" {

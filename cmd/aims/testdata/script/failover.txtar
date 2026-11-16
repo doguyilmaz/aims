@@ -139,7 +139,9 @@ exec aims failover claude --from personal --minutes 90
 exec aims failover claude --from work --to personal --minutes 30
 exec aims claude
 stdout 'claude interactive as work'
-stderr 'claude: every account is limited; using work, the first back \(in 30m\)'
+stderr 'claude: no account looks usable: .*trying work \(earliest known reset in 30m\)'
+stderr 'personal works again\? aims clear claude personal'
+stderr 'work works again\? aims clear claude work'
 exec aims clear claude
 
 -- LIMITED --
