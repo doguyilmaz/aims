@@ -41,6 +41,13 @@ struct EdgeDockSettings: View {
                     }.frame(width: 260)
                 }
                 Toggle("Automatically hide", isOn: $model.edgeDockAutoHide)
+                if model.edgeDockAutoHide {
+                    HStack(alignment: .center) {
+                        Text("Hidden marker")
+                        Spacer()
+                        EdgeDockMarkerPicker(model: model)
+                    }
+                }
                 Toggle("Pin Edge Dock", isOn: $model.edgeDockPinned)
             } header: {
                 Text("Placement & behavior")

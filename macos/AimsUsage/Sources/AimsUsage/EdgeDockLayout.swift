@@ -58,8 +58,10 @@ enum EdgeDockLayout {
             width: dockWidth, height: height)
     }
 
-    static func handleFrame(for dock: CGRect, side: EdgeDockSide) -> CGRect {
-        let width = min(handleWidth, max(0, dock.width))
+    static func handleFrame(
+        for dock: CGRect, side: EdgeDockSide, marker: EdgeDockMarkerStyle = .line, size: EdgeDockSize = .standard
+    ) -> CGRect {
+        let width = min(marker.activationWidth(for: size), max(0, dock.width))
         return CGRect(
             x: side == .right ? dock.maxX - width : dock.minX, y: dock.minY,
             width: width, height: dock.height)

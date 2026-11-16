@@ -65,7 +65,9 @@ final class EdgeDockController: NSObject {
             dock.contentView = host
         }
         handle?.contentView = NSHostingView(
-            rootView: EdgeDockHandleView(side: model.edgeDockSide, reveal: { [weak self] in self?.reveal() }))
+            rootView: EdgeDockHandleView(
+                side: model.edgeDockSide, style: model.edgeDockMarkerStyle, size: model.edgeDockSize,
+                reveal: { [weak self] in self?.reveal() }))
     }
 
     var overviewAnchor: UsageOverviewAnchor? {
@@ -121,7 +123,10 @@ final class EdgeDockController: NSObject {
             in: frame, providerCount: model.snapshot?.providers.count ?? 0,
             side: model.edgeDockSide, size: model.edgeDockSize, position: model.edgeDockPosition)
         dock.setFrame(dockFrame, display: true)
-        handle?.setFrame(EdgeDockLayout.handleFrame(for: dockFrame, side: model.edgeDockSide), display: true)
+        handle?.setFrame(
+            EdgeDockLayout.handleFrame(
+                for: dockFrame, side: model.edgeDockSide, marker: model.edgeDockMarkerStyle,
+                size: model.edgeDockSize), display: true)
         if let id = model.dockProvider, model.snapshot?.providers.contains(where: { $0.id == id }) != true {
             dismissPeek()
         }

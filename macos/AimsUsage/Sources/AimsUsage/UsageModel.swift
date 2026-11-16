@@ -69,6 +69,14 @@ final class UsageModel {
             dockBehaviorDidChange?()
         }
     }
+    var edgeDockMarkerStyle = EdgeDockMarkerStyle(
+        savedValue: UserDefaults.standard.string(forKey: "edgeDockMarkerStyle"))
+    {
+        didSet {
+            UserDefaults.standard.set(edgeDockMarkerStyle.rawValue, forKey: "edgeDockMarkerStyle")
+            dockConfigurationDidChange?()
+        }
+    }
     var edgeDockEnabled = UserDefaults.standard.object(forKey: "edgeDockEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(edgeDockEnabled, forKey: "edgeDockEnabled")
