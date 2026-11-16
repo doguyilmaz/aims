@@ -23,13 +23,4 @@ enum UsageSettingsSection: String, CaseIterable, Identifiable {
         case .updates: "arrow.triangle.2.circlepath"
         }
     }
-
-    var subtitle: String {
-        switch self {
-        case .general: "Appearance and refresh for your usage overview."
-        case .dock: "Choose a display and make the Dock yours."
-        case .cli: "Connect the app to your existing aims setup."
-        case .updates: "Keep the menu app, Edge Dock and bundled CLI up to date."
-        }
-    }
 }

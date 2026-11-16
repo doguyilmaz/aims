@@ -39,7 +39,6 @@ struct UsageSettings: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .navigationTitle(selectedSection.title)
-                .navigationSubtitle(selectedSection.subtitle)
                 .toolbar {
                     if selectedSection == .dock {
                         ToolbarItem(placement: .primaryAction) {
@@ -51,8 +50,6 @@ struct UsageSettings: View {
                 }
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbar(removing: .sidebarToggle)
-        .usageSettingsToolbar()
         .background(UsageScrollStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
