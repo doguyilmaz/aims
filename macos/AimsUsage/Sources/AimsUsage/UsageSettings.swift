@@ -16,13 +16,10 @@ struct UsageSettings: View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 List(UsageSettingsSection.allCases, selection: $section) { section in
-                    Button {
-                        self.section = section
-                    } label: {
+                    NavigationLink(value: section) {
                         Label(section.title, systemImage: section.symbol)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 3)
-                            .contentShape(Rectangle())
-                    }.buttonStyle(.plain).tag(section)
+                    }
                 }.listStyle(.sidebar).scrollDisabled(true)
                 HStack(spacing: 8) {
                     Image(nsImage: AimsBrandMark.menuImage).frame(width: 20, height: 20)
@@ -55,6 +52,8 @@ struct UsageSettings: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
+        .usageSettingsToolbar()
         .background(UsageScrollStyle())
         .environment(\.usageSlimScrollbars, model.slimScrollbars)
         .onAppear {
