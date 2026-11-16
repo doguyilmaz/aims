@@ -100,6 +100,7 @@ cat > "$build/Aims Usage.app/Contents/Info.plist" <<EOF
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$build_number</string>
   <key>AimsSourceRevision</key><string>$source_revision</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Dogu Yilmaz. MIT license.</string>
   <key>LSMinimumSystemVersion</key><string>14.0.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>

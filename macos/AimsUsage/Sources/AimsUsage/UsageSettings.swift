@@ -176,6 +176,14 @@ struct UsageSettings: View {
                     value: Bundle.main.object(forInfoDictionaryKey: "AimsSourceRevision") as? String ?? "development"
                 )
                 .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                HStack(spacing: 16) {
+                    if let website = URL(string: "https://aims.doguyilmaz.com") {
+                        Link("Website", destination: website)
+                    }
+                    if let source = URL(string: "https://github.com/doguyilmaz/aims") {
+                        Link("Source & license", destination: source)
+                    }
+                }
             }
         }.formStyle(.grouped)
     }

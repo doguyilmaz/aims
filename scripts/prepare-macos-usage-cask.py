@@ -36,7 +36,7 @@ cask "aims-usage" do
   url {download}
   name "Aims Usage"
   desc "AI provider usage and reset windows in the menu bar"
-  homepage "https://aims.apps.doguyilmaz.com"
+  homepage "https://aims.doguyilmaz.com"
 
   livecheck do
     skip "Updated from the signed Usage release."

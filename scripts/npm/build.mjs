@@ -87,9 +87,9 @@ writeFileSync(
     {
       name,
       version,
-      description: 'Several Claude Code and Codex accounts on one machine: instant switching, shared history, failover.',
+      description: 'Claude Code and Codex account management, session routing and AI usage monitoring.',
       license: 'MIT',
-      homepage: 'https://aims.apps.doguyilmaz.com',
+      homepage: 'https://aims.doguyilmaz.com',
       repository: { type: 'git', url: 'git+https://github.com/doguyilmaz/aims.git' },
       keywords: ['claude', 'claude-code', 'codex', 'accounts', 'profiles', 'cli'],
       bin: { aims: 'bin/aims.js' },

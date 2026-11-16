@@ -15,7 +15,7 @@ enum UsageSettingsSection: String, CaseIterable, Identifiable {
         case .dock: "Layout & display"
         case .readings: "Usage readings"
         case .cli: "CLI & paths"
-        case .updates: "Updates"
+        case .updates: "Updates & About"
         }
     }
 
@@ -45,7 +45,7 @@ enum UsageSettingsSection: String, CaseIterable, Identifiable {
         case .dock: "Choose where your Dock lives and how it appears."
         case .readings: "Choose the percentages and limits shown in the Dock."
         case .cli: "Connect the app to your existing aims installation."
-        case .updates: "Keep Aims Usage and its bundled CLI up to date."
+        case .updates: "Version, links and updates for Aims Usage."
         }
     }
 }

@@ -1,136 +1,44 @@
 ---
-title: Introduction
+title: aims
+linkTitle: Start here
+description: Manage Claude Code and Codex accounts. Track AI usage, resets and budgets in the terminal, macOS menu bar and Edge Dock.
 type: docs
 cascade:
   type: docs
 aliases: ["/docs/"]
 ---
 
-aims (short for **AI multi-session**) manages several Claude Code and Codex accounts on one machine and displays AI usage limits in the terminal or on macOS. Each account keeps its own login; history and settings can be shared or kept private. You switch without logging out, and supervised sessions can move to another account when they hit a limit.
+Keep personal and work accounts separate. Continue Claude Code and Codex sessions across accounts, and track usage in the terminal or on your Mac.
 
-| Interface | Start here |
-| --- | --- |
-| **aims CLI** — accounts, routing, recovery and terminal usage | [Installation](installation) and [Quick start](quick-start) |
-| **Aims Usage for macOS** — menu bar, optional Edge Dock and pinned overview | [App guide and source preview](macos-usage) |
+## Start in the terminal
 
-The macOS app is a source preview; public signed downloads, its separate Homebrew cask and the production update channel have not been activated. It is one app with three surfaces, using the same account/usage data as the CLI.
-
-## The problem
-
-Claude Code and Codex keep one login per machine. To use a second account you log out, log in with the other one in the browser, and do it again to switch back. Your conversations and settings stay with whichever folder the tool happens to use, and a limit in the middle of a task means stopping until it resets.
-
-Both tools can be pointed at a different config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), which keeps logins apart. But then each folder starts empty: no history, no settings, no skills, no MCP servers, and nothing to tell you which folder is which.
-
-aims does the bookkeeping. It gives every account its own folder, links the shared parts back to your normal `~/.claude` and `~/.codex`, remembers which account is active, and watches for limits and dead logins.
-
-## How it looks
-
-```text
-$ aims status
-Claude Code
-  order of this project (~/code/client-app); elsewhere personal → work
-  ● personal  pro       login expired  7d 37%
-    work      team      ready          7d 84%  standing in for personal
-  new sessions start on work
-
-Codex
-  ● personal  plus      ready          7d 31%
-    work      business  ready
-
-Open sessions
-  Claude Code  work      ~/code/client-app · 12h59m ago
-  Claude Code  work      ~/code/api · 2h4m ago
-  Codex        personal  ~/code/blog · 6m ago
-
-Next
-  → claude/personal is not logged in  aims login claude personal
-  → codex/personal keeps 51 MB of unused database copies  aims doctor --fix
-
-Every limit and when it resets, also for Antigravity, Grok, Kiro and OpenCode: aims usage
+```sh
+brew install --cask doguyilmaz/tap/aims
+aims init
+claude                     # or codex
 ```
 
-`aims status` is what is going on: each account's state, what a session does now, the sessions open now and, under **Next**, what is left to set up, each with the command that does it. `aims usage` has every number:
+On Linux or Windows, follow [Installation](installation). Setup connects your logins and offers shell integration. Each account keeps its own credentials; history sharing is configurable.
 
-```text
-$ aims usage
-Claude Code
-  personal       pro       5h     ━━━━━━    –                 7d     ━━━━━━  37%  resets 4d
-  work           team      5h     ━━━━━━   2%  resets 4h10m   7d     ━━━━━━  84%  resets 4d
+Run `aims` for the dashboard, `aims usage` for limits and resets, or `aims doctor --check` to inspect your setup.
 
-Codex
-  personal       plus      5h     ━━━━━━   9%  resets 2h5m    7d     ━━━━━━  31%  resets 5d
-  work           business  5h     ━━━━━━    –                 7d     ━━━━━━    –
+## Keep usage in view
 
-Antigravity
-  Gemini Models            5h     ━━━━━━   0%  resets 5h      7d     ━━━━━━   5%  resets 3d
+Aims Usage is a native macOS menu-bar app with an optional Edge Dock. Choose your layout, display, accounts and allowance windows.
 
-Grok  x premium
-  credits                  7d     ━━━━━━  26%  resets 47h
+{{< usage-preview >}}
 
-Kiro  pro
-  credits                  month  ━━━━━━  42%  resets 12d     420 of 1000 credits
+*Illustrative preview data. The app is a source preview; public signed downloads and automatic updates are not active yet.*
 
-OpenCode
-  my-team                  budget ━━━━━━  67%  resets 9d      $33.50 of $50
-```
+[Set up the macOS app →](macos-usage)
 
-```bash
-aims claude              # the active account (personal), or the next usable one
-aims claude@work         # this account, for this session only
-aims use work            # new sessions of both tools use work from now on
-aims failover claude     # personal is out: mark it, switch, and carry on
-aims claude --continue   # same conversation, now on the other account
-```
-
-Run `aims` with no arguments for a [dashboard](dashboard) that does all of this with a few keys; `tab` switches it between accounts and usage.
-
-## Menu bar and Edge Dock
-
-Aims Usage keeps Claude/Codex accounts, Kiro and Grok quotas, Antigravity model groups and OpenCode budgets visible without opening a terminal. Choose Compact or Gauges, place the optional Edge Dock on either edge, and select the account and allowance for each indicator. Display choices preserve active CLI logins and routing.
-
-![Aims Usage Gauges overview with illustrative preview data](/images/aims-usage-overview.jpg)
-
-*Preview data, not live account readings. See the [macOS app guide](macos-usage) for source setup, controls and provider reporting limits.*
-
-## How it works
-
-```text
-~/.claude/                          your normal Claude Code folder ("the hub")
-  projects/  settings.json  skills/ ...
-  .credentials.json                 your current login: profile "personal"
-
-~/.aims/profiles/claude/work/       CLAUDE_CONFIG_DIR for the work account
-  .credentials.json  .claude.json   its own login (private)
-  projects -> ~/.claude/projects    everything else links to the hub
-  settings.json -> ~/.claude/settings.json
-  ...
-```
-
-When you start `aims claude@work`, aims sets `CLAUDE_CONFIG_DIR` to the work folder, reconciles configured sharing and starts the real `claude`. Codex works the same way with `CODEX_HOME`. The official tools handle model requests; aims supplies launch environment and session routing.
-
-The details are in [How it works](how-it-works).
-
-## Supported tools
-
-| Tool | Login kept in | Notes |
-| --- | --- | --- |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `.credentials.json`, or the macOS keychain | Native status line, plus read-only OAuth quota refresh with the existing profile login |
-| [Codex CLI](https://github.com/openai/codex) | `auth.json`, or the OS keyring | Plan usage comes from its account API |
-
-`aims usage` also shows the limits of Antigravity, Grok, Kiro and OpenCode, read through each tool's own CLI; aims does not run sessions on them yet.
-
-Other CLIs can be added: each tool is one adapter behind a small interface. See [Adding a tool](how-it-works#adding-a-tool).
-
-## Fair use
-
-aims exists to keep work and personal apart. Many people have a work account and a personal one, and want each project to use the right one without logging in and out. aims runs your own accounts on your own machine. Sessions use the official Claude Code and Codex CLIs; quota readers use native CLIs and first-party usage APIs with each provider's existing login. It does not share, pool or resell access. Each account stays under its provider's terms, and aims is not meant for stacking accounts to get around a plan's limits. aims is not affiliated with Anthropic, OpenAI, Google, xAI, Amazon or OpenCode.
-
-## Where next
+## Find what you need
 
 {{< cards >}}
-  {{< card link="installation" title="Installation" icon="download" >}}
-  {{< card link="quick-start" title="Quick start" icon="play" >}}
-  {{< card link="macos-usage" title="macOS menu bar and Edge Dock" icon="desktop-computer" >}}
-  {{< card link="failover" title="Limits and failover" icon="switch-horizontal" >}}
-  {{< card link="commands" title="Commands" icon="terminal" >}}
+  {{< card link="quick-start" title="First session" icon="play" >}}
+  {{< card link="macos-usage" title="Menu bar & Edge Dock" icon="desktop-computer" >}}
+  {{< card link="sharing" title="Share or isolate history" icon="folder" >}}
+  {{< card link="other-apps" title="Editors & SDKs" icon="terminal" >}}
+  {{< card link="troubleshooting" title="Fix a problem" icon="cog" >}}
+  {{< card link="commands" title="Command reference" icon="book-open" >}}
 {{< /cards >}}

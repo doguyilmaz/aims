@@ -3,7 +3,7 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: &docs ["docs/**", ".github/workflows/pages.yml"]
+    paths: &docs ["docs/**", "infra/legacy-domain/**", ".github/workflows/pages.yml"]
   pull_request:
     paths: *docs
   workflow_dispatch:
@@ -32,10 +32,13 @@ jobs:
         with:
           hugo-version: "0.162.1"
           extended: true
+      - name: Legacy URL redirects
+        run: node --test infra/legacy-domain/index.test.mjs
       - id: pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
-      - run: hugo --source docs --gc --minify ${{ steps.pages.outputs.base_url && format('--baseURL "{0}/"', steps.pages.outputs.base_url) }}
+      # Keep canonical/OG URLs on HTTPS while Pages provisions a new domain certificate.
+      - run: hugo --source docs --gc --minify
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

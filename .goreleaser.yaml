@@ -57,7 +57,7 @@ release:
     owner: doguyilmaz
     name: aims
   footer: |
-    Install: `brew install doguyilmaz/tap/aims`, `npm install -g @doguyilmaz/aims`,
+    Install: `brew install --cask doguyilmaz/tap/aims`, `npm install -g @doguyilmaz/aims`,
     `go install github.com/doguyilmaz/aims/cmd/aims@{{ .Tag }}`, or
     `curl -fsSL https://raw.githubusercontent.com/doguyilmaz/aims/main/scripts/install.sh | sh`.
   draft: true
