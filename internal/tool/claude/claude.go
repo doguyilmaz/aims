@@ -226,18 +226,27 @@ func planKind(s string) string {
 
 // Probe verifies model access with a one-word prompt to the smallest model.
 // Unlike the passive quota reader, this can renew credentials through native
-// Claude Code and costs a few tokens; it runs only when explicitly requested
+// Claude Code and spends model tokens; it runs only when explicitly requested
 // (aims status --live, aims keepalive).
 // It starts no MCP server, runs no hook and offers no tool, which keeps it
-// cheap, quick and free of side effects.
+// cheap and quick. Low effort and output/retry limits belong only to this
+// child, which uses an empty temporary working directory. It never changes
+// the model or effort of the person's conversations.
 func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
 	if h.Bin == "" {
 		return tool.Probe{Status: tool.ProbeError, Detail: "claude is not installed"}
 	}
+	dir, err := os.MkdirTemp("", "aims-claude-probe-")
+	if err != nil {
+		return tool.Probe{Status: tool.ProbeError, Detail: "could not prepare Claude login check"}
+	}
+	defer os.RemoveAll(dir)
+	settings, _ := json.Marshal(map[string]any{"disableAllHooks": true, "effortLevel": "low", "env": probeControls()})
 	args := []string{"-p", "--output-format", "json", "--no-session-persistence", "--model", "haiku",
-		"--strict-mcp-config", "--settings", `{"disableAllHooks":true}`, "--tools", "", "--system-prompt", "Answer in one word.",
+		"--max-turns", "1",
+		"--strict-mcp-config", "--settings", string(settings), "--tools", "", "--system-prompt", "Answer in one word.",
 		"--", "Reply with just: OK"}
-	out, code, err := proc.OutputContext(ctx, h.Bin, args, h.Env, 2*time.Minute)
+	out, code, err := proc.OutputContextInDir(ctx, h.Bin, args, probeEnvironment(h.Env), dir, 2*time.Minute)
 	if err != nil {
 		return tool.Probe{Status: tool.ProbeError, Detail: err.Error()}
 	}
@@ -261,6 +270,34 @@ func (a *Adapter) Probe(ctx context.Context, h tool.Home) tool.Probe {
 		return tool.Probe{Status: tool.ProbeLimit, Detail: firstLine(text)}
 	}
 	return tool.Probe{Status: tool.ProbeError, Detail: firstLine(text)}
+}
+
+func probeEnvironment(env []string) []string {
+	if env == nil {
+		env = os.Environ()
+	}
+	controls := probeControls()
+	child := make([]string, 0, len(env)+len(controls))
+	for _, entry := range env {
+		key, _, _ := strings.Cut(entry, "=")
+		if _, overridden := controls[strings.ToUpper(key)]; !overridden {
+			child = append(child, entry)
+		}
+	}
+	// Environment overrides outrank saved per-model effort. Copy rather than
+	// changing h.Env or os.Environ: interactive sessions retain their settings.
+	for key, value := range controls {
+		child = append(child, key+"="+value)
+	}
+	return child
+}
+
+func probeControls() map[string]string {
+	return map[string]string{
+		"CLAUDE_CODE_EFFORT_LEVEL": "low", "MAX_THINKING_TOKENS": "0",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64", "CLAUDE_CODE_MAX_RETRIES": "0",
+		"CLAUDE_CODE_RETRY_WATCHDOG": "",
+	}
 }
 
 func firstLine(s string) string {

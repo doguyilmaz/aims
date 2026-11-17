@@ -191,6 +191,14 @@ func Claude() int {
 	if os.Getenv("FAKE_RECORD_ARGS") != "" {
 		record("claude " + strings.Join(args, " "))
 	}
+	if capture := os.Getenv("FAKE_CLAUDE_CAPTURE"); capture != "" {
+		env := map[string]string{}
+		for _, key := range []string{"CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "MAX_THINKING_TOKENS", "CLAUDE_CODE_MAX_RETRIES", "CLAUDE_CODE_RETRY_WATCHDOG", "CLAUDE_CONFIG_DIR"} {
+			env[key] = os.Getenv(key)
+		}
+		dir, _ := os.Getwd()
+		writeJSON(capture, map[string]any{"args": args, "env": env, "dir": dir})
+	}
 	format := flag(args, "--output-format")
 	if format == "" {
 		format = "text"

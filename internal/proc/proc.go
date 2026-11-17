@@ -454,10 +454,25 @@ func Output(bin string, args, env []string, timeout time.Duration) (string, int,
 
 // OutputContext also stops the helper when the request is cancelled.
 func OutputContext(ctx context.Context, bin string, args, env []string, timeout time.Duration) (string, int, error) {
+	return OutputContextInDir(ctx, bin, args, env, "", timeout)
+}
+
+// OutputContextInDir runs a short helper in dir without changing the caller's
+// working directory. An empty dir inherits the caller's directory.
+func OutputContextInDir(ctx context.Context, bin string, args, env []string, dir string, timeout time.Duration) (string, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if dir != "" {
+		// Resolve a relative override before the worker changes directory.
+		resolved, err := LookPathEnv(bin, env)
+		if err != nil {
+			return "", -1, err
+		}
+		bin = resolved
+	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = env
+	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.WaitDelay = time.Second
