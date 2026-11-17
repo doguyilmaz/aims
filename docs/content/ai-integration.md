@@ -57,7 +57,7 @@ Use one or the other. With both, the model sees the tools twice.
 
 ## Status line
 
-`aims setup --statusline` sets aims as Claude Code's [status line](https://docs.anthropic.com/en/docs/claude-code/statusline) command. It shows the account of the running session and its plan usage in a few characters:
+`aims setup --statusline` sets aims as Claude Code's [status line](https://code.claude.com/docs/en/statusline) command. It shows the account of the running session and its plan usage in a few characters:
 
 ```text
 ~/src/app main  work ▰▱▱▱▱  11% · 7d 47%
@@ -68,5 +68,7 @@ Use one or the other. With both, the model sees the tools twice.
 The bar is the five-hour window, then the weekly one. Numbers turn yellow at 70% and red at the [threshold](../failover#settings); from 70% on, `↻` says when the window resets. Past the threshold, or when the account is marked as limited, `→` names the account **new** sessions get instead. The running session keeps its account; aims moves a supervised session by itself, and `aims failover claude --resume` continues any other conversation on the next account (see [In an interactive session](../failover#in-an-interactive-session)).
 
 The usage numbers come from Claude Code itself, which passes them to the status line command. aims records them, which is how it knows to skip an account before the limit hits, at no cost.
+
+`retry in 2m` is a saved request-retry cooldown, separate from the displayed plan percentages. `pinned` keeps the session on its selected account; Claude's own "auto mode" describes tool permissions, not aims account switching.
 
 If you already had a status line command, aims keeps it: your line is shown first, followed by aims' part. `aims clean` puts your command back.

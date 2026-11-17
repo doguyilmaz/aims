@@ -425,7 +425,7 @@ func Evaluate(ctx context.Context, cfg *config.Config, st config.State, a tool.A
 	case ps.NeedsLogin:
 		ev.Reasons, open = append(ev.Reasons, "login expired"), true
 	}
-	ev.Cooldown = activeLimitMark(cfg, ps, now)
+	ev.Cooldown = CooldownActive(cfg, ps, now)
 	if ev.Cooldown {
 		reason := ps.Reason
 		switch {
@@ -506,7 +506,7 @@ func windowLimitText(w tool.Window) string {
 }
 
 func sameAccount(cfg *config.Config, ps *config.ProfileState, now time.Time) (reason string, until time.Time) {
-	if activeLimitMark(cfg, ps, now) && ps.Reason != "busy" {
+	if CooldownActive(cfg, ps, now) && ps.Reason != "busy" {
 		reason, until = "limited for "+Duration(ps.Until.Sub(now)), ps.Until
 	}
 	if ps.Usage != nil {

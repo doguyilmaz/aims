@@ -7,11 +7,12 @@ import (
 	"github.com/doguyilmaz/aims/internal/tool"
 )
 
-// activeLimitMark keeps explicit holds authoritative. A newer successful quota
-// reading can contradict only an automatic plan-limit mark for that exact window.
-// It says nothing about login validity or a short-lived request-rate limit.
-func activeLimitMark(cfg *config.Config, ps *config.ProfileState, now time.Time) bool {
-	if !ps.Until.After(now) {
+// CooldownActive reports whether a saved mark still blocks routing. A newer
+// successful quota reading can contradict only an automatic plan-limit mark for
+// that exact window. Explicit holds and short request-rate limits remain active.
+// It does not report login validity.
+func CooldownActive(cfg *config.Config, ps *config.ProfileState, now time.Time) bool {
+	if ps == nil || !ps.Until.After(now) {
 		return false
 	}
 	if ps.Reason != "limit" || ps.Window == "" || ps.MarkedAt.IsZero() || ps.Usage == nil ||
