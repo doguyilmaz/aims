@@ -155,9 +155,14 @@ func render(cfg *config.Config, name string, windows []tool.Window, ps *config.P
 	}
 	parts := []string{paint(bold, name)}
 	limited := false
-	if ps != nil && ps.Until.After(now) {
+	if profiles.CooldownActive(cfg, ps, now) {
 		limited = true
-		parts = append(parts, paint(red, "limited")+paint(dim, " ↻"+profiles.Duration(ps.Until.Sub(now))))
+		duration := profiles.Duration(ps.Until.Sub(now))
+		mark := paint(red, "limited") + paint(dim, " ↻"+duration)
+		if ps.Reason == "busy" {
+			mark = paint(yellow, "retry in") + paint(dim, " "+duration)
+		}
+		parts = append(parts, mark)
 	}
 	var tail []string
 	for _, w := range windows {

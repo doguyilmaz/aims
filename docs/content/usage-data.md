@@ -49,6 +49,12 @@ aims usage reset remove REMINDER_ID
 
 Custom reminders use a separate private file, `AIMS_HOME/usage-reminders.json`. Damaged or newer reminder formats are retained and reported; they do not suppress other usage data. To repair a malformed file, preserve a copy and correct its JSON. Removing the macOS app does not remove reminders, aims configuration, logins, sessions or history.
 
+## Login probe resource controls
+
+Quota Refresh sends no model prompt. An explicit Claude live login check or due-login keepalive uses the native `haiku` alias, low effort, one turn and a 64-output-token limit. It offers no tools or MCP servers, disables hooks and session persistence, and starts in a fresh temporary working directory. Automatic API retries and the retry watchdog are disabled for this check. Thinking is disabled on models that permit it; newer Haiku models still use adaptive thinking at low effort.
+
+These controls live only in the child's environment and inline settings, including when the parent or saved settings request higher effort. The native CLI retains ownership of authentication renewal; aims does not change saved conversation models, effort or prompts. This is a small model-access check, not a measurement of every model's quota. Tests use fake providers and spend no model tokens. Codex login/limit checks use its account API without a model turn.
+
 ## CLI compatibility and update ownership
 
 Quota refresh, authentication keepalive and software upgrades are separate operations. The login keepalive runs hourly through the native tools and renews due logins; it does not redeem a quota reset. `aims upgrade` updates the standalone aims installation through its owner. Provider CLIs keep their own installers/updaters, and a running native process keeps the version it started with.

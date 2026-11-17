@@ -114,7 +114,7 @@ With the [status line](../ai-integration#status-line) on, Claude Code shows the 
 | Tool | Source | Cost |
 | --- | --- | --- |
 | Claude Code | The status line while you work; `aims usage --refresh` also reads the profile's existing OAuth usage access without renewing its login. | none |
-| Claude Code | `aims usage --live`: a one-word prompt to the smallest model, to verify the login | a few tokens |
+| Claude Code | `aims status --live` / `aims usage --live`: a one-word Haiku prompt at low effort, to verify the login | a small model request |
 | Codex | `aims usage --live`: Codex's local app server reports the account and its rate limits | none |
 
 `aims usage` shows the last report with every window and its reset; `aims status` shows the window that decides each account's state. `r` in the dashboard runs the live check.
@@ -161,7 +161,7 @@ claude/personal: fresh for 1h12m
 codex/work: the login has lapsed (...)
 ```
 
-Codex renews without a request to the model (its app server reads the account with a refresh). Claude Code has no such way, so aims sends a one-word prompt to its smallest model, the same check as `aims usage --live`.
+Codex renews without a request to the model (its app server reads the account with a refresh). Claude Code uses a one-word Haiku prompt at low effort, the same check as `aims status --live`. Its limits apply only to that helper process; see [probe resource controls](../usage-data#login-probe-resource-controls).
 
 `aims keepalive on` runs it every hour in the background and `aims keepalive off` stops it:
 

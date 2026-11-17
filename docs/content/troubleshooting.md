@@ -51,7 +51,11 @@ The [shell integration](../everyday#plain-claude-and-codex) is missing or not lo
 
 ### A profile shows "limited" but works again
 
-The limit reset early, or the mark was a mistake. `aims clear claude work` removes it, and `aims usage --live` checks with the provider.
+A newer successful reading for the same window overrides an older automatic plan-limit mark. `retry in 2m` is a separate request-retry cooldown, shared by sessions on that profile; it can remain while the 5h bar is below 100%. A different model can also have its own limit. Repeated request failures extend the retry cooldown from 2 to 15 minutes. If native requests work again, `aims clear claude work` clears saved marks without removing login files or usage readings. `aims usage --live` refreshes quota data.
+
+### Claude says "auto mode on" but aims does not switch accounts
+
+Claude's auto mode controls tool permissions. Aims' status-line suffix describes account switching: `pinned` stays on the selected account; `auto` can move. Start with `aims claude` without `@profile` for automatic switching. To resume an existing conversation, exit it first and use `aims claude --resume <session-id>`; use its exact ID when several conversations share a folder.
 
 ### A login lapsed after weeks of not using an account
 
