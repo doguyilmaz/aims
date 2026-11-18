@@ -18,7 +18,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - name: Race tests with isolated process visibility
+        timeout-minutes: 20
+        run: scripts/test-linux-isolated.sh
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
