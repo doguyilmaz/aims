@@ -15,14 +15,13 @@
   <a href="https://aims.doguyilmaz.com/macos-usage">macOS app</a>
 </p>
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/static/images/aims-usage-overview.png" width="340" height="619" alt="Aims Usage overview showing provider quotas and resets"></td>
-    <td align="center"><img src="docs/static/images/aims-usage-edge-dock.png" width="64" height="472" alt="The optional Edge Dock with six provider indicators"></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/static/images/aims-usage-overview.png" width="264" height="480" alt="Aims Usage overview showing provider quotas and resets">
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/static/images/aims-usage-edge-dock.png" width="65" height="480" alt="The optional Edge Dock with six provider indicators">
+</p>
 
-*Illustrative preview data. The macOS app is currently a source preview.*
+<p align="center"><sub>Illustrative preview data. The macOS app is currently a source preview.</sub></p>
 
 - **Keep accounts separate.** Each account has its own login. Share history and settings, or keep them private.
 - **Keep sessions moving.** Supervised Claude/Codex sessions can continue on another account at a limit and return when the preferred account recovers.
