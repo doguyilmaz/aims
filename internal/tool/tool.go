@@ -110,7 +110,9 @@ type Watch struct {
 	Self string
 	// RunDir is the run's own directory, AIMS_RUN in the tool's environment.
 	RunDir string
-	Home   Home
+	// HookSettings is the durable path for settings containing only aims hooks.
+	HookSettings string
+	Home         Home
 	// Dir is the working directory; "" is aims' own.
 	Dir string
 	// Since is when this run started.

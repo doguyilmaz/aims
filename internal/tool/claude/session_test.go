@@ -110,42 +110,58 @@ func TestSupervises(t *testing.T) {
 func TestWithSettings(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "merged.json")
-	read := func() gjson.Result {
-		b, err := os.ReadFile(out)
+	hooks := filepath.Join(dir, "hooks.json")
+	read := func(path string) gjson.Result {
+		b, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return gjson.ParseBytes(b)
 	}
-	got, err := withSettings([]string{"--model", "opus"}, shellQuote("/opt/it's/aims")+" hook claude", out)
-	if err != nil || !slices.Equal(got, []string{"--settings", out, "--model", "opus"}) {
+	command := shellQuote("/opt/it's/aims") + " hook claude"
+	got, err := withSettings([]string{"--model", "opus"}, command, hooks, out)
+	if err != nil || !slices.Equal(got, []string{"--settings", hooks, "--model", "opus"}) {
 		t.Fatalf("prepended: %q %v", got, err)
 	}
 	want := `'/opt/it'\''s/aims' hook claude`
 	if runtime.GOOS == "windows" {
 		want = `"/opt/it's/aims" hook claude`
 	}
-	if cmd := read().Get("hooks.StopFailure.0.hooks.0.command").String(); cmd != want {
+	if cmd := read(hooks).Get("hooks.StopFailure.0.hooks.0.command").String(); cmd != want {
 		t.Fatalf("command: %s", cmd)
 	}
-	if fi, _ := os.Stat(out); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(hooks); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Fatalf("settings readable by others: %v", fi.Mode())
+	}
+	nativeResume := []string{"--settings", hooks, "--resume", "saved"}
+	got, err = withSettings(nativeResume, "current-aims hook claude", hooks, out)
+	if err != nil || !slices.Equal(got, nativeResume) {
+		t.Fatalf("native resume: %q %v", got, err)
+	}
+	if j := read(hooks).Get("hooks.Stop"); len(j.Array()) != 1 || j.Get("0.hooks.0.command").String() != "current-aims hook claude" {
+		t.Fatalf("resuming duplicated hooks or retained an old launcher: %s", j.Raw)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("hook-only launch wrote a run file: %v", err)
 	}
 
 	user := filepath.Join(dir, "s.json")
 	testutil.Write(t, user, `{"model":"haiku","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}]}}`)
-	got, err = withSettings([]string{"--settings", user, "hi"}, "'aims' hook claude", out)
+	got, err = withSettings([]string{"--settings", user, "hi"}, "'aims' hook claude", hooks, out)
 	if err != nil || !slices.Equal(got, []string{"--settings", out, "hi"}) {
 		t.Fatalf("merged: %q %v", got, err)
 	}
-	if j := read(); j.Get("model").String() != "haiku" || j.Get("hooks.Stop.0.hooks.0.command").String() != "mine" || j.Get("hooks.Stop.1.hooks.0.command").String() != "'aims' hook claude" {
+	if j := read(out); j.Get("model").String() != "haiku" || j.Get("hooks.Stop.0.hooks.0.command").String() != "mine" || j.Get("hooks.Stop.1.hooks.0.command").String() != "'aims' hook claude" {
 		t.Fatalf("user settings lost: %s", j.Raw)
 	}
-	got, _ = withSettings([]string{`--settings={"x":1}`}, "'aims' hook claude", out)
-	if j := read(); got[0] != "--settings="+out || j.Get("x").Int() != 1 || !j.Get("hooks.Stop").Exists() {
+	got, _ = withSettings([]string{`--settings={"x":1}`}, "'aims' hook claude", hooks, out)
+	if j := read(out); got[0] != "--settings="+out || j.Get("x").Int() != 1 || !j.Get("hooks.Stop").Exists() {
 		t.Fatalf("inline: %q %s", got, j.Raw)
 	}
-	if _, err := withSettings([]string{"--settings", "/missing.json"}, "aims", out); err == nil {
+	if j := read(hooks); j.Get("model").Exists() || j.Get("x").Exists() {
+		t.Fatalf("user settings reached the durable hook file: %s", j.Raw)
+	}
+	if _, err := withSettings([]string{"--settings", "/missing.json"}, "aims", hooks, out); err == nil {
 		t.Fatal("a missing settings file must fail")
 	}
 }

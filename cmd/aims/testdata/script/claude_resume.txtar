@@ -1,0 +1,24 @@
+[windows] skip 'replays the shell resume command and runs hooks with sh'
+exec claude auth login --email me@gmail.com
+exec aims init --yes --tools claude --integrations none
+exec aims login claude work
+env FAKE_CLAUDE_SAVE_TRANSCRIPT=1
+env FAKE_CLAUDE_NATIVE_RESUME=$WORK/resume.sh
+
+# Replay the exact command Claude printed after aims has cleaned up.
+exec aims claude
+stdout 'Resume this session with:\nclaude --settings .*claude-watch-settings\.json.* --resume s-default'
+exists $HOME/.aims/claude-watch-settings.json
+stderr 'Resume with Aims: aims claude --resume s-default'
+exec sh -c 'claude() { aims claude "$@"; }; . "$FAKE_CLAUDE_NATIVE_RESUME"'
+stdout 'claude interactive as default args=\["--resume" "s-default"\]'
+stderr 'Resume with Aims: aims claude --resume s-default$'
+! stderr 'include your original launch options'
+
+# Explicit settings can contain credentials and still use a private temporary
+# merge. They cannot appear in the durable hook file or in the aims hint.
+exec aims claude --settings '{"model":"fixture-private"}'
+stdout 'claude --settings .*runs[/\\]run-'
+stderr 'Resume with Aims: aims claude --resume s-default \(include your original launch options\)'
+! stderr 'fixture-private'
+exec sh -c 'claude() { test "$1" = --settings && test ! -e "$2"; }; . "$FAKE_CLAUDE_NATIVE_RESUME"'

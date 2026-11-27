@@ -74,6 +74,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 	if err != nil {
 		return Result{Code: 1, Profile: name}, err
 	}
+	hookSettings := filepath.Join(config.Home(), "claude-watch-settings.json")
 
 	started := time.Now()
 	args := o.Args
@@ -104,7 +105,8 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			return child.Pid()
 		}
 		watched, poll, err := sv.Watch(tool.Watch{
-			Args: args, Self: self, RunDir: dir, Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now(), PID: pid,
+			Args: args, Self: self, RunDir: dir, HookSettings: hookSettings,
+			Home: profiles.Home(cfg, a, name), Dir: o.Dir, Since: time.Now(), PID: pid,
 			Env: map[string]string{profiles.RunVar: dir, profiles.SessionVar: string(a.ID()) + ":" + name},
 		})
 		if err != nil {
@@ -136,12 +138,31 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		ticker := time.NewTicker(pollEvery)
 		var next, prompt, why, revive string
 		var resume []string
+		finish := func() (Result, error) {
+			code := child.Code()
+			if code == 0 && a.ID() == "claude" {
+				// Claude can exit before the next poll, including after /resume.
+				// Read the final hooks before the run directory is removed.
+				for _, ev := range append(carry, poll()...) {
+					if ev.Session != "" && ev.Session != session {
+						session, transcript = ev.Session, ""
+					}
+					if ev.Transcript != "" {
+						transcript = ev.Transcript
+					}
+				}
+				if fi := fsx.Stat(transcript); tool.ValidSessionID(session) && fi != nil && fi.Mode().IsRegular() && fi.Size() > 0 {
+					printClaudeResume(o, cfg, name, session, hookSettings)
+				}
+			}
+			return Result{Code: code, Profile: name}, nil
+		}
 	watch:
 		for {
 			select {
 			case <-child.Done():
 				ticker.Stop()
-				return Result{Code: child.Code(), Profile: name}, nil
+				return finish()
 			case <-ticker.C:
 			}
 			if to := takeMove(dir); to != "" && validMove(a.ID(), name, to) {
@@ -290,7 +311,7 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 			select {
 			case <-child.Done():
 				ticker.Stop()
-				return Result{Code: child.Code(), Profile: name}, nil
+				return finish()
 			default:
 			}
 			// A limit stopped the conversation: what it was set to do goes on too.
@@ -317,6 +338,38 @@ func supervise(ctx context.Context, o Options, sv tool.Supervisor, bin, name str
 		}
 		args, name = resume, next
 	}
+}
+
+// Claude's exit command can include the generated --settings path. Build
+// aims' hint from the caller's original options, before Watch adds that path.
+func printClaudeResume(o Options, cfg *config.Config, profile, session, hookSettings string) {
+	command := "aims claude"
+	if len(profiles.Apart(cfg, o.Tool.ID(), profile)) > 0 {
+		command += "@" + profile
+	}
+	command += " --resume " + session
+	for i, arg := range o.Args {
+		if arg == "--" {
+			break
+		}
+		flag, value, inline := strings.Cut(arg, "=")
+		if !strings.HasPrefix(flag, "-") || slices.Contains([]string{"-c", "--continue", "-r", "--resume"}, flag) {
+			continue
+		}
+		if flag == "--settings" {
+			if !inline && i+1 < len(o.Args) {
+				value = o.Args[i+1]
+			}
+			if filepath.Clean(value) == hookSettings {
+				continue
+			}
+		}
+		// Options can include inline settings or credentials. Leave the
+		// original values to the caller instead of printing them.
+		o.say(Hint, "Resume with Aims: %s (include your original launch options)", command)
+		return
+	}
+	o.say(Hint, "Resume with Aims: %s", command)
 }
 
 // onFailure handles a turn that ended on an error: it marks the profile and

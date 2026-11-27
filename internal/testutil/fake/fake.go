@@ -279,6 +279,11 @@ func interactiveTurn(settings, label string, args []string, has func(string) boo
 		event, payload = "StopFailure", map[string]any{"error": "rate_limit", "error_details": "429 Too Many Requests"}
 	}
 	payload["hook_event_name"], payload["session_id"] = event, session
+	if os.Getenv("FAKE_CLAUDE_SAVE_TRANSCRIPT") == "1" {
+		transcript := filepath.Join(os.Getenv("HOME"), session+".jsonl")
+		_ = os.WriteFile(transcript, []byte("{}\n"), 0o600)
+		payload["transcript_path"] = transcript
+	}
 	in, _ := json.Marshal(payload)
 	var cfg struct {
 		Hooks map[string][]struct {
@@ -330,6 +335,12 @@ func interactiveTurn(settings, label string, args []string, has func(string) boo
 		fmt.Printf("claude stopped as %s\n", label)
 		os.Exit(143)
 	case <-time.After(linger):
+	}
+	if file := os.Getenv("FAKE_CLAUDE_NATIVE_RESUME"); file != "" {
+		quotedSettings := "'" + strings.ReplaceAll(settings, "'", "'\\''") + "'"
+		command := fmt.Sprintf("claude --settings %s --resume %s\n", quotedSettings, session)
+		fmt.Printf("Resume this session with:\n%s", command)
+		_ = os.WriteFile(file, []byte(command), 0o600)
 	}
 }
 
