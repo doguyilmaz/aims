@@ -18,7 +18,7 @@ This is the technical reference. For setup and everyday controls, use the [macOS
 | OpenCode | Native `/api/experimental/usage/limits` | Each Go meter and budget timestamp | Budget amounts and per-model limits remain distinct; no inferred banked resets |
 | Custom | User-defined reminder | Explicit date with timezone | A reminder only; never changes the provider or recorded usage |
 
-Antigravity retains every reported model-group ID, including separate Gemini, Claude/GPT, Argon 4 and Carbon 4 groups when supplied. Groups keep their own usage and reset timestamps even when their bucket IDs match. An account that does not report a group is not given an invented allowance for it.
+Antigravity quota reads use the terminal CLI's login. The [T3 Antigravity provider](../other-apps#antigravity) has a separate sign-in and reports conversation usage in T3. Aims retains every reported model-group ID, including separate Gemini, Claude/GPT, Argon 4 and Carbon 4 groups when supplied. Groups keep their own usage and reset timestamps even when their bucket IDs match.
 
 Grok's unified billing can omit the percentage while still returning a weekly period. This partial JSON alone stays unknown. Aims then allows up to six seconds for the read-only web billing method used by grok.com, using one unambiguous, non-expired first-party login from Grok's existing `auth.json`. `GROK_HOME` and an absolute `GROK_AUTH_PATH` are respected. If the credential changes during the native/web read, enrichment is discarded. Aims never refreshes, copies, rewrites or deletes Grok credentials and never reads browser cookies.
 

@@ -110,7 +110,9 @@ type Watch struct {
 	Self string
 	// RunDir is the run's own directory, AIMS_RUN in the tool's environment.
 	RunDir string
-	Home   Home
+	// HookSettings is the durable path for settings containing only aims hooks.
+	HookSettings string
+	Home         Home
 	// Dir is the working directory; "" is aims' own.
 	Dir string
 	// Since is when this run started.
@@ -431,9 +433,9 @@ type MCPServer struct {
 }
 
 // MCPAuditor reports what an MCP entry registered by an older aims lacks;
-// nil when it is complete or not there.
+// nil when it is complete or absent, and an error when settings cannot be read.
 type MCPAuditor interface {
-	MCPMissing(h Home, s MCPServer) []string
+	MCPMissing(h Home, s MCPServer) ([]string, error)
 }
 
 // MCPConfigLocator identifies settings to preserve before a provider changes

@@ -58,14 +58,12 @@ func (a *Adapter) Supervises(args []string) bool {
 // ended by an API error such as a usage limit.
 var hookEvents = []string{"SessionStart", "UserPromptSubmit", "Stop", "StopFailure"}
 
-// Watch passes Claude Code the hooks with --settings, merged into the
-// user's own --settings when there is one, so the user's settings files stay
-// untouched and a session started without aims reports nothing. The merged
-// settings go in a file of the run, readable by the user only, rather than
-// on the command line, where other users can read it. The hooks record the
-// turns in the run's directory.
+// Watch passes Claude Code the hooks with --settings. The hook-only settings
+// file survives exit so Claude's native resume command can reuse it. Settings
+// merged with user overrides stay in the run directory, which is private and
+// removed on exit. The hooks find the current attempt through AIMS_RUN.
 func (*Adapter) Watch(w tool.Watch) ([]string, func() []tool.SessionEvent, error) {
-	args, err := withSettings(w.Args, shellQuote(w.Self)+" hook claude", filepath.Join(w.RunDir, "settings.json"))
+	args, err := withSettings(w.Args, shellQuote(w.Self)+" hook claude", w.HookSettings, filepath.Join(w.RunDir, "settings.json"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -117,15 +115,15 @@ func graceEvent(line []byte, path string) (tool.SessionEvent, bool) {
 	return tool.SessionEvent{Session: j.Get("sessionId").String(), Transcript: path, Failure: tool.FailLimit, Text: text}, true
 }
 
-// withSettings writes the user's --settings (or none) with the hooks added
-// to file, and points args at it.
-func withSettings(args []string, command, file string) ([]string, error) {
-	write := func(settings string) (string, error) {
+// withSettings points Claude at the hook-only settings or a private merge
+// with explicit user settings.
+func withSettings(args []string, command, hookFile, mergedFile string) ([]string, error) {
+	write := func(file, settings string) (string, error) {
 		merged, err := withHooks(settings, command)
 		if err != nil {
 			return "", err
 		}
-		return file, fsx.WriteFile(file, []byte(merged), 0o600)
+		return file, fsx.WritePrivateFile(file, []byte(merged))
 	}
 	for i, a := range args {
 		if a == "--" {
@@ -137,7 +135,13 @@ func withSettings(args []string, command, file string) ([]string, error) {
 		} else if !inline {
 			continue
 		}
-		path, err := write(value)
+		file := mergedFile
+		if filepath.Clean(value) == hookFile {
+			// Claude may have printed this path in an earlier resume command.
+			// Regenerate it with this installation's hooks once.
+			file, value = hookFile, "{}"
+		}
+		path, err := write(file, value)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +153,7 @@ func withSettings(args []string, command, file string) ([]string, error) {
 		}
 		return out, nil
 	}
-	path, err := write("{}")
+	path, err := write(hookFile, "{}")
 	if err != nil {
 		return nil, err
 	}

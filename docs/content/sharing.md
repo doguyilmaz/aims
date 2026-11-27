@@ -45,7 +45,7 @@ Private to each profile: `.credentials.json` (or the macOS keychain entry) and `
 | `AGENTS.md`, `prompts/`, `skills/`, `rules/`, `plugins/` | your instructions and customizations | |
 | `.hook-trust/` | hooks you reviewed, so a moved session does not ask again | |
 
-Private to each profile: `auth.json` (or the OS keyring entry). Daemon processes and their control sockets also remain private: sharing history does not mean sharing an authenticated running server.
+Each profile keeps its own `auth.json`, file-backed MCP OAuth store (`.credentials.json`), and encrypted `secrets/` directory. Codex can also use the OS keyring. Daemon processes and their control sockets are private to each profile.
 
 ## Work and personal accounts
 

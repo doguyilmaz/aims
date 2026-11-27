@@ -158,8 +158,13 @@ func runDoctorCheck(cmd *cobra.Command, version string, fix, asJSON bool) error 
 			}
 			if au, ok := a.(tool.MCPAuditor); ok {
 				for i, h := range ops.MCPHomes(cfg, a) {
-					if missing := au.MCPMissing(h, ops.MCPServer()); len(missing) > 0 {
-						add(fmt.Sprintf("%s/mcp/%d", id, i), "problem", a.Title()+" MCP server is missing "+strings.Join(missing, " and ")+" in "+fsx.Tildify(h.Dir), "aims setup --no-skill --tools "+string(id))
+					key := fmt.Sprintf("%s/mcp/%d", id, i)
+					missing, err := au.MCPMissing(h, ops.MCPServer())
+					switch {
+					case err != nil:
+						add(key, "problem", err.Error(), "")
+					case len(missing) > 0:
+						add(key, "problem", a.Title()+" MCP server is missing "+strings.Join(missing, " and ")+" in "+fsx.Tildify(h.Dir), "aims setup --no-skill --tools "+string(id))
 					}
 				}
 			}

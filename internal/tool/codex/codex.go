@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
+	"github.com/pelletier/go-toml/v2/unstable"
 
 	"github.com/doguyilmaz/aims/internal/fsx"
 	"github.com/doguyilmaz/aims/internal/proc"
@@ -197,27 +201,38 @@ var (
 	missingRe = regexp.MustCompile(`(?i)no mcp server named|not found`)
 )
 
-// RegisterMCP runs `codex mcp add`, then adds what it cannot set to the entry
-// it wrote: codex starts MCP servers with only HOME, PATH and a few other
-// variables, and gives up on a tool call after 60 seconds.
-func (*Adapter) RegisterMCP(ctx context.Context, h tool.Home, s tool.MCPServer) error {
-	if _, err := runMCP(ctx, h, append([]string{"mcp", "add", s.Name, "--"}, s.Command...), alreadyRe); err != nil {
-		return err
-	}
+// RegisterMCP uses Codex to add a new entry. For an existing entry, it only
+// updates the environment allowlist and tool timeout managed by aims.
+func (a *Adapter) RegisterMCP(ctx context.Context, h tool.Home, s tool.MCPServer) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	path := filepath.Join(h.Dir, "config.toml")
-	b, err := os.ReadFile(path)
+	path := a.MCPConfigPath(h)
+	b, entry, err := readMCPConfig(path, s.Name)
 	if err != nil {
 		return err
 	}
+	if entry == nil {
+		if _, err := runMCP(ctx, h, append([]string{"mcp", "add", s.Name, "--"}, s.Command...), alreadyRe); err != nil {
+			return err
+		}
+		b, entry, err = readMCPConfig(path, s.Name)
+		if err != nil {
+			return err
+		}
+		if entry == nil {
+			return fmt.Errorf("codex mcp add left no %s MCP entry in %s", s.Name, fsx.Tildify(path))
+		}
+	}
+	if len(missingMCPKeys(entry, s)) == 0 {
+		return nil
+	}
 	out, ok := completeMCP(string(b), s)
 	if !ok {
-		return fmt.Errorf("codex mcp add left no [mcp_servers.%s] in %s", s.Name, fsx.Tildify(path))
+		return fmt.Errorf("cannot update %s MCP entry without an explicit [mcp_servers.%s] table in %s", s.Name, s.Name, fsx.Tildify(path))
 	}
-	if out == string(b) {
-		return nil
+	if _, err := parseMCPConfig([]byte(out), path, s.Name); err != nil {
+		return fmt.Errorf("cannot update %s MCP entry in %s: managed keys conflict with its TOML structure", s.Name, fsx.Tildify(path))
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -225,47 +240,57 @@ func (*Adapter) RegisterMCP(ctx context.Context, h tool.Home, s tool.MCPServer) 
 	return fsx.WriteFile(path, []byte(out), 0o600)
 }
 
-// MCPMissing names the keys an entry from an older aims lacks, or has with
-// another value.
-func (*Adapter) MCPMissing(h tool.Home, s tool.MCPServer) []string {
-	b, err := os.ReadFile(filepath.Join(h.Dir, "config.toml"))
-	if err != nil {
-		return nil
+// MCPMissing names missing or stale managed keys in an existing MCP entry.
+func (a *Adapter) MCPMissing(h tool.Home, s tool.MCPServer) ([]string, error) {
+	_, entry, err := readMCPConfig(a.MCPConfigPath(h), s.Name)
+	return missingMCPKeys(entry, s), err
+}
+
+func readMCPConfig(path, name string) ([]byte, map[string]any, error) {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil, nil
 	}
-	lines := strings.SplitAfter(string(b), "\n")
-	start, end := mcpTable(lines, s.Name)
-	if start < 0 {
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot read Codex MCP settings in %s", fsx.Tildify(path))
+	}
+	entry, err := parseMCPConfig(b, path, name)
+	return b, entry, err
+}
+
+func parseMCPConfig(b []byte, path, name string) (map[string]any, error) {
+	var cfg struct {
+		Servers map[string]map[string]any `toml:"mcp_servers"`
+	}
+	if err := toml.Unmarshal(b, &cfg); err != nil {
+		// TOML errors can include values from the settings file.
+		var decode *toml.DecodeError
+		if errors.As(err, &decode) {
+			line, column := decode.Position()
+			return nil, fmt.Errorf("invalid Codex MCP settings in %s (line %d, column %d)", fsx.Tildify(path), line, column)
+		}
+		return nil, fmt.Errorf("invalid Codex MCP settings in %s", fsx.Tildify(path))
+	}
+	return cfg.Servers[name], nil
+}
+
+func missingMCPKeys(entry map[string]any, s tool.MCPServer) []string {
+	if entry == nil {
 		return nil
 	}
 	var missing []string
-	for _, want := range mcpKeys(s) {
-		if !slices.ContainsFunc(lines[start+1:end], func(l string) bool { return strings.TrimSpace(l) == strings.TrimSpace(want) }) {
-			k, _, _ := strings.Cut(want, " =")
-			missing = append(missing, k)
-		}
+	if env, _ := entry["env_vars"].([]any); len(s.Env) > 0 &&
+		(len(env) != len(s.Env) || slices.ContainsFunc(s.Env, func(k string) bool { return !slices.Contains(env, any(k)) })) {
+		missing = append(missing, "env_vars")
+	}
+	if seconds := int64(s.Timeout.Seconds()); s.Timeout > 0 &&
+		entry["tool_timeout_sec"] != seconds && entry["tool_timeout_sec"] != float64(seconds) {
+		missing = append(missing, "tool_timeout_sec")
 	}
 	return missing
 }
 
-// mcpTable finds the [mcp_servers.<name>] table: its header line and the
-// line after its last key. start is -1 when it is missing.
-func mcpTable(lines []string, name string) (start, end int) {
-	header := "[mcp_servers." + name + "]"
-	start = slices.IndexFunc(lines, func(l string) bool {
-		rest, found := strings.CutPrefix(strings.TrimSpace(l), header)
-		return found && (rest == "" || strings.HasPrefix(strings.TrimSpace(rest), "#"))
-	})
-	if start < 0 {
-		return -1, -1
-	}
-	end = start + 1
-	for end < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[end]), "[") {
-		end++
-	}
-	return start, end
-}
-
-// mcpKeys are the lines completeMCP puts in the entry.
+// mcpKeys contains complete assignments for the keys aims manages.
 func mcpKeys(s tool.MCPServer) []string {
 	var out []string
 	if len(s.Env) > 0 {
@@ -281,37 +306,70 @@ func mcpKeys(s tool.MCPServer) []string {
 	return out
 }
 
-// completeMCP sets env_vars and tool_timeout_sec in the [mcp_servers.<name>]
-// table of a config.toml, replacing what was there. ok is false when the
-// table is missing.
-func completeMCP(toml string, s tool.MCPServer) (out string, ok bool) {
-	lines := strings.SplitAfter(toml, "\n")
-	start, end := mcpTable(lines, s.Name)
-	if start < 0 {
-		return toml, false
-	}
-	var body []string
-	for i := start + 1; i < end; i++ {
-		k, v, _ := strings.Cut(lines[i], "=")
-		if k = strings.TrimSpace(k); k != "env_vars" && k != "tool_timeout_sec" {
-			body = append(body, lines[i])
-			continue
+// completeMCP inserts managed settings at the top of the explicit server
+// table and removes their old assignments. The parser supplies source ranges
+// so quoted keys and multiline values leave surrounding settings intact.
+func completeMCP(config string, s tool.MCPServer) (out string, ok bool) {
+	var p unstable.Parser
+	p.Reset([]byte(config))
+	var result strings.Builder
+	cursor := 0
+	inTable := false
+	for p.NextExpression() {
+		n := p.Expression()
+		switch n.Kind {
+		case unstable.Table, unstable.ArrayTable:
+			if inTable {
+				result.WriteString(config[cursor:])
+				return result.String(), true
+			}
+			keys := n.Key()
+			if n.Kind != unstable.Table || !keys.Next() || string(keys.Node().Data) != "mcp_servers" ||
+				!keys.Next() || string(keys.Node().Data) != s.Name || !keys.IsLast() {
+				continue
+			}
+			cursor = nextTOMLLine(config, int(keys.Node().Raw.Offset))
+			result.WriteString(config[:cursor])
+			if config[cursor-1] != '\n' {
+				result.WriteByte('\n')
+			}
+			for _, line := range mcpKeys(s) {
+				result.WriteString(line)
+			}
+			inTable = true
+		case unstable.KeyValue:
+			if !inTable {
+				continue
+			}
+			keys := n.Key()
+			keys.Next()
+			key := string(keys.Node().Data)
+			if key != "env_vars" && key != "tool_timeout_sec" {
+				continue
+			}
+			start := int(n.Raw.Offset)
+			result.WriteString(config[cursor : strings.LastIndexByte(config[:start], '\n')+1])
+			cursor = nextTOMLLine(config, start+int(n.Raw.Length))
 		}
-		// An array may go on over several lines, up to its "]".
-		for open := strings.Contains(v, "[") && !strings.Contains(v, "]"); open && i+1 < end; {
-			i++
-			open = !strings.Contains(lines[i], "]")
-		}
 	}
-	head := lines[start]
-	if !strings.HasSuffix(head, "\n") {
-		head += "\n"
+	if p.Error() != nil || !inTable {
+		return config, false
 	}
-	out = strings.Join(slices.Concat(lines[:start], []string{head}, mcpKeys(s), body, lines[end:]), "")
-	return out, true
+	result.WriteString(config[cursor:])
+	return result.String(), true
 }
 
-func (*Adapter) UnregisterMCP(ctx context.Context, h tool.Home, name string) (bool, error) {
+func nextTOMLLine(config string, offset int) int {
+	if i := strings.IndexByte(config[offset:], '\n'); i >= 0 {
+		return offset + i + 1
+	}
+	return len(config)
+}
+
+func (a *Adapter) UnregisterMCP(ctx context.Context, h tool.Home, name string) (bool, error) {
+	if _, _, err := readMCPConfig(a.MCPConfigPath(h), name); err != nil {
+		return false, err
+	}
 	return runMCP(ctx, h, []string{"mcp", "remove", name}, missingRe)
 }
 

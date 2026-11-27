@@ -61,6 +61,12 @@ Claude's auto mode controls tool permissions. Aims' status-line suffix describes
 
 The tool could not renew it. Run `aims login <tool> <profile>`, and `aims keepalive on` so it does not happen again; see [Keeping logins alive](../failover#keeping-logins-alive).
 
+### Claude's resume command refers to a missing Aims settings file
+
+For normal launches, Aims passes Claude a reusable file containing only Aims hooks. You can paste Claude's resume command into an Aims-enabled shell, or use the **Resume with Aims** command printed on exit.
+
+An older command or a launch with explicit `--settings` can reference a path like `~/.aims/runs/run-…/1/settings.json`. Aims removes the private merge at exit. From the original project directory, run `aims claude --resume <session-id>` with any launch options you originally supplied, including your own `--settings` if you passed one.
+
 ### "shared 'settings.json': points to …, not the shared folder"
 
 The entry in the profile is a link aims did not make, for example from a dotfiles tool. aims leaves it alone. Remove it if it should be shared, or list it under [`exclude`](../sharing#keeping-one-entry-private) to keep it.

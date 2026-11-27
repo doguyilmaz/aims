@@ -236,13 +236,17 @@ func TestCompleteMCP(t *testing.T) {
 	s := tool.MCPServer{Name: "aims", Env: []string{"AIMS_SESSION_PROFILE", "AIMS_HOME"}, Timeout: time.Hour}
 	in := `model = "o3"
 
-[mcp_servers.aims] # added by aims
+["mcp_servers" . 'aims'] # added by aims
 command = "aims"
-env_vars = [
-  "OLD",
+args = [
+  """mcp
+[literal line]
+""",
 ]
-args = ["mcp"]
-tool_timeout_sec = 60
+"env_vars" = [ # comment with a ]
+  "OLD]",
+]
+'tool_timeout_sec' = 60
 
 [mcp_servers.aims.env]
 X = "1"
@@ -252,11 +256,15 @@ command = "o"
 `
 	want := `model = "o3"
 
-[mcp_servers.aims] # added by aims
+["mcp_servers" . 'aims'] # added by aims
 env_vars = ["AIMS_SESSION_PROFILE", "AIMS_HOME"]
 tool_timeout_sec = 3600
 command = "aims"
-args = ["mcp"]
+args = [
+  """mcp
+[literal line]
+""",
+]
 
 [mcp_servers.aims.env]
 X = "1"
@@ -285,13 +293,35 @@ command = "o"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[mcp_servers.aims]\ncommand = \"aims\"\ntool_timeout_sec = 3600\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := New().MCPMissing(h, s); strings.Join(got, ",") != "env_vars" {
-		t.Fatalf("missing %q", got)
+	if got, err := New().MCPMissing(h, s); err != nil || strings.Join(got, ",") != "env_vars" {
+		t.Fatalf("missing %q, error %v", got, err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(want), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := New().MCPMissing(h, s); got != nil {
-		t.Fatalf("missing %q", got)
+	if got, err := New().MCPMissing(h, s); err != nil || len(got) != 0 {
+		t.Fatalf("missing %q, error %v", got, err)
+	}
+	formatted := `[mcp_servers."aims"]
+env_vars = [
+    'AIMS_HOME',  # allowed environment
+    "AIMS_SESSION_PROFILE",
+]
+tool_timeout_sec = 3_600
+`
+	testutil.Write(t, filepath.Join(dir, "config.toml"), formatted)
+	if got, err := New().MCPMissing(h, s); err != nil || len(got) != 0 {
+		t.Fatalf("reformatted settings reported missing: %q, error %v", got, err)
+	}
+	wrong := strings.NewReplacer("AIMS_HOME", "AIMS_HOM", "3_600", "30").Replace(formatted)
+	testutil.Write(t, filepath.Join(dir, "config.toml"), wrong)
+	if got, err := New().MCPMissing(h, s); err != nil || strings.Join(got, ",") != "env_vars,tool_timeout_sec" {
+		t.Fatalf("wrong settings reported missing: %q, error %v", got, err)
+	}
+	if err := New().RegisterMCP(t.Context(), h, s); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := New().MCPMissing(h, s); err != nil || len(got) != 0 {
+		t.Fatalf("repaired settings reported missing: %q, error %v", got, err)
 	}
 }

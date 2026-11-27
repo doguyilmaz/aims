@@ -50,8 +50,8 @@ func TestAdapters(t *testing.T) {
 				t.Errorf("%s: shared dir %q is not in Shared", id, d)
 			}
 		}
-		// Logins stay private: nothing that looks like a credential is shared.
-		for _, n := range []string{"auth.json", ".credentials.json", ".claude.json", "credentials", "token.json"} {
+		// Keep credential stores and Computer Use session data in their own homes.
+		for _, n := range []string{"auth.json", ".credentials.json", ".claude.json", "credentials", "token.json", "secrets", "computer-use"} {
 			if l.IsShared(n) {
 				t.Errorf("%s: %s must never be shared", id, n)
 			}

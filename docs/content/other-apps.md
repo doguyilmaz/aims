@@ -167,6 +167,24 @@ You can enter the generated connection settings in T3's existing-CLI provider se
 
 After reopening T3, select the desired existing-CLI connection for new threads. The export deliberately leaves defaults, existing threads and managed logins alone. T3 owns account switching for its threads; aims' interactive failover supervises only sessions started through `aims claude` or `aims codex`.
 
+### Antigravity
+
+For Antigravity sessions, use [T3's Antigravity provider](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md). It runs Google's official ACP agent. In T3 Settings → Providers, leave **Binary path** blank to use the T3-managed runtime, or set it to an installed `agy` for a manual setup. Update the managed runtime with **Update Antigravity** in the provider settings. The T3 instance has its own sign-in.
+
+For account quotas, `aims usage agy --refresh` runs [Google's `/usage` command](https://antigravity.google/docs/cli/commands/usage) through the terminal's `agy` and uses that CLI's login. T3's Antigravity Usage view reports tokens and cost from local conversation history.
+
+### MCP startup after switching providers
+
+T3 can reuse a running Codex app-server across turns. Provider environment and launch arguments take effect when T3 starts a new app-server. If the old process keeps reporting the same warnings after you save the provider settings, let provider work finish, then quit and reopen T3 to start a fresh process.
+
+- **Missing environment variable.** A desktop-launched T3 server may have a different environment from your terminal. In T3 Settings → Providers, add the variable to each instance that needs it and mark the value as sensitive. This applies to Codex servers configured with `bearer_token_env_var` and Claude Code servers whose headers reference an environment variable.
+- **OAuth sign-in required.** Authorize the server with the sign-in action in T3, or run `aims codex@personal mcp login <server>` with the profile that T3 uses. File-backed Codex MCP credentials stay in that profile.
+- **Computer Use reports `No such file or directory`.** If the shared Codex config has a relative `mcp_servers.computer-use.command` pointing at the macOS app bundle, add a provider launch argument with the installed executable's absolute path. For example, replace the path below with the executable on your machine. Keep the Computer Use directory private because it also holds session data.
+
+  ```text
+  -c 'mcp_servers.computer-use.command="/absolute/path/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"'
+  ```
+
 T3 also derives continuation groups from configured home paths. Distinct aims profile homes can appear as different groups even when their transcript directories link to the same hub. This exporter does not change T3's grouping or promise automatic moves between those instances. Do not set an aims profile as a T3 `shadowHomePath` to bypass that restriction: T3 materializes its own links there and can conflict with the profile's private runtime files. Fully automatic moves across these instances require T3 to recognize separate login and shared-history homes.
 
 ### Bring CLI conversations into T3
