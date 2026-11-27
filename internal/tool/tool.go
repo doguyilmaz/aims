@@ -433,9 +433,9 @@ type MCPServer struct {
 }
 
 // MCPAuditor reports what an MCP entry registered by an older aims lacks;
-// nil when it is complete or not there.
+// nil when it is complete or absent, and an error when settings cannot be read.
 type MCPAuditor interface {
-	MCPMissing(h Home, s MCPServer) []string
+	MCPMissing(h Home, s MCPServer) ([]string, error)
 }
 
 // MCPConfigLocator identifies settings to preserve before a provider changes

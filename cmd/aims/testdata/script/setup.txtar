@@ -50,15 +50,33 @@ exec aims doctor
 
 # Starting a session brings what is installed up to this aims by itself: an
 # old skill and an old MCP entry.
-exec codex mcp remove aims
-exec codex mcp add aims -- aims mcp
+cp quoted-codex.toml $HOME/.codex/config.toml
+! exec aims doctor --check
+stdout 'Codex MCP server is missing env_vars and tool_timeout_sec'
 cp OLD_SKILL $HOME/.codex/skills/aims/SKILL.md
 exec aims codex@work
 grep 'tool_timeout_sec = 3660' $HOME/.codex/config.toml
+grep '\[mcp_servers\."aims"\] # existing integration' $HOME/.codex/config.toml
+grep '\[mcp_servers\.other\]' $HOME/.codex/config.toml
 ! grep 'an older skill' $HOME/.codex/skills/aims/SKILL.md
 exec aims doctor
 ! stdout 'MCP server is missing'
 ! stdout 'from another aims version'
+
+# Invalid config should be reported without its values or a rewrite.
+cp $HOME/.codex/config.toml working-codex.toml
+cp broken-codex.toml $HOME/.codex/config.toml
+! exec aims doctor --check
+stdout 'invalid Codex MCP settings .*line 3, column [0-9]+'
+! stdout 'fixture-secret-value'
+! exec aims doctor
+stdout 'invalid Codex MCP settings'
+! exec aims setup --no-skill --tools codex
+stderr 'invalid Codex MCP settings'
+! stderr 'fixture-secret-value'
+exec aims codex@work
+cmp $HOME/.codex/config.toml broken-codex.toml
+cp working-codex.toml $HOME/.codex/config.toml
 
 # So does a skill from another aims version.
 cp stale.md $HOME/.codex/skills/aims/SKILL.md
@@ -97,6 +115,18 @@ grep '"command": "~/my-line.sh"' $HOME/.claude/settings.json
 cmp $HOME/.zshrc zshrc.orig
 exec aims clean -y
 stderr 'nothing to clean'
+
+-- quoted-codex.toml --
+[mcp_servers."aims"] # existing integration
+command = "aims"
+args = ["mcp"]
+
+[mcp_servers.other]
+command = "other"
+-- broken-codex.toml --
+[mcp_servers.aims]
+command = "aims"
+env_vars = "fixture-secret-value
 
 -- settings.json --
 {

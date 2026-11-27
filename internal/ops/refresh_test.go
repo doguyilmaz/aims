@@ -20,13 +20,13 @@ type pausedRefresh struct {
 	reached, release, wrote chan struct{}
 }
 
-func (a pausedRefresh) MCPMissing(h tool.Home, _ tool.MCPServer) []string {
+func (a pausedRefresh) MCPMissing(h tool.Home, _ tool.MCPServer) ([]string, error) {
 	if h.Dir != a.home {
-		return nil
+		return nil, nil
 	}
 	close(a.reached)
 	<-a.release
-	return []string{"stale dummy registration"}
+	return []string{"stale dummy registration"}, nil
 }
 func (a pausedRefresh) RegisterMCP(_ context.Context, h tool.Home, _ tool.MCPServer) error {
 	err := fsx.WriteFile(filepath.Join(h.Dir, "config.toml"), []byte("# dummy aims registration\n"), 0o600)

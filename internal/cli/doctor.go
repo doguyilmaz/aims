@@ -207,7 +207,11 @@ func newDoctorCmd(version string) *cobra.Command {
 					}
 				}
 				if au, isAuditor := a.(tool.MCPAuditor); isAuditor {
-					if missing := au.MCPMissing(profiles.HubHome(cfg, a), ops.MCPServer()); len(missing) > 0 {
+					missing, err := au.MCPMissing(profiles.HubHome(cfg, a), ops.MCPServer())
+					switch {
+					case err != nil:
+						bad("%s", err)
+					case len(missing) > 0:
 						bad("%s MCP server is missing %s", a.Title(), strings.Join(missing, " and "))
 						fix1("aims setup --no-skill --tools " + string(a.ID()))
 					}

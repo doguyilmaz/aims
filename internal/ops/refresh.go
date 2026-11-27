@@ -57,7 +57,7 @@ func refresh(ctx context.Context, a tool.Adapter) {
 	if au, ok := a.(tool.MCPAuditor); ok && profiles.Bin(a) != "" {
 		server := MCPServer()
 		for _, h := range MCPHomes(cfg, a) {
-			if len(au.MCPMissing(h, server)) > 0 {
+			if missing, err := au.MCPMissing(h, server); err == nil && len(missing) > 0 {
 				_ = updateMCP(ctx, a, h, server, false)
 			}
 		}
